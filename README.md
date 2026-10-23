@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/rader-ai/Glyphmotion/releases/latest"><img src="https://img.shields.io/github/v/release/rader-ai/Glyphmotion?style=flat-square&labelColor=070b18&color=ffb15c&label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-ffb15c?style=flat-square&labelColor=070b18" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/engine-7.7%20KB%20gzipped-5cc0d8?style=flat-square&labelColor=070b18" alt="7.7 KB gzipped">
   <img src="https://img.shields.io/badge/dependencies-0-7fe3d0?style=flat-square&labelColor=070b18" alt="Zero dependencies">
@@ -21,7 +22,7 @@
   <a href="#the-gallery"><b>Gallery</b></a> &nbsp;·&nbsp;
   <a href="docs/api.md"><b>API</b></a> &nbsp;·&nbsp;
   <a href="docs/principles.md"><b>Principles</b></a> &nbsp;·&nbsp;
-  <a href="https://github.com/rader-ai/Glyphmotion/archive/refs/heads/main.zip"><b>Download</b></a>
+  <a href="https://github.com/rader-ai/Glyphmotion/releases/latest"><b>Download</b></a>
 </p>
 
 <br>
@@ -49,7 +50,7 @@ Drop one script on a page and give it a canvas.
 
 ```html
 <canvas id="sea" style="width:100%;height:320px"></canvas>
-<script src="https://cdn.jsdelivr.net/gh/rader-ai/Glyphmotion@main/src/glyphmotion.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/rader-ai/Glyphmotion@v0.1.0/src/glyphmotion.js"></script>
 <script>
   const { fbm, ramp, smooth } = Glyphmotion;
 
@@ -64,7 +65,7 @@ Drop one script on a page and give it a canvas.
 </script>
 ```
 
-That is a living, glowing smoke field. Or clone the repo and open `index.html`. Every page runs straight from the file system.
+That is a living, glowing smoke field. The script is pinned to `v0.1.0`, so it never changes under you; swap in `@main` to ride the latest. Or clone the repo and open `index.html`. Every page runs straight from the file system.
 
 ```sh
 git clone https://github.com/rader-ai/Glyphmotion.git
@@ -185,7 +186,7 @@ Created by **Chris Rader**, who builds AI agents and product experiences, direct
 MIT licensed. Use it, remix it, ship it in your product. A star or a credit back to Glyphmotion helps more people find it.
 
 <p align="center">
-  <a href="https://github.com/rader-ai/Glyphmotion/archive/refs/heads/main.zip"><b>Download the zip</b></a> &nbsp;·&nbsp;
+  <a href="https://github.com/rader-ai/Glyphmotion/releases/latest"><b>Download the latest release</b></a> &nbsp;·&nbsp;
   <a href="docs/api.md"><b>Read the API</b></a> &nbsp;·&nbsp;
   <a href="index.html"><b>Open the landing page</b></a>
 </p>
