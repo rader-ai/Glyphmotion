@@ -346,99 +346,53 @@ footer{padding:80px 16px 120px;text-align:center;color:var(--mut);font-size:13px
 </div>
 <button class="dockshow" id="dockShow" type="button" hidden>Wake Nomi</button>
 
+<script src="../../src/glyphmotion.js"></script>
 <script>
 (() => {
 'use strict';
-const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const GM = Glyphmotion;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
-const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-const rnd = (a, b) => a + Math.random() * (b - a);
-function hash2(x, y) {
-  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
-  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
-  return (h >>> 0) / 4294967296;
-}
-function vnoise(x, y) {
-  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
-const FAMILY = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
+const { clamp, lerp, smooth, rnd, hash2, vnoise, spring, Pool } = GM;
 const CH = []; for (let i = 0; i < 256; i++) CH[i] = String.fromCharCode(i);
 const cc = (s) => s.charCodeAt(0);
 const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
-const FILL = new Array(1 << 18);
-function fillOf(k) {
-  let s = FILL[k];
-  if (!s) s = FILL[k] = 'rgba(' + ((((k >> 10) & 15) << 4) | 8) + ',' + ((((k >> 6) & 15) << 4) | 8) + ',' + ((((k >> 2) & 15) << 4) | 8) + ',' + ((((k & 3) + 1) / 4).toFixed(2)) + ')';
-  return s;
-}
 
-/* ================= character grid layer ================= */
-class Layer {
-  constructor(cv, o) {
-    this.cv = cv; this.o = o; this.ctx = cv.getContext('2d');
-    this.bcv = document.createElement('canvas'); this.bctx = this.bcv.getContext('2d');
-    this.bloom = o.bloom == null ? 0.35 : o.bloom; this.ready = false;
-    this.cols = 1; this.rows = 1; this.cw = 6; this.chh = 12; this.vw = 1; this.vh = 1;
+/* ================= Grid: adapter between Nomi's pixel-space drawing and a Glyphmotion surface =================
+   The engine grid has no per-cell alpha, so each glyph is blended toward the stage color behind it
+   (the same gradient the page paints in CSS), using the quantized alpha levels this page always used. */
+class Grid {
+  constructor(stops) { this.stops = stops; this.ready = false; this.s = null; this.cols = 1; this.rows = 1; this.cw = 6; this.chh = 12; this.vw = 1; this.vh = 1; }
+  sync(s) {
+    this.s = s; this.cols = s.cols; this.rows = s.rows; this.cw = s.cw; this.chh = s.chh; this.vw = s.vw; this.vh = s.vh; this.N = s.N; this.fs = s.fs;
+    this.ready = s.vw >= 2 && s.vh >= 2;
+    this.A = new Uint8Array(s.N); this.bg = new Uint8ClampedArray(s.rows * 3);
+    this.setStops(this.stops);
   }
-  layout() {
-    const cv = this.cv, o = this.o;
-    const r = cv.getBoundingClientRect();
-    if (r.width < 2 || r.height < 2) { this.ready = false; return; }
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const fs = o.fs; this.fs = fs; this.font = '600 ' + fs + 'px ' + FAMILY;
-    const ctx = this.ctx; ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.vw = r.width; this.vh = r.height;
-    cv.width = Math.round(this.vw * dpr); cv.height = Math.round(this.vh * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = this.font; ctx.textBaseline = 'middle';
-    this.cw = ctx.measureText('M').width || fs * 0.6; this.chh = fs * 1.2;
-    this.cols = Math.ceil(this.vw / this.cw); this.rows = Math.ceil(this.vh / this.chh);
-    const N = this.N = this.cols * this.rows;
-    this.Bc = new Uint8Array(N); this.Br = new Uint8ClampedArray(N); this.Bg = new Uint8ClampedArray(N); this.Bb = new Uint8ClampedArray(N); this.Ba = new Uint8ClampedArray(N);
-    this.bcv.width = Math.max(1, Math.round(cv.width / 5)); this.bcv.height = Math.max(1, Math.round(cv.height / 5));
-    this.ready = true; this.dpr = dpr;
-    if (o.onLayout) o.onLayout(this);
-  }
-  clearBuf() { this.Bc.fill(0); }
-  put(c, r, ch, R, G, B, A) {
-    if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return;
-    const i = r * this.cols + c; this.Bc[i] = ch; this.Br[i] = R; this.Bg[i] = G; this.Bb[i] = B; this.Ba[i] = A;
-  }
-  putXY(x, y, ch, R, G, B, A) { this.put(Math.floor(x / this.cw), Math.floor(y / this.chh), ch, R, G, B, A); }
-  paint() {
-    const { ctx, cols, rows, cw, chh, Bc, Br, Bg, Bb, Ba } = this;
-    ctx.clearRect(0, 0, this.vw, this.vh);
-    ctx.font = this.font; ctx.textBaseline = 'middle'; let last = -1;
+  setStops(stops) {
+    this.stops = stops; if (!this.s) return;
+    const { rows, chh, vh } = this, bg = this.bg;
     for (let r = 0; r < rows; r++) {
-      const y = r * chh + chh * 0.5 + 0.5;
-      for (let c = 0, i = r * cols; c < cols; c++, i++) {
-        const ch = Bc[i]; if (!ch) continue;
-        const k = ((Br[i] >> 4) << 10) | ((Bg[i] >> 4) << 6) | ((Bb[i] >> 4) << 2) | (Ba[i] >> 6);
-        if (k !== last) { ctx.fillStyle = fillOf(k); last = k; }
-        ctx.fillText(CH[ch], c * cw, y);
-      }
+      const pct = (r + 0.5) * chh / vh * 100; let i = 0;
+      while (i < stops.length - 2 && stops[i + 1][0] <= pct) i++;
+      const a = stops[i], b = stops[i + 1], t = clamp((pct - a[0]) / Math.max(1e-6, b[0] - a[0]), 0, 1);
+      for (let k = 0; k < 3; k++) bg[r * 3 + k] = lerp(a[1][k], b[1][k], t);
     }
   }
-  bloomPass(x0, y0, x1, y1) {
-    if (!this.bloom) return;
-    const { ctx, bctx, bcv, cv } = this; const d = this.dpr;
-    if (x0 == null) { x0 = 0; y0 = 0; x1 = this.vw; y1 = this.vh; }
-    x0 = Math.max(0, Math.floor(x0 * d)); y0 = Math.max(0, Math.floor(y0 * d)); x1 = Math.min(cv.width, Math.ceil(x1 * d)); y1 = Math.min(cv.height, Math.ceil(y1 * d));
-    const sw = x1 - x0, sh = y1 - y0; if (sw < 4 || sh < 4) return;
-    const bw = Math.max(1, Math.round(sw / 5)), bh = Math.max(1, Math.round(sh / 5));
-    bctx.globalCompositeOperation = 'copy'; bctx.drawImage(cv, x0, y0, sw, sh, 0, 0, bw, bh);
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = this.bloom;
-    ctx.imageSmoothingEnabled = true; ctx.drawImage(bcv, 0, 0, bw, bh, x0, y0, sw, sh); ctx.restore();
+  clearBuf() { this.s.clear(); }
+  put(c, r, ch, R, G, B, A) {
+    if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return;
+    A = A > 255 ? 255 : A > 0 ? A : 0;
+    const a = (((A | 0) >> 6) + 1) * 0.25, i = r * this.cols + c;
+    if (a < 1) { const bg = this.bg, k = r * 3; R = bg[k] + (R - bg[k]) * a; G = bg[k + 1] + (G - bg[k + 1]) * a; B = bg[k + 2] + (B - bg[k + 2]) * a; }
+    this.A[i] = A; this.s.putI(i, CH[ch], R, G, B);
   }
+  putXY(x, y, ch, R, G, B, A) { this.put(Math.floor(x / this.cw), Math.floor(y / this.chh), ch, R, G, B, A); }
 }
 
 /* ================= world: time of day, pointer, scroll ================= */
-const G = { px: -9999, py: -9999, pt: -99, clientDown: false, scrollV: 0, lastScrollY: window.scrollY || 0, typeT: -99, typeLen: 0, hourOv: null, hourOvT: 0, hourScrub: false, T: 0 };
+const T0 = performance.now();
+const G = { px: -9999, py: -9999, pt: -99, scrollV: 0, lastScrollY: window.scrollY || 0, typeT: -99, typeLen: 0, hourOv: null, hourScrub: false, get T() { return (performance.now() - T0) / 1000; } };
 function realHour() { const d = new Date(); return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600; }
 function hourNow() { return G.hourOv != null ? G.hourOv : realHour(); }
 const PAL = [
@@ -457,9 +411,8 @@ function skyAt(h) {
   return { zen, hor, ground, alt, day, h };
 }
 const rgbs = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
-function stageBg(S, gpct) {
-  return 'linear-gradient(to bottom,' + rgbs(S.zen) + ' 0%,' + rgbs(S.hor) + ' ' + (gpct - 1) + '%,' + rgbs(mix3(S.ground, [255, 255, 255], 0.06)) + ' ' + gpct + '%,' + rgbs(S.ground) + ' 100%)';
-}
+function stageStops(S, gpct) { return [[0, S.zen], [gpct - 1, S.hor], [gpct, mix3(S.ground, [255, 255, 255], 0.06)], [100, S.ground]]; }
+function stageBg(stops) { return 'linear-gradient(to bottom,' + rgbs(stops[0][1]) + ' 0%,' + rgbs(stops[1][1]) + ' ' + stops[1][0] + '%,' + rgbs(stops[2][1]) + ' ' + stops[2][0] + '%,' + rgbs(stops[3][1]) + ' 100%)'; }
 
 /* ================= emotions ================= */
 const E = {
@@ -487,11 +440,11 @@ const LABEL = { content: 'Content', curious: 'Curious', delighted: 'Delighted', 
 
 /* ================= actors + shared loop ================= */
 const actors = [];
-const live = { el: null, last: -99, pending: null };
+const live = { el: null, last: -99, pending: null, timer: 0 };
 function announce(text) {
   const el = live.el; if (!el) return;
   const now = G.T;
-  if (now - live.last < 4) { live.pending = text; return; }
+  if (now - live.last < 4) { live.pending = text; if (!live.timer) live.timer = setTimeout(() => { live.timer = 0; flushAnnounce(); }, (4 - (now - live.last)) * 1000 + 30); return; }
   live.last = now; live.pending = null; el.textContent = text;
 }
 function flushAnnounce() {
@@ -499,29 +452,38 @@ function flushAnnounce() {
 }
 
 /* particle pool kinds */
-const PK = { dust: 1, spark: 2, zed: 3, conf: 4, glint: 5, food: 6, q: 7, ember: 8 };
+const PK = { dust: 1, spark: 2, zed: 3, conf: 4, food: 6 };
 
 class Nomi {
   constructor(cv, o) {
     this.o = o; this.cv = cv;
-    this.L = new Layer(cv, { fs: o.fs, bloom: o.bloom == null ? 0.35 : o.bloom, onLayout: () => this.onLayout() });
+    this.L = new Grid([[0, [29, 42, 96]], [100, [29, 42, 96]]]);
+    this.sq = { x: 0, v: 0 }; this.ps = { x: 0, v: 0 };
     this.P = {}; for (const k of KEYS) this.P[k] = E.content[k];
     this.emo = o.emo || 'content'; this.emoT = 0; this.nextEmo = null; this.forced = !!o.emo; this.cycle = o.cycle || null; this.cycI = 0; this.cycT = o.cycleT || 3;
     if (this.forced) for (const k of KEYS) this.P[k] = E[this.emo][k];
-    this.vis = false; this.x = 0; this.x0 = null; this.hy = 0; this.vy = 0; this.vx = 0; this.q = 0; this.qv = 0;
-    this.pa = 0; this.pav = 0; this.pl = 0; this.hopS = 0; this.hopT = 0; this.hopTx = 0; this.target = null; this.nextHop = rnd(1.5, 3);
+    this.x = 0; this.x0 = null; this.hy = 0; this.vy = 0; this.vx = 0; this.q = 0; this.qv = 0;
+    this.pa = 0; this.pav = 0; this.hopS = 0; this.hopT = 0; this.hopTx = 0; this.target = null; this.nextHop = rnd(1.5, 3);
     this.lookx = 0; this.looky = 0; this.gx = 0; this.gy2 = 0; this.glanceT = 1;
     this.blinkT = rnd(1.5, 4); this.blink = 0; this.blinkPh = 0; this.breath = rnd(0, 6); this.phase = 0;
     this.idle = 0; this.sleepFlag = false; this.lm = 0; this.lx_ = 0; this.ly_ = 0; this.lastDirX = 1; this.xs = 0; this.pas = 0; this.mischief = 0; this.mischT = rnd(9, 16);
     this.pet = 0; this.pokes = 0; this.pokeT = 0; this.held = false; this.scrub = false; this.shake = 0; this.purr = 0; this.px = -9999; this.py = -9999; this.ptrT = -99; this.inside = false;
-    this.parts = []; for (let i = 0; i < (o.pn || 28); i++) this.parts.push({ on: 0, k: 0, ch: 0, x: 0, y: 0, vx: 0, vy: 0, t: 0, m: 1, r: 255, g: 255, b: 255 });
+    this.parts = new Pool(o.pn || 28, ['k', 'ch', 'x', 'y', 'vx', 'vy', 't', 'm', 'r', 'g', 'b']);
     this.zT = 0; this.spT = 0; this.rect = null; this.sunS = 0; this.skyS = null; this.tickAcc = 0; this.hourSeen = -1;
     this.foodX = null; this.mood = 0; this.lastSaid = ''; this.confetti = 0; this.fedCount = 0; this.sizeScale = 1;
-    this.tail = 0; this.noticeT = 0; this.flyT = rnd(8, 14); this.fly = null;
-    actors.push(this); this.draw1 = () => { if (this.L.ready) this.draw(); };
+    this.noticeT = 0; this.flyT = rnd(8, 14); this.fly = null;
+    actors.push(this);
+    this.S = GM.surface(cv, { fontSize: o.fs, transparent: true, bloom: o.bloom == null ? 0.35 : o.bloom, fps: o.fps || 30,
+      setup: () => this.onLayout(), step: (s, dt) => this.step(dt), draw: () => this.draw(), still: () => this.pose() });
   }
+  get vis() { return !!this.S && this.S.active; }
+  get q() { return this.sq.x; } set q(v) { this.sq.x = v; }
+  get qv() { return this.sq.v; } set qv(v) { this.sq.v = v; }
+  get pa() { return this.ps.x; } set pa(v) { this.ps.x = v; }
+  get pav() { return this.ps.v; } set pav(v) { this.ps.v = v; }
   onLayout() {
-    const L = this.L, o = this.o;
+    const L = this.L, o = this.o; L.sync(this.S); if (!L.ready) return;
+    this.rect = null;
     this.u = Math.min(L.vw / (o.uw || 7.4), L.vh / (o.uh || 4.7)) * (o.uk || 1);
     if (o.umax) this.u = Math.min(this.u, o.umax);
     this.gyp = Math.round(L.vh * (o.ground == null ? 0.8 : o.ground));
@@ -532,13 +494,16 @@ class Nomi {
     this.shd = new Float32Array(L.N);
     this.gpct = (this.gr * L.chh) / L.vh * 100;
     this.applyBg(true);
-    if (reduce || !this.vis) this.settle();
+    if (GM.reducedMotion || !this.vis) this.pose();
   }
   applyBg(force) {
     const h = hourNow();
     if (!force && Math.abs(h - this.hourSeen) < 0.01) return;
     this.hourSeen = h; const S = skyAt(h); this.skyS = S;
-    if (this.o.bg !== false && this.L.ready) this.cv.parentNode.style.background = stageBg(S, this.gpct);
+    if (this.L.ready) {
+      if (this.o.bg !== false) { const st = stageStops(S, this.gpct); this.L.setStops(st); this.cv.parentNode.style.background = stageBg(st); }
+      else this.L.setStops([[0, [16, 22, 61]], [100, [16, 22, 61]]]);
+    }
   }
   /* ------ emotion control ------ */
   feel(name, dur, next, nextDur) {
@@ -546,7 +511,7 @@ class Nomi {
     this.nextDur = nextDur || 0;
     if (this.emo !== name) { this.emo = name; if (this.o.main) announce(SAY[name]); }
     this.emoT = dur || 0; this.nextEmo = next || null;
-    if (reduce) {
+    if (GM.reducedMotion) {
       clearTimeout(this._rt);
       if (dur > 0) this._rt = setTimeout(() => { const nx = this.nextEmo || this.baseEmo(); const nd = this.nextDur || 0; this.nextEmo = null; this.emoT = 0; if (nx !== this.emo || nd) this.feel(nx, nd); else this.settle(); }, Math.min(dur, 3) * 1000 + 300);
       this.settle();
@@ -566,17 +531,13 @@ class Nomi {
     if (this.emo === 'asleep' || this.emo === 'sleepy') this.feel(this.emo === 'asleep' ? 'surprised' : 'curious', 0.8, 'curious');
     this.addQ(1.2);
   }
-  setSleep(on) { this.sleepFlag = on; this.idle = on ? 999 : 0; if (on) { this.feel('asleep', 0); } else { this.feel('surprised', 0.7, 'sleepy'); this.idle = 0; } this.emoT = on ? 0 : this.emoT; if (reduce) this.settle(); }
+  setSleep(on) { this.sleepFlag = on; this.idle = on ? 999 : 0; if (on) { this.feel('asleep', 0); } else { this.feel('surprised', 0.7, 'sleepy'); this.idle = 0; } this.emoT = on ? 0 : this.emoT; if (GM.reducedMotion) this.settle(); }
   addQ(v) { this.qv += v * 10; }
   /* ------ particles ------ */
-  emit(k, ch, x, y, vx, vy, life, r, g, b) {
-    const ps = this.parts; let p = null;
-    for (let i = 0; i < ps.length; i++) if (!ps[i].on) { p = ps[i]; break; }
-    if (!p) return null;
-    p.on = 1; p.k = k; p.ch = cc(ch); p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.t = 0; p.m = life; p.r = r; p.g = g; p.b = b; return p;
-  }
+  emit(k, ch, x, y, vx, vy, life, r, g, b) { return this.parts.spawn({ k, ch: cc(ch), x, y, vx, vy, t: 0, m: life, r, g, b }); }
+  clearFood() { const P = this.parts; for (let i = P.n - 1; i >= 0; i--) if (P.k[i] === PK.food) P.kill(i); }
   dropFood(x) {
-    for (const p of this.parts) if (p.on && p.k === PK.food) p.on = 0;
+    this.clearFood();
     const u = this.u; this.emit(PK.food, '*', clamp(x, u, this.L.vw - u), this.gy - u * 0.25, 0, 0, 99, 255, 214, 130);
     this.foodX = clamp(x, u, this.L.vw - u); this.idle = 0; if (this.emo === 'asleep' || this.emo === 'sleepy') this.wake();
     else this.feel('curious', 2.5);
@@ -589,15 +550,16 @@ class Nomi {
   bodyH() { return 1.95 * this.u * this.P.post * this.P.scl * (1 - this.q * 0.5); }
   bodyW() { return 2.5 * this.u * this.P.scl * (1 + this.q * 0.5); }
   pinLen() { return 0.85 * this.u * this.P.pinUp * (1 - this.q * 0.25) * (1 - 0.18 * clamp((62 - this.u) / 30, 0, 1)); }
-  /* ------ settle (reduced motion / offscreen first frame) ------ */
-  settle() {
+  /* ------ pose: the resting state for reduced motion and for the first frame ------ */
+  pose() {
+    if (!this.L.ready) return;
     for (const k of KEYS) this.P[k] = E[this.emo][k];
-    this.q = 0; this.qv = 0; this.hy = 0; this.vy = 0; this.hopS = 0; this.blink = 0;
+    this.q = 0; this.qv = 0; this.hy = 0; this.vy = 0; this.hopS = 0; this.blink = 0; this.rect = null;
     const tgt = this.looking(); this.lookx = tgt[0] * this.P.look; this.looky = tgt[1] * this.P.look;
     this.pa = this.pinTarget(); this.pav = 0; this.pas = this.pa; this.xs = this.x;
     this.updLight(0.001); this.applyBg(true);
-    if (this.L.ready) this.draw();
   }
+  settle() { this.pose(); this.S.invalidate(); }
   /* ------ look + light ------ */
   looking() {
     const u = this.u;
@@ -606,8 +568,8 @@ class Nomi {
     if (G.T - G.typeT < 1.6 && this.o.main !== 'dock') { return [clamp(G.typeLen * 0.06 - 0.3, -1, 1) * 0.8, -0.6]; }
     if (this.foodX != null) { tx = clamp((this.foodX - this.x) / (3 * u), -1, 1); ty = -0.6; return [tx, ty]; }
     if (this.noticeT > 0) return [this.sunDir() * 0.9, -1];
-    if (this.fly && this.fly.on) return [clamp((this.fly.x - this.x) / (3 * u), -1, 1), clamp((this.fly.y - (this.gy - this.bodyH() * 0.6)) / (3 * u), -1, 1) * -1];
-    const r = this.rect;
+    if (this.fly) return [clamp((this.fly.x - this.x) / (3 * u), -1, 1), clamp((this.fly.y - (this.gy - this.bodyH() * 0.6)) / (3 * u), -1, 1) * -1];
+    const r = this.rect || (this.rect = this.cv.getBoundingClientRect());
     if (this.o.look !== false && r && G.pt > -90 && G.T - G.pt < 6) {
       const cx = r.left + this.x, cy = r.top + this.gy - this.bodyH() * 0.6;
       let dx = G.px - cx, dy = G.py - cy; const d = Math.hypot(dx, dy) || 1;
@@ -642,7 +604,7 @@ class Nomi {
   /* ------ step ------ */
   step(dt) {
     const o = this.o, u = this.u, L = this.L; if (!L.ready) return;
-    G.T += 0; // global time advanced in loop
+    tickWorld();
     this.phase += dt * 3; this.breath += dt * (this.emo === 'asleep' ? 1.5 : this.emo === 'sleepy' ? 2 : 2.8);
     this.idle += dt;
     // scheduled cycle for showcase instances
@@ -678,8 +640,7 @@ class Nomi {
       if (b > 1.8) { this.blinkPh = 0; this.blink = 0; this.blinkT = Math.random() < 0.18 ? 0.18 : rnd(2, 5.5); }
     }
     // squash spring
-    const kq = 260, cq = 15;
-    this.qv += (-kq * this.q - cq * this.qv) * dt; this.q += this.qv * dt; this.q = clamp(this.q, -0.45, 0.55);
+    spring(this.sq, 0, 260, 15, dt); this.q = clamp(this.q, -0.45, 0.55);
     // hop state machine
     const grounded = this.hopS === 0;
     if (this.held) {
@@ -703,7 +664,7 @@ class Nomi {
     this.x = clamp(this.x, u * 1.5, L.vw - u * 1.5);
     // pin spring
     const pt = this.pinTarget() * (this.held ? 0.2 : 1);
-    this.pav += (-90 * (this.pa - pt) - 9 * this.pav) * dt; this.pa += this.pav * dt;
+    spring(this.ps, pt, 90, 9, dt);
     this.pa = clamp(this.pa, -1.2 * u, 1.2 * u);
     // shadow lag
     this.xs += (this.x - this.xs) * (1 - Math.exp(-dt * 7)); this.pas += (this.pa - this.pas) * (1 - Math.exp(-dt * 6));
@@ -715,9 +676,8 @@ class Nomi {
     if (this.noticeT > 0) this.noticeT -= dt;
     if (!this.forced && this.emo === 'content' && !this.fly) {
       this.flyT -= dt;
-      if (this.flyT <= 0) { const dir = Math.random() < 0.5 ? 1 : -1; this.fly = this.emit(PK.glint, '*', dir > 0 ? -10 : L.vw + 10, this.gy - 2.7 * u, dir * 0.8 * u, 0, 7, 190, 235, 255); this.flyT = rnd(16, 28); if (this.fly) { this.fly.y0 = this.fly.y; this.feel('curious', 6, null); } }
+      if (this.flyT <= 0) { const dir = Math.random() < 0.5 ? 1 : -1; const fy = this.gy - 2.7 * u; this.fly = { x: dir > 0 ? -10 : L.vw + 10, y: fy, y0: fy, vx: dir * 0.8 * u, t: 0, m: 7 }; this.flyT = rnd(16, 28); this.feel('curious', 6, null); }
     }
-    if (this.fly) { if (!this.fly.on) { this.fly = null; if (this.emo === 'curious' && this.emoT > 0) this.emoT = 0.4; } }
     if (this.mischief > 0) { this.mischief -= dt; if (this.mischief <= 0) { if (this.emo === 'content') { this.feel('curious', 1.7); this.noticeT = 1.7; } } }
     // petting decay
     this.pet = Math.max(0, this.pet - dt * 0.5); this.pokeT -= dt; if (this.pokeT <= 0) this.pokes = 0;
@@ -765,21 +725,26 @@ class Nomi {
     this.pav += -Math.sign(d) * 4 * u;
   }
   eat() {
-    this.foodX = null; this.target = null; for (const p of this.parts) if (p.on && p.k === PK.food) p.on = 0;
+    this.foodX = null; this.target = null; this.clearFood();
     this.addQ(1.4); this.burst(14, 255, 214, 130, true); this.fedCount++;
     this.feel('delighted', 3.2, 'content'); this.nextHop = rnd(2, 4); this.pav += 5 * u0(this);
   }
   stepParts(dt) {
-    const u = this.u;
-    for (const p of this.parts) {
-      if (!p.on) continue; p.t += dt; if (p.t > p.m) { p.on = 0; continue; }
-      if (p.k === PK.food) { p.y = this.gy - u * 0.28 - Math.abs(Math.sin(G.T * 3)) * 0.12 * u; continue; }
-      p.x += p.vx * dt; p.y += p.vy * dt;
-      if (p.k === PK.conf) { p.vy += 0.1 * dt * u; p.x += Math.sin(p.t * 4 + p.x) * 0.3; if (p.y > this.gy + 6) p.on = 0; }
-      else if (p.k === PK.spark) { p.vy += 1.4 * u * dt; p.vx *= 0.985; }
-      else if (p.k === PK.zed) { p.x += Math.sin(p.t * 2) * 0.2; }
-      else if (p.k === PK.glint) { p.y = p.y0 + Math.sin(p.t * 2.4) * 0.5 * u; if (p.x < -20 || p.x > this.L.vw + 20) p.on = 0; }
-      else if (p.k === PK.dust) { p.vx *= 0.94; }
+    const u = this.u, Pl = this.parts, { k, x, y, vx, vy, t, m } = Pl;
+    for (let i = Pl.n - 1; i >= 0; i--) {
+      t[i] += dt; if (t[i] > m[i]) { Pl.kill(i); continue; }
+      const kd = k[i];
+      if (kd === PK.food) { y[i] = this.gy - u * 0.28 - Math.abs(Math.sin(G.T * 3)) * 0.12 * u; continue; }
+      x[i] += vx[i] * dt; y[i] += vy[i] * dt;
+      if (kd === PK.conf) { vy[i] += 0.1 * dt * u; x[i] += Math.sin(t[i] * 4 + x[i]) * 0.3; if (y[i] > this.gy + 6) Pl.kill(i); }
+      else if (kd === PK.spark) { vy[i] += 1.4 * u * dt; vx[i] *= 0.985; }
+      else if (kd === PK.zed) { x[i] += Math.sin(t[i] * 2) * 0.2; }
+      else if (kd === PK.dust) { vx[i] *= 0.94; }
+    }
+    const f = this.fly;
+    if (f) {
+      f.t += dt; f.x += f.vx * dt; f.y = f.y0 + Math.sin(f.t * 2.4) * 0.5 * u;
+      if (f.t > f.m || f.x < -20 || f.x > this.L.vw + 20) { this.fly = null; if (this.emo === 'curious' && this.emoT > 0) this.emoT = 0.4; }
     }
   }
   /* ------ pointer API (called by page glue) ------ */
@@ -797,8 +762,8 @@ class Nomi {
     else if (this.pokes >= 3) this.feel('shy', 3.2, 'content');
     else this.feel('surprised', 0.7, this.pokes === 2 ? 'curious' : 'delighted');
     if (this.pokes < 3) { this.nextEmo = this.nextEmo; }
-    if (!reduce && this.hopS === 0 && this.pokes < 3) { this.hopS = 1; this.hopT = 0.08; this.hopG = 8 * this.u * 0.7 / 0.3 / 0.3 * 0.09 * 10 / 3.3; this.hopG = 8 * (this.u * 0.8) / (0.4 * 0.4); this.hopV = this.hopG * 0.4 / 2; this.hopVx = 0; }
-    if (reduce) this.settle();
+    if (!GM.reducedMotion && this.hopS === 0 && this.pokes < 3) { this.hopS = 1; this.hopT = 0.08; this.hopG = 8 * this.u * 0.7 / 0.3 / 0.3 * 0.09 * 10 / 3.3; this.hopG = 8 * (this.u * 0.8) / (0.4 * 0.4); this.hopV = this.hopG * 0.4 / 2; this.hopVx = 0; }
+    if (GM.reducedMotion) this.settle();
   }
   petMove(dist, dt) {
     if (this.held || this.scrub) return;
@@ -809,6 +774,8 @@ class Nomi {
   /* ================= DRAW ================= */
   draw() {
     const L = this.L, { cols, rows, cw, chh } = L, u = this.u, P = this.P, o = this.o;
+    if (!L.ready) return;
+    this.applyBg(false);
     L.clearBuf();
     const S = this.skyS || skyAt(hourNow()); const T = G.T;
     const gy = this.gy, gr = this.gr;
@@ -842,7 +809,6 @@ class Nomi {
     this.drawPin();
     this.drawParts();
     if (o.extra) o.extra(this);
-    const bu = this.u; L.paint(); L.bloomPass(this.x - bu * 2.7, (this.tipY || 0) - bu * 1.3, this.x + bu * 2.7, this.gy + bu * 0.4);
   }
   offs(ox, h, ptr) {
     const u = this.u; let sun = this.sunS * h * 1.0;
@@ -1095,7 +1061,7 @@ class Nomi {
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       const dx = (c + 0.5) * cw - tipX, dy = ((r + 0.5) * chh - tipY) * 1.8; const d = Math.sqrt(dx * dx + dy * dy) / hr; if (d >= 1) continue;
       const a = (1 - d) * (1 - d) * glow; if (a < 0.06) continue;
-      if (L.Bc[r * L.cols + c] && r >= 0) { const i = r * L.cols + c; if (L.Ba[i] > 40) continue; }
+      if (c >= 0 && r >= 0 && c < L.cols && r < L.rows) { const i = r * L.cols + c; if (L.s.ch[i] !== ' ' && L.A[i] > 40) continue; }
       L.put(c, r, d < 0.45 ? 58 : 46, 255, 214, 140, a * 150);
     }
     // blade: a small triangular gnomon fin, wide at the head and sharp at the tip
@@ -1133,53 +1099,35 @@ class Nomi {
     }
   }
   drawParts() {
-    const L = this.L;
-    for (const p of this.parts) {
-      if (!p.on) continue; const k = 1 - p.t / p.m; let a = 255 * Math.min(1, k * 2.2);
-      if (p.k === PK.food) { const tw = 0.7 + 0.3 * Math.sin(G.T * 8); L.putXY(p.x, p.y, 42, 255, 224, 150, 255 * tw); L.putXY(p.x - L.cw, p.y, 43, 255, 200, 120, 130); L.putXY(p.x + L.cw, p.y, 43, 255, 200, 120, 130); L.putXY(p.x, p.y - L.chh, 94, 255, 214, 130, 150); continue; }
-      if (p.k === PK.glint) { L.putXY(p.x, p.y, 42, 220, 245, 255, 255); L.putXY(p.x - Math.sign(p.vx) * L.cw * 1.2, p.y, 46, 190, 235, 255, 170); L.putXY(p.x - Math.sign(p.vx) * L.cw * 2.4, p.y, 46, 190, 235, 255, 90); continue; }
-      let ch = p.ch;
-      if (p.k === PK.zed) { ch = p.t > p.m * 0.5 ? cc('Z') : cc('z'); }
-      L.putXY(p.x, p.y, ch, p.r, p.g, p.b, a);
+    const L = this.L, Pl = this.parts, { k, ch, x, y, vx, t, m, r, g, b } = Pl;
+    for (let i = 0; i < Pl.n; i++) {
+      const kd = k[i], a = 255 * Math.min(1, (1 - t[i] / m[i]) * 2.2);
+      if (kd === PK.food) { const tw = 0.7 + 0.3 * Math.sin(G.T * 8); L.putXY(x[i], y[i], 42, 255, 224, 150, 255 * tw); L.putXY(x[i] - L.cw, y[i], 43, 255, 200, 120, 130); L.putXY(x[i] + L.cw, y[i], 43, 255, 200, 120, 130); L.putXY(x[i], y[i] - L.chh, 94, 255, 214, 130, 150); continue; }
+      L.putXY(x[i], y[i], kd === PK.zed ? (t[i] > m[i] * 0.5 ? cc('Z') : cc('z')) : ch[i], r[i], g[i], b[i], a);
     }
+    const f = this.fly;
+    if (f) { const sg = Math.sign(f.vx); L.putXY(f.x, f.y, 42, 220, 245, 255, 255); L.putXY(f.x - sg * L.cw * 1.2, f.y, 46, 190, 235, 255, 170); L.putXY(f.x - sg * L.cw * 2.4, f.y, 46, 190, 235, 255, 90); }
   }
 }
 function u0(n) { return n.u; }
 const CH_RAMP = [32, 46, 58, 45, 61, 43, 42, 35, 37, 64];
 
-/* ================= loop ================= */
-function refreshRects() {
-  for (const a of actors) if (a.vis) { a.rect = a.cv.getBoundingClientRect(); }
-}
-let last = 0, acc = 0, lastDraw = 0, rectT = 0;
-function frame(ts) {
-  requestAnimationFrame(frame);
-  if (document.hidden) { last = ts; return; }
-  let dt = (ts - last) / 1000; last = ts; if (dt > 0.1) dt = 0.1; if (dt <= 0) return;
-  acc += dt; let n = 0;
-  G.T += dt;
-  const sy = window.scrollY; const v = (sy - G.lastScrollY) / Math.max(dt, 0.001); G.lastScrollY = sy; G.scrollV += (v - G.scrollV) * Math.min(1, dt * 8);
+/* ================= world clock: the engine drives each surface, this keeps the shared page state moving ================= */
+let tw = performance.now(), rectT = 0;
+function tickWorld() {
+  const now = performance.now(), real = (now - tw) / 1000; if (real < 0.008) return; tw = now;
+  const dt = Math.min(0.1, real), sy = window.scrollY;
+  if (real > 0.25) { G.lastScrollY = sy; G.scrollV = 0; }
+  else { const v = (sy - G.lastScrollY) / Math.max(dt, 0.001); G.lastScrollY = sy; G.scrollV += (v - G.scrollV) * Math.min(1, dt * 8); }
   if (G.hourOv != null && !G.hourScrub && !G.hourPin) {
     if (G.hourHold > 0) G.hourHold -= dt; else { const rh = realHour(); let d = rh - G.hourOv; if (d > 12) d -= 24; if (d < -12) d += 24; G.hourOv += d * Math.min(1, dt * 1.6); G.hourOv = (G.hourOv + 24) % 24; if (Math.abs(d) < 0.03) G.hourOv = null; }
   }
-  rectT -= dt; if (rectT <= 0) { rectT = 0.12; refreshRects(); }
-  let vis = 0; for (const a of actors) if (a.vis) vis++;
-  if (!vis) { acc = 0; return; }
-  while (acc >= 1 / 60 && n < 4) { acc -= 1 / 60; n++; for (const a of actors) if (a.vis) a.step(1 / 60); }
-  if (acc > 0.1) acc = 0;
-  if (ts - lastDraw < 31) return; lastDraw = ts;
-  for (const a of actors) if (a.vis && a.L.ready) { if (a.o.static) continue; const fp = a.o.fps || 30; if (fp < 30 && ts < (a.nd || 0)) continue; a.nd = ts + 1000 / fp - 9; a.applyBg(false); a.draw(); }
-  flushAnnounce();
+  rectT -= dt; if (rectT <= 0) { rectT = 0.12; for (const a of actors) if (a.vis) a.rect = a.cv.getBoundingClientRect(); }
 }
-window.NOMI = { actors, Nomi, Layer, G, E, ORDER, LABEL, SAY, announce, reduce, $, $$, clamp, lerp, smooth, rnd, skyAt, stageBg, hourNow, PK, cc, startLoop() { if (!reduce) requestAnimationFrame((t) => { last = t; frame(t); }); }, hash2, vnoise, mix3, refreshRects, live };
-})();
 
-</script>
-<script>
-(() => {
-'use strict';
-const N = window.NOMI; const { $, $$, clamp, lerp, rnd, G, Nomi, Layer, E, ORDER, LABEL, SAY, reduce, hourNow } = N;
-N.live.el = $('#live');
+
+/* ================= page glue ================= */
+live.el = $('#live');
 
 /* ---------- build instances ---------- */
 const all = [];
@@ -1191,9 +1139,9 @@ const cards = ORDER.map((e) => mk('cv-' + e, { fs: 8, emo: e, uw: 5.2, uh: 4.9, 
 const wild = {
   nav: mk('cvNav', { fps: 20, fs: 5, emo: 'content', uw: 4.6, uh: 3.5, ground: 0.95, bloom: 0.25, bg: false, hopForced: true }),
   e404: mk('cv404', { fps: 20, fs: 8, emo: 'concerned', cycle: ['concerned', 'curious', 'concerned', 'shy'], cycleT: 2.6, uw: 7.4, uh: 4.6, ground: 0.84, free: false,
-    extra: (n) => { const L = n.L; const t = N.G.T; const q = '?'.charCodeAt(0); const y = n.tipY - L.chh * 2.4 - Math.sin(t * 2) * 3; L.putXY(n.tipX + L.cw * 3, y, q, 255, 220, 150, 255); if (Math.sin(t * 2 + 1) > 0.2) L.putXY(n.tipX - L.cw * 4, y + L.chh * 1.4, q, 200, 220, 255, 200); } }),
+    extra: (n) => { const L = n.L; const t = G.T; const q = '?'.charCodeAt(0); const y = n.tipY - L.chh * 2.4 - Math.sin(t * 2) * 3; L.putXY(n.tipX + L.cw * 3, y, q, 255, 220, 150, 255); if (Math.sin(t * 2 + 1) > 0.2) L.putXY(n.tipX - L.cw * 4, y + L.chh * 1.4, q, 200, 220, 255, 200); } }),
   load: mk('cvLoad', { fps: 20, fs: 8, emo: 'focused', uw: 7.4, uh: 4.6, ground: 0.8,
-    extra: (n) => { const L = n.L; const w = Math.floor(L.cols * 0.7), c0 = Math.floor((L.cols - w) / 2), r = Math.min(L.rows - 1, n.gr + 2); const p = (N.G.T * 0.22) % 1; for (let i = 0; i < w; i++) { const on = i / w < p; L.put(c0 + i, r, on ? 61 : 45, on ? 255 : 160, on ? 214 : 170, on ? 130 : 200, on ? 255 : 120); } L.put(c0 - 1, r, 91, 200, 210, 240, 255); L.put(c0 + w, r, 93, 200, 210, 240, 255); } }),
+    extra: (n) => { const L = n.L; const w = Math.floor(L.cols * 0.7), c0 = Math.floor((L.cols - w) / 2), r = Math.min(L.rows - 1, n.gr + 2); const p = (G.T * 0.22) % 1; for (let i = 0; i < w; i++) { const on = i / w < p; L.put(c0 + i, r, on ? 61 : 45, on ? 255 : 160, on ? 214 : 170, on ? 130 : 200, on ? 255 : 120); } L.put(c0 - 1, r, 91, 200, 210, 240, 255); L.put(c0 + w, r, 93, 200, 210, 240, 255); } }),
   win: mk('cvWin', { fps: 20, fs: 8, emo: 'delighted', cycle: ['delighted', 'proud'], cycleT: 3.2, uw: 7.4, uh: 4.6, ground: 0.84, pn: 60, hopForced: true,
     onStep: (n, dt) => { if (n.confetti <= 0) n.confetti = 1; } }),
   foot: mk('cvFoot', { fps: 20, fs: 8, emo: 'asleep', uw: 7.4, uh: 4.6, ground: 0.84 })
@@ -1203,15 +1151,15 @@ const dockEls = { box: $('#dock'), sleep: $('#dockSleep'), hide: $('#dockHide'),
 /* ---------- sketches (rejected concepts) ---------- */
 class Sketch {
   constructor(id, fn, fs) {
-    this.cv = document.getElementById(id); this.fn = fn; this.vis = false; this.o = {};
-    this.o.fps = 20; this.L = new Layer(this.cv, { fs: fs || 8, bloom: 0.35, onLayout: () => { if (reduce || !this.vis) this.draw(); } }); this.t = 0; this.rect = null;
-    N.actors.push(this); this.px = null; this.py = null;
-    this.cv.addEventListener('pointermove', (e) => { const r = this.cv.getBoundingClientRect(); this.px = e.clientX - r.left; this.py = e.clientY - r.top; if (reduce) this.draw(); });
+    this.cv = document.getElementById(id); this.fn = fn; this.t = 0; this.px = null; this.py = null;
+    this.L = new Grid([[0, [27, 36, 88]], [100, [51, 48, 95]]]);
+    this.S = GM.surface(this.cv, { fontSize: fs || 8, transparent: true, bloom: 0.35, fps: 20,
+      setup: (s) => this.L.sync(s), step: (s, dt) => { this.t += dt; }, draw: () => this.draw(), still: () => { this.t = 0; } });
+    this.cv.addEventListener('pointermove', (e) => { const r = this.cv.getBoundingClientRect(); this.px = e.clientX - r.left; this.py = e.clientY - r.top; if (GM.reducedMotion) this.S.invalidate(); });
     this.cv.addEventListener('pointerleave', () => { this.px = null; });
-    this.cv.addEventListener('pointerdown', () => { this.down = true; if (reduce) this.draw(); }); window.addEventListener('pointerup', () => { this.down = false; });
+    this.cv.addEventListener('pointerdown', () => { this.down = true; if (GM.reducedMotion) this.S.invalidate(); }); window.addEventListener('pointerup', () => { this.down = false; });
   }
-  applyBg() {} step(dt) { this.t += dt; }
-  draw() { const L = this.L; if (!L.ready) return; L.clearBuf(); this.fn(L, this); L.paint(); L.bloomPass(); }
+  draw() { const L = this.L; if (!L.ready) return; L.clearBuf(); this.fn(L, this); }
 }
 const P = (L, x, y, ch, r, g, b, a) => L.putXY(x, y, ch.charCodeAt(0), r, g, b, a == null ? 255 : a);
 const sk1 = new Sketch('sk1', (L, s) => { // Wick the moth: orbits the pointer lamp
@@ -1241,26 +1189,20 @@ const sk3 = new Sketch('sk3', (L, s) => { // Tick, a clock-hand bird
   P(L, cx, cy, '@', 255, 230, 190);
 }, 8);
 
-/* ---------- visibility, layout ---------- */
-const io = new IntersectionObserver((es) => {
-  for (const e of es) { const a = N.actors.find((x) => x.cv === e.target); if (a) { a.vis = e.isIntersecting && !(a === dock && dockEls.box.hidden); if (a.vis && a.L.ready && (reduce)) a.draw(); } }
-  syncDock();
-}, { rootMargin: '60px' });
-const ro = new ResizeObserver((es) => { for (const e of es) { const a = N.actors.find((x) => x.cv === e.target); if (a) { a.L.layout(); if (a.rect !== undefined) a.rect = a.cv.getBoundingClientRect(); if (a.vis || reduce) { if (a.settle) a.settle(); else a.draw(); } } } });
-for (const a of N.actors) { io.observe(a.cv); ro.observe(a.cv); a.vis = false; }
-document.fonts && document.fonts.ready && document.fonts.ready.then(() => { for (const a of N.actors) { a.L.layout(); if (a.settle) a.settle(); else a.draw(); } });
-
 /* ---------- dock: shows only when the big stages are off screen ---------- */
 let dockHidden = false; try { dockHidden = localStorage.getItem('nomiDockHidden') === '1'; } catch (e) {}
-function mainVisible() { return hero.vis || play.vis; }
+// the dock shows only while neither big stage is on screen (a page behavior, so it keeps its own small observer)
+const stageSeen = new Map();
+const stageIO = new IntersectionObserver((es) => { for (const e of es) stageSeen.set(e.target, e.isIntersecting); syncDock(); }, { rootMargin: '60px' });
+stageIO.observe(hero.cv); stageIO.observe(play.cv);
+function mainVisible() { return !!(stageSeen.get(hero.cv) || stageSeen.get(play.cv)); }
 function syncDock() {
   const want = !mainVisible() && !dockHidden;
   dockEls.box.hidden = !want; dockEls.show.hidden = !(dockHidden && !mainVisible());
-  dock.vis = want;
-  if (want && reduce && dock.L.ready) { dock.L.layout(); dock.settle(); }
+  if (want) dock.S.resume(); else dock.S.pause();
 }
 dockEls.hide.addEventListener('click', () => { dockHidden = true; try { localStorage.setItem('nomiDockHidden', '1'); } catch (e) {} syncDock(); dockEls.show.focus(); });
-dockEls.show.addEventListener('click', () => { dockHidden = false; try { localStorage.setItem('nomiDockHidden', '0'); } catch (e) {} syncDock(); dock.wake(); dockEls.sleep.focus(); });
+dockEls.show.addEventListener('click', () => { dockHidden = false; try { localStorage.setItem('nomiDockHidden', '0'); } catch (e) {} syncDock(); dock.wake(); if (GM.reducedMotion) dock.settle(); dockEls.sleep.focus(); });
 dockEls.sleep.addEventListener('click', () => { const on = dockEls.sleep.getAttribute('aria-pressed') !== 'true'; dockEls.sleep.setAttribute('aria-pressed', on); dockEls.sleep.textContent = on ? 'Wake' : 'Sleep'; dock.setSleep(on); });
 const scrollReact = (n, dt) => {
   const v = G.scrollV;
@@ -1278,8 +1220,7 @@ window.addEventListener('keydown', (e) => {
   G.typeT = G.T; G.typeLen = (e.target && e.target.value) ? e.target.value.length : G.typeLen;
   for (const n of [hero, play, dock]) if (n.vis) { n.idle = 0; if (n.emo === 'content') n.feel('curious', 1.8); }
 });
-window.addEventListener('scroll', () => { G.pt = G.pt; if (reduce && dock.vis) { dock.settle(); } }, { passive: true });
-document.addEventListener('visibilitychange', () => {});
+window.addEventListener('scroll', () => { G.pt = G.pt; if (GM.reducedMotion && dock.vis) { dock.settle(); } }, { passive: true });
 
 /* ---------- stage wiring (hero + playground) ---------- */
 function wireStage(n, box) {
@@ -1294,45 +1235,45 @@ function wireStage(n, box) {
       if (down.type === 'scrub') {
         const hr = 4.8 + 14.4 * clamp(x / n.L.vw, 0, 1); G.hourOv = hr; G.hourScrub = true; n.scrub = true; n.idle = 0;
         const band = hr < 6.4 ? 'sleepy' : hr < 17 ? (hr > 10.5 && hr < 14.5 ? 'proud' : 'delighted') : hr < 19.2 ? 'curious' : 'sleepy';
-        if (hr > 19.4 || hr < 5.4) { if (n.emo !== 'asleep') n.feel('asleep', 0); } else if (n.emo !== band) { n.emo = band; n.emoT = 0.0001; n.nextEmo = null; N.announce(SAY[band]); }
+        if (hr > 19.4 || hr < 5.4) { if (n.emo !== 'asleep') n.feel('asleep', 0); } else if (n.emo !== band) { n.emo = band; n.emoT = 0.0001; n.nextEmo = null; announce(SAY[band]); }
         n.emoT = 0.8; n.nextEmo = null;
-        if (reduce) n.settle();
+        if (GM.reducedMotion) n.settle();
       } else if (down.type === 'body') {
         if (!down.moved && Math.hypot(x - down.x, y - down.y) > 7) { down.moved = true; n.held = true; n.hopS = 0; n.feel('surprised', 0.8, 'shy', 0); n.emoT = 0.8; n.nextEmo = 'shy'; n.nextDur = 0; }
-        if (down.moved) { n.heldX = x; n.heldY = Math.max(0, n.gy - y - n.Hh * 0.42); n.idle = 0; if (n.emoT <= 0 && n.held) { n.emoT = 5; n.emo = 'shy'; } if (reduce) n.settle(); }
+        if (down.moved) { n.heldX = x; n.heldY = Math.max(0, n.gy - y - n.Hh * 0.42); n.idle = 0; if (n.emoT <= 0 && n.held) { n.emoT = 5; n.emo = 'shy'; } if (GM.reducedMotion) n.settle(); }
       }
     } else {
       if (n.hitBody(x, y)) n.petMove(sp, 1 / 60);
       cv.style.cursor = n.hitPin(x, y) ? 'grab' : n.hitBody(x, y) ? 'pointer' : 'crosshair';
-      if (reduce) { n.settle(); }
+      if (GM.reducedMotion) { n.settle(); }
     }
   });
   cv.addEventListener('pointerleave', () => { if (!down) n.pointerOut(); });
   cv.addEventListener('pointerdown', (e) => {
     const [x, y] = loc(e); cv.setPointerCapture && cv.setPointerCapture(e.pointerId); n.pointerAt(x, y); n.idle = 0;
     box.focus({ preventScroll: true });
-    if (n.hitPin(x, y)) { down = { type: 'scrub' }; G.scrubbed = true; n.scrub = true; G.hourScrub = true; G.hourOv = hourNow(); cv.style.cursor = 'grabbing'; n.pav += 6 * n.u; n.feel('surprised', 0.6, 'delighted'); if (reduce) n.settle(); }
+    if (n.hitPin(x, y)) { down = { type: 'scrub' }; G.scrubbed = true; n.scrub = true; G.hourScrub = true; G.hourOv = hourNow(); cv.style.cursor = 'grabbing'; n.pav += 6 * n.u; n.feel('surprised', 0.6, 'delighted'); if (GM.reducedMotion) n.settle(); }
     else if (n.hitBody(x, y)) { down = { type: 'body', x, y, moved: false }; }
-    else { down = { type: 'food' }; n.dropFood(x); if (reduce) n.settle(); }
+    else { down = { type: 'food' }; n.dropFood(x); if (GM.reducedMotion) n.settle(); }
   });
   const up = (e) => {
     if (!down) return; const d = down; down = null;
     if (d.type === 'scrub') { n.scrub = false; G.hourScrub = false; G.hourHold = 2.2; n.emoT = 1.4; n.nextEmo = null; cv.style.cursor = ''; if (n.emo === 'asleep') { n.idle = 80; } else n.feel(n.emo, 1.2, null); }
     else if (d.type === 'body') {
-      if (d.moved) { n.held = false; n.hopS = 0; n.vy = 0; n.feel('delighted', 1.6, 'content'); n.emoT = 1.8; n.nextEmo = 'content'; n.nextDur = 0; n.x = clamp(n.x, n.u * 1.5, n.L.vw - n.u * 1.5); if (reduce) { n.hy = 0; n.settle(); } }
+      if (d.moved) { n.held = false; n.hopS = 0; n.vy = 0; n.feel('delighted', 1.6, 'content'); n.emoT = 1.8; n.nextEmo = 'content'; n.nextDur = 0; n.x = clamp(n.x, n.u * 1.5, n.L.vw - n.u * 1.5); if (GM.reducedMotion) { n.hy = 0; n.settle(); } }
       else n.poke();
     }
-    if (reduce) { setTimeout(() => { n.settle(); }, 1800); }
+    if (GM.reducedMotion) { setTimeout(() => { n.settle(); }, 1800); }
   };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
   // keyboard
   box.addEventListener('keydown', (e) => {
     const L = n.L; let used = true;
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { n.inside = true; n.px = clamp((n.px < -9000 ? n.x : n.px) + (e.key === 'ArrowLeft' ? -50 : 50), 10, L.vw - 10); n.py = n.gy * 0.35; n.idle = 0; if (n.emo === 'asleep') n.wake(); if (reduce) n.settle(); }
-    else if (e.key === 'Escape') { n.inside = false; n.px = -9999; if (reduce) n.settle(); used = false; }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { n.inside = true; n.px = clamp((n.px < -9000 ? n.x : n.px) + (e.key === 'ArrowLeft' ? -50 : 50), 10, L.vw - 10); n.py = n.gy * 0.35; n.idle = 0; if (n.emo === 'asleep') n.wake(); if (GM.reducedMotion) n.settle(); }
+    else if (e.key === 'Escape') { n.inside = false; n.px = -9999; if (GM.reducedMotion) n.settle(); used = false; }
     else if (e.key === 'Enter' || e.key === ' ') n.poke();
     else if (e.key === 'p' || e.key === 'P') { n.pet = 5; n.petMove(n.u * 4, 1 / 60); }
-    else if (e.key === 'f' || e.key === 'F') { n.dropFood(n.x + (Math.random() < 0.5 ? -1 : 1) * n.u * rnd(3, 5)); if (reduce) n.settle(); }
+    else if (e.key === 'f' || e.key === 'F') { n.dropFood(n.x + (Math.random() < 0.5 ? -1 : 1) * n.u * rnd(3, 5)); if (GM.reducedMotion) n.settle(); }
     else if (e.key === 's' || e.key === 'S') toggleSleep(n);
     else used = false;
     if (used) e.preventDefault();
@@ -1340,10 +1281,10 @@ function wireStage(n, box) {
   box.addEventListener('blur', () => { if (!down) { n.inside = false; n.px = -9999; } });
 }
 wireStage(hero, $('#stageHero')); wireStage(play, $('#stagePlay'));
-function toggleSleep(n) { const on = !n.sleepFlag; n.setSleep(on); const sel = n === play ? '[data-sleep][data-stage=play]' : '[data-sleep]:not([data-stage])'; $$(sel).forEach((b) => { b.setAttribute('aria-pressed', on); b.textContent = on ? 'Wake up' : 'Send to sleep'; }); if (on) N.announce('Nomi is asleep.'); }
+function toggleSleep(n) { const on = !n.sleepFlag; n.setSleep(on); const sel = n === play ? '[data-sleep][data-stage=play]' : '[data-sleep]:not([data-stage])'; $$(sel).forEach((b) => { b.setAttribute('aria-pressed', on); b.textContent = on ? 'Wake up' : 'Send to sleep'; }); if (on) announce('Nomi is asleep.'); }
 
 /* ---------- buttons ---------- */
-const act = (n, fn) => { fn(n); if (reduce) n.settle(); };
+const act = (n, fn) => { fn(n); if (GM.reducedMotion) n.settle(); };
 $$('[data-act]').forEach((b) => b.addEventListener('click', () => {
   const a = b.dataset.act; const tgt = b.dataset.stage === 'play' ? play : hero;
   if (a === 'pet') act(tgt, (n) => { n.pet = 5; n.petMove(n.u * 4, 1 / 60); n.purr = 2.5; n.idle = 0; if (n.sleepFlag) toggleSleep(n); });
@@ -1359,7 +1300,7 @@ function setMoodText() { const n = play.vis ? play : hero; const t = LABEL[n.emo
 setInterval(setMoodText, 250);
 const clk = $('#clockline');
 function clockText() {
-  const h = hourNow(); const S = N.skyAt(h); const hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+  const h = hourNow(); const S = skyAt(h); const hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
   const t = ((hh + 11) % 12 + 1) + ':' + String(mm).padStart(2, '0') + (hh < 12 ? ' AM' : ' PM');
   const alt = S.alt; const d = S.day;
   const txt = d < 0.15 ? 'the sun is down, so the pin glows and the shadow stays small' : alt > 0.8 ? 'the sun is high, so the shadow is a short puddle' : alt > 0.45 ? 'the sun is climbing, so the shadow is medium' : 'the sun is low, so the shadow is long';
@@ -1373,17 +1314,17 @@ function ev(type) {
   for (const n of ts) {
     n.idle = 0; if (n.sleepFlag) { n.sleepFlag = false; }
     if (type === 'error') { n.feel('concerned', 3.8, 'content'); n.shake = 0.45; n.addQ(1.4); n.confetti = 0; }
-    else if (type === 'success') { n.feel('delighted', 2.6, 'proud', 3.4); n.confetti = 2.8; n.burst(18, 255, 214, 130, true); n.addQ(-1.2); if (n.hopS === 0 && !reduce) { n.hopS = 1; n.hopT = 0.1; n.hopG = 8 * n.u * 1.1 / (0.5 * 0.5); n.hopV = n.hopG * 0.5 / 2; n.hopVx = 0; } }
+    else if (type === 'success') { n.feel('delighted', 2.6, 'proud', 3.4); n.confetti = 2.8; n.burst(18, 255, 214, 130, true); n.addQ(-1.2); if (n.hopS === 0 && !GM.reducedMotion) { n.hopS = 1; n.hopT = 0.1; n.hopG = 8 * n.u * 1.1 / (0.5 * 0.5); n.hopV = n.hopG * 0.5 / 2; n.hopVx = 0; } }
     else if (type === 'loading') { n.feel('focused', 14, 'content'); n.target = null; }
     else if (type === 'loaded') { n.feel('proud', 2.8, 'content'); n.burst(10, 255, 214, 130, true); }
     else if (type === 'night') { n.idle = 120; n.feel('sleepy', 0); }
-    else if (type === 'idle') { n.idle = 30; n.feel('sleepy', 0); setTimeout(() => { if (n.idle > 29) { n.idle = 90; n.emo = 'asleep'; if (reduce) n.settle(); } }, 3200); }
-    if (reduce) n.settle();
+    else if (type === 'idle') { n.idle = 30; n.feel('sleepy', 0); setTimeout(() => { if (n.idle > 29) { n.idle = 90; n.emo = 'asleep'; if (GM.reducedMotion) n.settle(); } }, 3200); }
+    if (GM.reducedMotion) n.settle();
   }
-  if (type === 'night') { G.hourPin = true; G.hourOv = 23.4; setTimeout(() => { G.hourPin = false; G.hourHold = 0.5; for (const n of targets()) { n.idle = 0; n.feel('surprised', 0.7, 'content'); if (reduce) n.settle(); } if (reduce) { G.hourOv = null; for (const a of all) a.applyBg(true); } }, 9000); if (reduce) for (const a of all) { a.applyBg(true); a.settle && a.settle(); } }
+  if (type === 'night') { G.hourPin = true; G.hourOv = 23.4; setTimeout(() => { G.hourPin = false; G.hourHold = 0.5; for (const n of targets()) { n.idle = 0; n.feel('surprised', 0.7, 'content'); if (GM.reducedMotion) n.settle(); } if (GM.reducedMotion) { G.hourOv = null; for (const a of all) a.applyBg(true); } }, 9000); if (GM.reducedMotion) for (const a of all) { a.applyBg(true); a.settle && a.settle(); } }
   if (type === 'day') { G.hourPin = false; G.hourHold = 0; G.hourOv = null; }
 }
-window.NOMI.event = ev;
+window.NOMI = { event: ev, actors };
 $$('[data-ev]').forEach((b) => b.addEventListener('click', () => {
   const t = b.dataset.ev;
   if (t === 'loading') { ev('loading'); b.disabled = true; const old = b.textContent; b.textContent = 'Loading...'; setTimeout(() => { ev('loaded'); b.disabled = false; b.textContent = old; }, 3400); }
@@ -1404,15 +1345,13 @@ $$('.ecard').forEach((b) => b.addEventListener('click', () => {
   const e = b.dataset.emo; const ts = targets(); const n = ts.find((x) => x === hero || x === play) || dock;
   const ts2 = ts.length ? ts : [dock];
   for (const t of ts2) { t.idle = 0; t.sleepFlag = false; t.feel(e, 6, null); if (e === 'asleep') t.idle = 60; }
-  toast.textContent = LABEL[e] + ': the live Nomi on this page feels it for six seconds.' ; if (reduce) for (const t of ts2) t.settle();
+  toast.textContent = LABEL[e] + ': the live Nomi on this page feels it for six seconds.' ; if (GM.reducedMotion) for (const t of ts2) t.settle();
 }));
 const navBox = $('.fakenav');
-if (navBox && wild.nav) { const hopNav = () => { const n = wild.nav; if (reduce || n.hopS !== 0) return; n.hopS = 1; n.hopT = 0.08; n.hopG = 8 * n.u * 0.9 / (0.45 * 0.45); n.hopV = n.hopG * 0.45 / 2; n.hopVx = 0; n.addQ(1.2); n.pav += 3 * n.u; }; navBox.addEventListener('pointerenter', hopNav); navBox.addEventListener('pointerdown', hopNav); }
-N.startLoop();
+if (navBox && wild.nav) { const hopNav = () => { const n = wild.nav; if (GM.reducedMotion || n.hopS !== 0) return; n.hopS = 1; n.hopT = 0.08; n.hopG = 8 * n.u * 0.9 / (0.45 * 0.45); n.hopV = n.hopG * 0.45 / 2; n.hopVx = 0; n.addQ(1.2); n.pav += 3 * n.u; }; navBox.addEventListener('pointerenter', hopNav); navBox.addEventListener('pointerdown', hopNav); }
 syncDock();
 // first-visit gentle wake
 setTimeout(() => { if (hero.vis) hero.feel('curious', 1.8); }, 900);
-window.addEventListener('load', () => { for (const a of N.actors) { a.L.layout(); if (reduce) { if (a.settle) a.settle(); else a.draw(); } } });
 })();
 
 </script>
