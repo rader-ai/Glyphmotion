@@ -154,7 +154,7 @@ h2{font:500 clamp(26px,4.2vw,42px)/1.1 var(--ui);letter-spacing:-.01em;margin:0 
   text-shadow:0 0 18px rgba(255,176,64,.9),0 0 40px rgba(255,176,64,.5);opacity:0;transition:opacity .4s;width:min(92vw,720px)}
 #toast.on{opacity:1}
 #toast small{display:block;margin-top:10px;font-size:.55em;letter-spacing:.16em;color:var(--am)}
-canvas#cur{position:fixed;inset:0;width:100vw;height:100vh;z-index:80;pointer-events:none}
+canvas#cur{position:fixed;inset:0;width:100vw;height:100vh;z-index:80;pointer-events:none;mix-blend-mode:screen}
 
 @media (max-width:900px){
   .nav,.hdr-r .btn.sm{display:none}
@@ -342,89 +342,48 @@ canvas#cur{position:fixed;inset:0;width:100vw;height:100vh;z-index:80;pointer-ev
 <div id="toast" role="status" aria-live="polite"></div>
 <canvas id="cur" aria-hidden="true"></canvas>
 
+<script src="../../src/glyphmotion.js"></script>
 <script>
 (() => {
 'use strict';
-const REDUCE = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-const FAMILY = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-const STEP = 1 / 60;
-const RAMP = ' .:-=+*#%@';
+const GM = Glyphmotion;
+const { clamp, lerp, smooth, hash2, vnoise, lineChar, Pool, RAMP, STEP } = GM;
+const RM = () => GM.reducedMotion;
 const NOISE = '01+=x:/<>%#&$';
-const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
-const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-function hash2(x, y) {
-  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
-  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
-  return (h >>> 0) / 4294967296;
-}
-function vnoise(x, y) {
-  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
-function lineChar(x, y) {
-  let a = Math.atan2(y, x); if (a < 0) a += Math.PI; if (a >= Math.PI) a -= Math.PI;
-  if (a < Math.PI / 8 || a > 7 * Math.PI / 8) return '-';
-  if (a < 3 * Math.PI / 8) return '\\';
-  if (a < 5 * Math.PI / 8) return '|';
-  return '/';
-}
 let mr_ = 0, mg_ = 0, mb_ = 0;
 function mixTo(r, g, b, r2, g2, b2, t) { mr_ = r + (r2 - r) * t; mg_ = g + (g2 - g) * t; mb_ = b + (b2 - b) * t; }
 
 // ---------- shared state ----------
-let NOW = 0;
+// NOW is the page clock, advanced by the overlay surface's 60Hz step (the engine has one loop for everything).
+let NOW = RM() ? 1 : 0;
 const P = { x: -999, y: -999, has: false, touch: false, down: false, over: false, t: 0 };
 const ST = { muted: false, bt: -99 };
 const CH = { v: 0, on: false };
-const pings = [];
+const pings = new Pool(8, ['x', 'y', 't0', 'pw', 'shock']);
 const listeners = { ping: [], broadcast: [] };
 function ping(x, y, pw, kind) {
-  pings.push({ x, y, t0: NOW, pw, kind }); if (pings.length > 8) pings.shift();
+  if (pings.n >= pings.cap) pings.kill(0);
+  pings.spawn({ x, y, t0: NOW, pw, shock: kind === 'shock' ? 1 : 0 });
   listeners.ping.forEach(f => f(x, y, pw, kind));
   pokeAll();
 }
 
-// ---------- Grid: characters with phosphor persistence ----------
-const cssCache = new Map();
-function cssRGB(q) {
-  let s = cssCache.get(q);
-  if (!s) { s = 'rgb(' + (((q >> 10) & 31) << 3) + ',' + (((q >> 5) & 31) << 3) + ',' + ((q & 31) << 3) + ')'; if (cssCache.size > 9000) cssCache.clear(); cssCache.set(q, s); }
-  return s;
-}
-const cssA = new Map();
-function cssRGBA(q, a) {
-  const k = q * 16 + a; let s = cssA.get(k);
-  if (!s) { s = 'rgba(' + (((q >> 10) & 31) << 3) + ',' + (((q >> 5) & 31) << 3) + ',' + ((q & 31) << 3) + ',' + (a / 15).toFixed(2) + ')'; if (cssA.size > 9000) cssA.clear(); cssA.set(k, s); }
-  return s;
-}
-class Grid {
-  constructor(cv, o) {
-    this.cv = cv; this.o = o; this.ctx = cv.getContext('2d', { alpha: !o.bg });
-    this.bc = document.createElement('canvas'); this.bx = this.bc.getContext('2d');
-    this.cols = 0; this.rows = 0; this.live = true; this.pe = o.persist || .8;
+// ---------- Phos: phosphor persistence on top of an engine surface ----------
+// The engine paints a plain character grid. Carrier wants every lit cell to decay over a few frames,
+// so each scene excites cells here (ex / exc / str / ring) and flush() writes the decayed result into the engine grid.
+class Phos {
+  constructor(o) { this.pe = o.persist || .8; this.rgba = !!o.rgba; this.s = null; this.cols = 0; this.rows = 0; }
+  layout(s) {
+    this.s = s; this.cols = s.cols; this.rows = s.rows; this.cw = s.cw; this.chh = s.chh; this.asp = s.asp; this.N = s.N;
+    this.E = new Float32Array(s.N); this.ch = new Array(s.N).fill(' ');
+    this.R = new Uint8Array(s.N); this.G = new Uint8Array(s.N); this.B = new Uint8Array(s.N);
   }
-  layout(w, h, fs) {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2); this.dpr = dpr; const cv = this.cv;
-    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-    this.w = w; this.h = h; this.fs = fs; this.font = '600 ' + fs.toFixed(2) + 'px ' + FAMILY;
-    const x = this.ctx; x.setTransform(dpr, 0, 0, dpr, 0, 0); x.font = this.font;
-    this.cw = x.measureText('M').width || fs * .6; this.chh = fs * 1.25;
-    this.cols = Math.ceil(w / this.cw); this.rows = Math.ceil(h / this.chh); this.asp = this.chh / this.cw;
-    const N = this.N = this.cols * this.rows;
-    this.E = new Float32Array(N); this.ch = new Array(N).fill(' ');
-    this.R = new Uint8Array(N); this.G = new Uint8Array(N); this.B = new Uint8Array(N);
-    this.bc.width = Math.max(1, Math.round(cv.width / 5)); this.bc.height = Math.max(1, Math.round(cv.height / 5));
-    this.live = true;
-  }
+  reset() { if (this.E) this.E.fill(0); }
   ex(i, ch, r, g, b, e) {
     if (e <= 0.02) return;
     const E = this.E;
     if (e >= E[i] * .9) { this.ch[i] = ch; this.R[i] = r; this.G[i] = g; this.B[i] = b; }
     if (e > E[i]) E[i] = e;
-    this.live = true;
   }
   exc(c, r, ch, R, G, B, e) {
     c = Math.round(c); r = Math.round(r);
@@ -440,76 +399,72 @@ class Grid {
       this.exc(cx + Rc * c, cy + Rc * s / asp, lineChar(-s, c), R, G, B, e);
     }
   }
-  present() {
-    if (!this.live) return;
-    const x = this.ctx, cv = this.cv, dpr = this.dpr, cols = this.cols, rows = this.rows, E = this.E, cw = this.cw, chh = this.chh;
-    const rgba = !!this.o.rgba;
-    x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1;
-    if (this.o.bg) { x.fillStyle = this.o.bg; x.fillRect(0, 0, cv.width, cv.height); } else x.clearRect(0, 0, cv.width, cv.height);
-    x.setTransform(dpr, 0, 0, dpr, 0, 0); x.font = this.font; x.textBaseline = 'middle';
-    let alive = false, lastq = -1, laste = -1;
-    const pe = this.pe, ch = this.ch, R = this.R, G = this.G, B = this.B;
-    for (let r = 0; r < rows; r++) {
-      const y = (r + .5) * chh, o = r * cols;
-      for (let c = 0; c < cols; c++) {
-        const i = o + c, e = E[i];
-        if (e < .035) { E[i] = 0; continue; }
-        alive = true; E[i] = e * pe;
-        const g = ch[i]; if (g === ' ') continue;
-        let rr, gg, bb, a = 15;
-        if (rgba) {
-          const hot = e > 1 ? Math.min(1, (e - 1) * 3) : 0;
-          rr = R[i] + (255 - R[i]) * hot; gg = G[i] + (255 - G[i]) * hot; bb = B[i] + (255 - B[i]) * hot; a = Math.min(15, (Math.min(e, 1) * 15 + .5) | 0);
-        } else {
-          const k = e > 1 ? 1 : e, hot = e > 1 ? Math.min(1, (e - 1) * 3.3) : 0;
-          rr = R[i] * k; gg = G[i] * k; bb = B[i] * k;
-          if (hot) { rr += (255 - rr) * hot; gg += (255 - gg) * hot; bb += (255 - bb) * hot; }
-        }
-        const q = ((rr >> 3) << 10) | ((gg >> 3) << 5) | (bb >> 3);
-        const qq = rgba ? q * 16 + a : q;
-        if (qq !== lastq) { x.fillStyle = rgba ? cssRGBA(q, a) : cssRGB(q); lastq = qq; }
-        x.fillText(g, c * cw, y);
+  // decay every cell and copy the lit ones into the engine grid; returns whether anything is still lit
+  flush() {
+    const s = this.s, N = this.cols * this.rows, E = this.E, ch = this.ch, R = this.R, G = this.G, B = this.B, pe = this.pe, rgba = this.rgba;
+    s.clear();
+    let alive = false;
+    for (let i = 0; i < N; i++) {
+      const e = E[i];
+      if (e < .035) { E[i] = 0; continue; }
+      alive = true; E[i] = e * pe;
+      const g = ch[i]; if (g === ' ') continue;
+      let rr, gg, bb;
+      if (rgba) {
+        // the overlay canvas is blended with screen, so scaling the color by its alpha is the same as drawing it translucent
+        const hot = e > 1 ? Math.min(1, (e - 1) * 3) : 0, k = e > 1 ? 1 : e;
+        rr = (R[i] + (255 - R[i]) * hot) * k; gg = (G[i] + (255 - G[i]) * hot) * k; bb = (B[i] + (255 - B[i]) * hot) * k;
+      } else {
+        const k = e > 1 ? 1 : e, hot = e > 1 ? Math.min(1, (e - 1) * 3.3) : 0;
+        rr = R[i] * k; gg = G[i] * k; bb = B[i] * k;
+        if (hot) { rr += (255 - rr) * hot; gg += (255 - gg) * hot; bb += (255 - bb) * hot; }
       }
+      s.putI(i, g, rr, gg, bb);
     }
-    this.live = alive;
-    const bl = this.o.bloom;
-    if (bl && alive) {
-      const bx = this.bx; bx.globalCompositeOperation = 'copy'; bx.drawImage(cv, 0, 0, this.bc.width, this.bc.height);
-      x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'lighter'; x.globalAlpha = bl; x.imageSmoothingEnabled = true;
-      x.drawImage(this.bc, 0, 0, cv.width, cv.height); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
-    }
+    return alive;
   }
 }
 
-// ---------- Surf: a canvas that lives in the shared loop ----------
-const surfs = [];
-const io = new IntersectionObserver(es => { for (const e of es) { const s = e.target.__s; if (s) { const was = s.vis; s.vis = e.isIntersecting; if (s.vis && !was) { s.g.live = true; s.onShow && s.onShow(); } } } }, { rootMargin: '80px' });
-const ro = new ResizeObserver(es => { for (const e of es) { const s = e.target.__s; if (s) s.relayout(); } });
-class Surf {
+// ---------- Scene: one engine surface plus a phosphor grid ----------
+const scenes = [];
+class Scene {
   constructor(cv, o) {
-    this.cv = cv; this.o = o; this.g = new Grid(cv, o); this.vis = false; this.t = 0; this.ready = false;
-    cv.__s = this; surfs.push(this); io.observe(cv); ro.observe(cv);
+    this.cv = cv; this.o = o; this.t = 0; this.pokable = false; this.sleepy = false;
+    this.g = new Phos(o);
+    this.s = GM.surface(cv, {
+      fontSize: o.fs, lineHeight: 1.25, bloom: o.bloom, background: o.bg, transparent: !o.bg,
+      setup: s => { this.s = s; this.g.layout(s); if (this.onLayout) this.onLayout(); },
+      step: (s, dt) => this.sim(dt),
+      draw: () => this.frame(),
+      still: () => this.rest(260),
+    });
+    this.g.s = this.s; scenes.push(this);
   }
-  get on() { return this.vis && this.ready; }
-  relayout() {
-    const r = this.cv.getBoundingClientRect(); if (r.width < 4 || r.height < 4) { this.ready = false; return; }
-    this.g.layout(r.width, r.height, this.o.fs(r.width, r.height));
-    this.ready = true; this.onLayout && this.onLayout();
-    if (REDUCE) this.still(260);
-  }
-  sim(dt) { this.t += dt; }
+  get ready() { return !!this.s && this.s.cols > 0; }
   rect() { return this.cv.getBoundingClientRect(); }
-  still(n) { if (!this.ready) return; for (let i = 0; i < n; i++) this.sim(STEP); this.g.live = true; this.draw(); this.g.present(); }
-  poke() { if (REDUCE) { this.snap && this.snap(); this.still(40); } }
+  sim(dt) { this.t += dt; }
+  frame() {
+    this.draw();
+    const alive = this.g.flush();
+    if (!alive && this.sleepy && this.canSleep()) this.s.pause();
+  }
+  // reduced motion: run the world forward without painting, then show one still frame
+  rest(n) { this.g.reset(); for (let i = 0; i < n; i++) this.sim(STEP); }
+  // an interaction under reduced motion: jump state to its target, settle a moment, repaint once
+  poke() {
+    if (!RM() || !this.ready) return;
+    if (this.snap) this.snap();
+    this.rest(40); this.s.invalidate();
+  }
 }
-function pokeAll() { if (REDUCE) for (const s of surfs) if (s.vis && s.ready && s.pokable) s.poke(); }
+function pokeAll() { if (RM()) for (const s of scenes) if (s.pokable && s.ready && s.s.visible) s.poke(); }
 
 // ---------- DOM text decoding ----------
 const DEC = [];
 const GL = '01+=:/#%<>*';
 function decode(el, txt, dur, delay) {
   for (let i = DEC.length - 1; i >= 0; i--) if (DEC[i].el === el) DEC.splice(i, 1);
-  if (REDUCE) { el.textContent = txt; return; }
+  if (RM()) { el.textContent = txt; return; }
   DEC.push({ el, txt, t0: performance.now() + (delay || 0), dur: dur || 700 });
 }
 function updDec(now) {
@@ -606,7 +561,7 @@ class Word {
 }
 
 // ---------- Logo (nav, specimen) ----------
-class Logo extends Surf {
+class Logo extends Scene {
   constructor(cv, v, host) {
     super(cv, { fs: v === 'big' ? ((w) => clamp(w / 120, 6.5, 10)) : (() => 4.7), persist: .8, bloom: .55 });
     this.v = v; this.word = new Word(); this.att = 0; this.tAtt = 0; this.ft = 0; this.pw = 1; this.pokable = true; this.force = false;
@@ -620,13 +575,12 @@ class Logo extends Surf {
     const g = this.g, big = this.v === 'big';
     this.word.build(g, 'CARRIER', { cx: g.cols / 2, cy: g.rows / 2, w: g.cols * (big ? .88 : .97), hmax: g.rows * g.asp * (big ? .5 : .86), mark: big, t0: big ? 1.1 : .7, rs: big ? .05 : .08 });
   }
-  onShow() { if (!this.formed) { this.formed = true; this.ft = 0; } }
-  replay() { this.ft = 0; this.g.live = true; if (REDUCE) this.poke(); }
+  replay() { this.ft = 0; if (RM()) this.poke(); }
   snap() { this.att = this.tAtt; }
   sim(dt) { this.t += dt; this.ft += dt; this.att += ((this.force ? 1 : this.tAtt) - this.att) * .12; this.pw += ((ST.muted ? .3 : 1) - this.pw) * .06; }
   draw() {
     const g = this.g, big = this.v === 'big', w = this.word;
-    const ft = REDUCE ? 99 : this.ft;
+    const ft = RM() ? 99 : this.ft;
     const reveal = clamp(ft / (big ? 1.2 : .6), 0, 1);
     if (ft < w.endT + (big ? 99 : 0) || big) {
       const amp = big ? (ft < 1.2 ? 2.2 : 1.1 + this.att * 1.2) : 1.1 * (1 - smooth(w.endT - .6, w.endT, ft));
@@ -637,7 +591,7 @@ class Logo extends Surf {
 }
 
 // ---------- NavWire: the menu bar as a spectrum analyzer ----------
-class NavWire extends Surf {
+class NavWire extends Scene {
   constructor(cv, links) {
     super(cv, { fs: () => 7, persist: .72, bloom: .5 }); this.links = links; this.hv = -1; this.act = -1; this.last = -1; this.pokable = true;
     this.lvl = new Float32Array(links.length); this.pk = null; this.pkx = 0; this.lastX = 40;
@@ -692,16 +646,16 @@ class NavWire extends Surf {
 }
 
 // ---------- DropSurf: dropdown and mobile menu panels ----------
-class DropSurf extends Surf {
+class DropSurf extends Scene {
   constructor(cv, panel, full) {
     super(cv, { fs: () => 7, persist: .78, bloom: .45 }); this.panel = panel; this.full = full; this.p = 0; this.tgt = 0; this.pokable = true;
-    this.hr = null; this.tr = null; this.band = 0; this.items = [...panel.querySelectorAll('a')];
+    this.hr = null; this.tr = null; this.band = 0; this.sleepy = true; this.s.pause(); this.items = [...panel.querySelectorAll('a')];
     this.items.forEach(a => {
       const on = () => { this.setItem(a); }, offf = () => { this.tr = null; this.poke(); };
       a.addEventListener('pointerenter', on); a.addEventListener('focus', on); a.addEventListener('pointerleave', offf); a.addEventListener('blur', offf);
     });
   }
-  get on() { return this.vis && this.ready && (this.tgt > 0 || this.p > .002); }
+  canSleep() { return this.tgt === 0 && this.p < .002; }
   setItem(a) {
     const r = a.getBoundingClientRect(), cr = this.cv.getBoundingClientRect(), g = this.g;
     this.tr = { y0: (r.top - cr.top) / g.chh, y1: (r.bottom - cr.top) / g.chh, x0: (r.left - cr.left) / g.cw, x1: (r.right - cr.left) / g.cw };
@@ -709,8 +663,8 @@ class DropSurf extends Surf {
     this.poke();
   }
   setOpen(o) {
-    this.tgt = o ? 1 : 0; if (o) { this.hr = null; this.tr = null; this.g.live = true; }
-    if (REDUCE) { this.p = this.tgt; this.still(2); }
+    this.tgt = o ? 1 : 0; if (o) { this.hr = null; this.tr = null; this.s.resume(); }
+    if (RM()) { this.p = this.tgt; this.g.reset(); this.rest(2); this.s.invalidate(); }
   }
   snap() { this.p = this.tgt; if (this.tr) this.hr = Object.assign({}, this.tr); }
   sim(dt) {
@@ -756,13 +710,14 @@ class DropSurf extends Surf {
 
 // ---------- BtnSurf ----------
 const HEX = '0123456789ABCDEF';
+const COL_CY = [84, 214, 255], COL_AM = [255, 176, 64];
 const CHAN = [[84, 214, 255], [255, 176, 64], [255, 84, 130], [246, 242, 228]];
-class BtnSurf extends Surf {
+class BtnSurf extends Scene {
   constructor(btn) {
     const kind = btn.dataset.kind;
     super(btn.querySelector('canvas'), { fs: () => 7, persist: kind === 'burger' ? .7 : .78, bloom: .55 });
     this.btn = btn; this.kind = kind; this.hT = 0; this.hov = 0; this.pT = 0; this.prs = 0; this.kick = 0; this.sp = 0; this.pokable = true;
-    this.on_ = true; this.ap = 1; this.cnt = 0; this.pk = []; this.open = 0; this.openT = 0; this.per = null;
+    this.on_ = true; this.ap = 1; this.cnt = 0; this.pk = new Pool(7, ['c', 't0', 'a0', 'a1', 'ci']); this.open = 0; this.openT = 0; this.per = null;
     const m = btn.matches.bind(btn);
     btn.addEventListener('pointerenter', () => { this.hT = 1; this.poke(); });
     btn.addEventListener('pointerleave', () => { this.hT = m(':focus-visible') ? 1 : 0; this.pT = 0; this.poke(); });
@@ -776,8 +731,8 @@ class BtnSurf extends Surf {
     this.kick = 1;
     if (this.kind === 'xmit') {
       this.cnt++; const n = document.getElementById('xmN'); if (n) n.textContent = String(this.cnt).padStart(3, '0');
-      const adr = HEX[(Math.random() * 16) | 0] + HEX[(Math.random() * 16) | 0];
-      this.pk.push({ c: this.bx1, t0: this.t, adr, col: CHAN[this.cnt % 4] }); if (this.pk.length > 7) this.pk.shift();
+      if (this.pk.n >= this.pk.cap) this.pk.kill(0);
+      this.pk.spawn({ c: this.bx1, t0: this.t, a0: (Math.random() * 16) | 0, a1: (Math.random() * 16) | 0, ci: this.cnt % 4 });
     }
     if (this.kind === 'icon' || this.kind === 'primary') { const r = this.btn.getBoundingClientRect(); ping(r.left + r.width / 2, r.top + r.height / 2, .6, 'tap'); }
     this.poke();
@@ -869,11 +824,12 @@ class BtnSurf extends Surf {
     } else if (k === 'xmit') {
       this.border(g, 84, 214, 255, .4, 20, 8, .4 + hov);
       for (let r = by0 + 1; r < by1; r++) for (let c = bx0 + 1; c < bx1; c++) if (this.prs > .1) g.exc(c, r, '=', 255, 176, 64, this.prs * .35);
-      for (let j = this.pk.length - 1; j >= 0; j--) {
-        const q = this.pk[j], age = t - q.t0, x = q.c + age * 46 * (1 - Math.exp(-age * 5) * .5) + 1;
-        if (x > g.cols + 8) { this.pk.splice(j, 1); continue; }
-        const col = q.col; g.exc(x - 5, mid, '0', col[0], col[1], col[2], .85); g.exc(x - 4, mid, 'x', col[0], col[1], col[2], .85);
-        g.exc(x - 3, mid, q.adr[0], col[0], col[1], col[2], 1.0); g.exc(x - 2, mid, q.adr[1], col[0], col[1], col[2], 1.0);
+      const pk = this.pk;
+      for (let j = pk.n - 1; j >= 0; j--) {
+        const age = t - pk.t0[j], x = pk.c[j] + age * 46 * (1 - Math.exp(-age * 5) * .5) + 1;
+        if (x > g.cols + 8) { pk.kill(j); continue; }
+        const col = CHAN[pk.ci[j]]; g.exc(x - 5, mid, '0', col[0], col[1], col[2], .85); g.exc(x - 4, mid, 'x', col[0], col[1], col[2], .85);
+        g.exc(x - 3, mid, HEX[pk.a0[j]], col[0], col[1], col[2], 1.0); g.exc(x - 2, mid, HEX[pk.a1[j]], col[0], col[1], col[2], 1.0);
         g.exc(x - 1, mid, '>', 255, 255, 255, 1.3); g.exc(x, mid, '>', 255, 255, 255, 1.3);
         for (let z = 6; z < 22; z++) g.exc(x - z, mid, z % 2 ? '=' : '-', col[0], col[1], col[2], Math.max(0, .6 - z * .028));
         g.exc(x + 1, mid - 1, '.', col[0], col[1], col[2], .5); g.exc(x + 1, mid + 1, '.', col[0], col[1], col[2], .5);
@@ -900,14 +856,15 @@ class BtnSurf extends Surf {
 
 // ---------- Hero ----------
 const WF_T = 0.58;
-class Hero extends Surf {
+class Hero extends Scene {
   constructor(cv) {
     super(cv, { fs: (w) => clamp(w / 115, 7, 10), persist: .84, bloom: .55, bg: '#05070b' });
-    this.word = new Word(); this.att = 0; this.ft = 0; this.pw = 1; this.pokable = true; this.chirps = [];
-    this.lock = new Float32Array(7); this.lockCol = null; this.acc = 0; this.formed = false; this.px = -1; this.py = -1;
+    this.word = new Word(); this.att = 0; this.ft = 0; this.pw = 1; this.pokable = true; this.chirps = new Pool(5, ['c0', 't0']);
+    this.lock = new Float32Array(7); this.lockCol = null; this.acc = 0;
     listeners.ping.push((x, y) => {
       const r = this.rect(); if (x < r.left || x > r.right || y < r.top || y > r.bottom || !this.ready) return;
-      this.chirps.push({ c0: (x - r.left) / this.g.cw, t0: this.t }); if (this.chirps.length > 5) this.chirps.shift();
+      if (this.chirps.n >= this.chirps.cap) this.chirps.kill(0);
+      this.chirps.spawn({ c0: (x - r.left) / this.g.cw, t0: this.t });
     });
   }
   onLayout() {
@@ -916,7 +873,6 @@ class Hero extends Surf {
     this.wfTop = Math.floor(g.rows * WF_T); this.depth = Math.max(4, g.rows - this.wfTop);
     this.wf = new Float32Array(this.depth * g.cols); this.head = 0; this.lockCol = new Float32Array(g.cols);
   }
-  onShow() { if (!this.formed) { this.formed = true; this.ft = 0; } }
   snap() {}
   newLine() {
     const g = this.g, cols = g.cols, t = this.t, o = this.head * cols, wf = this.wf, cen = this.word.centers;
@@ -929,9 +885,10 @@ class Hero extends Surf {
       const lo = Math.max(0, Math.floor(cc - 6)), hi = Math.min(cols - 1, Math.ceil(cc + 6));
       for (let c = lo; c <= hi; c++) { const d = (c - cc) / sg; wf[o2 + c] += key * emit * (.75 + .25 * this.lock[k]) * Math.exp(-d * d * .5) * (.8 + .4 * Math.random()); }
     }
-    for (let q = this.chirps.length - 1; q >= 0; q--) {
-      const ch = this.chirps[q], age = t - ch.t0; if (age > .9) { this.chirps.splice(q, 1); continue; }
-      const cc = ch.c0 + age * 38, f = 1 - age / .9;
+    const chirps = this.chirps;
+    for (let q = chirps.n - 1; q >= 0; q--) {
+      const age = t - chirps.t0[q]; if (age > .9) { chirps.kill(q); continue; }
+      const cc = chirps.c0[q] + age * 38, f = 1 - age / .9;
       for (let c = Math.max(0, Math.floor(cc - 5)); c <= Math.min(cols - 1, Math.ceil(cc + 5)); c++) { const d = (c - cc) / 1.3; wf[o2 + c] += 1.1 * f * Math.exp(-d * d * .5); }
     }
   }
@@ -954,7 +911,7 @@ class Hero extends Surf {
   draw() {
     const g = this.g, cols = g.cols, rows = g.rows, t = this.t, w = this.word, wfTop = this.wfTop;
     if (!this.wf || !w.centers) return;
-    const ft = REDUCE ? 99 : this.ft, charge = CH.v, wt = (NOW - ST.bt) < 3.2;
+    const ft = RM() ? 99 : this.ft, charge = CH.v, wt = (NOW - ST.bt) < 3.2;
     // graticule and snow
     for (let r = 2; r < wfTop - 1; r += 6) for (let c = 6; c < cols; c += 12) g.exc(c, r, '+', 60, 110, 150, .16);
     for (let c = 0; c < cols; c += 2) g.exc(c, w.cy, '.', 60, 110, 150, .12);
@@ -999,21 +956,25 @@ class Hero extends Surf {
 }
 
 // ---------- Cursor / charge / shock overlay ----------
-class Cur extends Surf {
+class Cur extends Scene {
   constructor(cv) {
     super(cv, { fs: () => 11, persist: .78, bloom: 0, rgba: true });
-    this.rx = 0; this.ry = 0; this.lk = 0; this.trail = []; this.vis = true; this.spin = 0; this.pokable = false;
+    this.rx = 0; this.ry = 0; this.lk = 0; this.trail = new Float32Array(16); this.tn = 0; this.spin = 0;
   }
-  get on() { return this.ready && !REDUCE; }
-  sim(dt) { this.t += dt; this.spin += dt * 24; }
+  // this overlay is always on screen, so its 60Hz step doubles as the page clock and the broadcast charge
+  sim(dt) {
+    this.t += dt; this.spin += dt * 24; NOW += dt;
+    if (CH.on) CH.v = Math.min(1, CH.v + dt / 1.5); else CH.v = Math.max(0, CH.v - dt * 3);
+  }
   draw() {
     const g = this.g, cw = g.cw, chh = g.chh;
+    updDec(performance.now()); clock();
     if (P.has && !(P.touch && !P.down)) {
       this.rx += (P.x - this.rx) * .5; this.ry += (P.y - this.ry) * .5;
       this.lk += ((P.over ? 1 : 0) - this.lk) * .25;
       const c = this.rx / cw, r = this.ry / chh, d = 2.6 - this.lk * 1.4;
       const sp = Math.hypot(P.x - this.rx, P.y - this.ry);
-      const col = this.lk > .5 ? [255, 176, 64] : [84, 214, 255];
+      const col = this.lk > .5 ? COL_AM : COL_CY;
       if (!P.touch) {
         g.exc(c - d - 1, r, '[', col[0], col[1], col[2], 1.1); g.exc(c + d + 1, r, ']', col[0], col[1], col[2], 1.1);
         g.exc(c, r - 1.6, '.', col[0], col[1], col[2], .7); g.exc(c, r + 1.6, '.', col[0], col[1], col[2], .7);
@@ -1021,22 +982,23 @@ class Cur extends Surf {
         g.str(c + d + 3, r + 1, f.toFixed(1) + (this.lk > .5 ? ' LOCK' : ''), col[0], col[1], col[2], .7);
       }
       const n = sp > 14 ? 3 : sp > 4 ? 2 : 1;
-      for (let k = 0; k < n; k++) { const f = Math.random(); g.exc(c + (this.rx - P.x) / cw * f * 0 + (Math.random() - .5) * 1.5, r + (Math.random() - .5) * 1.2, sp > 10 ? '*' : ':', 84, 214, 255, .55); }
-      this.trail.push(c, r); if (this.trail.length > 16) this.trail.splice(0, 2);
-      for (let i = 0; i < this.trail.length; i += 2) g.exc(this.trail[i], this.trail[i + 1], '.', 130, 225, 255, .25 + i / 40);
+      for (let k = 0; k < n; k++) g.exc(c + (Math.random() - .5) * 1.5, r + (Math.random() - .5) * 1.2, sp > 10 ? '*' : ':', 84, 214, 255, .55);
+      const tr = this.trail;
+      if (this.tn >= 8) { tr.copyWithin(0, 2); this.tn = 7; }
+      tr[this.tn * 2] = c; tr[this.tn * 2 + 1] = r; this.tn++;
+      for (let i = 0; i < this.tn * 2; i += 2) g.exc(tr[i], tr[i + 1], '.', 130, 225, 255, .25 + i / 40);
       if (CH.v > .02) {
         const Rc = 2 + CH.v * 7, m = CH.v > .97 ? 1 : 0;
-        const q = (CH.v);
-        mixTo(84, 214, 255, 255, 176, 64, smooth(.5, 1, q));
+        mixTo(84, 214, 255, 255, 176, 64, smooth(.5, 1, CH.v));
         g.ring(c + (m ? (Math.random() - .5) * .5 : 0), r, Rc, .6 + CH.v * .7, mr_, mg_, mb_, 4, Math.floor(this.spin));
         g.ring(c, r, Rc * .5, .5, mr_, mg_, mb_, 3, -Math.floor(this.spin * .7));
         g.str(c - 2, r + Rc / g.asp + 1.5, Math.round(CH.v * 100) + '%', mr_, mg_, mb_, .95);
       }
     }
-    for (let i = pings.length - 1; i >= 0; i--) {
-      const p = pings[i], age = NOW - p.t0, shock = p.kind === 'shock', life = shock ? 2.8 : 1.0;
-      if (age > life) { pings.splice(i, 1); continue; }
-      const sp = (shock ? 70 : 20) * (.55 + .45 * p.pw), Rc = age * sp, e = (1 - age / life) * (.5 + p.pw * .7), cx = p.x / cw, cy = p.y / chh;
+    for (let i = pings.n - 1; i >= 0; i--) {
+      const age = NOW - pings.t0[i], shock = pings.shock[i] === 1, life = shock ? 2.8 : 1.0;
+      if (age > life) { pings.kill(i); continue; }
+      const pw = pings.pw[i], sp = (shock ? 70 : 20) * (.55 + .45 * pw), Rc = age * sp, e = (1 - age / life) * (.5 + pw * .7), cx = pings.x[i] / cw, cy = pings.y[i] / chh;
       g.ring(cx, cy, Rc, e, 255, 230, 180, 0, 0);
       if (shock) { g.ring(cx, cy, Rc * .8, e * .7, 255, 176, 64, 0, 0); g.ring(cx, cy, Rc * .6, e * .5, 84, 214, 255, 0, 0); }
       else g.ring(cx, cy, Rc * .7, e * .6, 84, 214, 255, 0, 0);
@@ -1076,10 +1038,10 @@ function inPoly(poly, x, y) {
   }
   return ins;
 }
-class MapS extends Surf {
+class MapS extends Scene {
   constructor(cv) {
     super(cv, { fs: (w) => clamp(w / 150, 6.2, 9), persist: .9, bloom: .55 });
-    this.pk = []; this.pulse = new Float32Array(STN.length); this.nextSend = 0; this.hov = -1; this.pokable = true;
+    this.pk = new Pool(45, ['a', 'b', 's', 'v', 'hh', 'amber']); this.pulse = new Float32Array(STN.length); this.nextSend = 0; this.hov = -1; this.pokable = true;
     listeners.broadcast.push(() => this.broadcast());
     cv.addEventListener('pointerdown', () => { if (this.hov >= 0) this.fan(this.hov, 3); });
   }
@@ -1104,9 +1066,9 @@ class MapS extends Surf {
   }
   proj(lon, lat) { return [this.ox + (lon + 180) / 360 * this.mw, this.oy + (LAT_T - lat) / (LAT_T - LAT_B) * this.mrows]; }
   send(a, b, amber) {
-    if (this.pk.length > 44) return;
+    if (this.pk.n >= this.pk.cap) return;
     const A = this.sc[a], B = this.sc[b], dist = Math.hypot(B[0] - A[0], (B[1] - A[1]) * this.g.asp);
-    this.pk.push({ a, b, s: 0, v: .55 + Math.random() * .35 + 40 / (dist + 40), hh: Math.min(dist * .2, this.mrows * .6) / this.g.asp, amber: !!amber });
+    this.pk.spawn({ a, b, s: 0, v: .55 + Math.random() * .35 + 40 / (dist + 40), hh: Math.min(dist * .2, this.mrows * .6) / this.g.asp, amber: amber ? 1 : 0 });
   }
   fan(a, n) { for (let k = 0; k < n; k++) { let b = (Math.random() * STN.length) | 0; if (b === a) b = (b + 1) % STN.length; this.send(a, b, true); } this.pulse[a] = 1; }
   broadcast() { for (let a = 0; a < STN.length; a++) { this.send(a, (a + 3) % STN.length, true); this.send(a, (a + 7) % STN.length, true); this.pulse[a] = 1; } }
@@ -1114,12 +1076,13 @@ class MapS extends Surf {
   sim(dt) {
     this.t += dt;
     this.nextSend -= dt; if (this.nextSend <= 0) { this.nextSend = .35 + Math.random() * .6; const a = (Math.random() * STN.length) | 0; let b = (Math.random() * STN.length) | 0; if (a === b) b = (b + 5) % STN.length; this.send(a, b, false); }
-    for (let i = this.pk.length - 1; i >= 0; i--) { const p = this.pk[i]; p.s += dt * p.v; if (p.s >= 1) { this.pulse[p.b] = 1; this.pk.splice(i, 1); } }
+    const pk = this.pk;
+    for (let i = pk.n - 1; i >= 0; i--) { pk.s[i] += dt * pk.v[i]; if (pk.s[i] >= 1) { this.pulse[pk.b[i]] = 1; pk.kill(i); } }
     for (let k = 0; k < this.pulse.length; k++) this.pulse[k] *= .965;
   }
-  arc(p, s) { const A = this.sc[p.a], B = this.sc[p.b]; return [lerp(A[0], B[0], s), lerp(A[1], B[1], s) - Math.sin(Math.PI * s) * p.hh]; }
+  arc(i, s) { const A = this.sc[this.pk.a[i]], B = this.sc[this.pk.b[i]]; return [lerp(A[0], B[0], s), lerp(A[1], B[1], s) - Math.sin(Math.PI * s) * this.pk.hh[i]]; }
   draw() {
-    const g = this.g, cols = g.cols, rows = g.rows, t = this.t + (REDUCE ? 0 : 0), land = this.land, coast = this.coast;
+    const g = this.g, cols = g.cols, rows = g.rows, t = this.t, land = this.land, coast = this.coast;
     if (!land) return;
     const sunLon = 180 - ((t * 3 + 40) % 360), r2d = Math.PI / 180;
     // graticule
@@ -1146,17 +1109,17 @@ class MapS extends Surf {
       }
     }
     // packets
-    for (const p of this.pk) {
-      const col = p.amber ? [255, 176, 64] : [84, 214, 255];
+    const pk = this.pk;
+    for (let i = 0; i < pk.n; i++) {
+      const col = pk.amber[i] ? COL_AM : COL_CY;
       for (let q = 0; q < 9; q++) {
-        const s = p.s - q * .012; if (s < 0) break;
-        const pt = this.arc(p, s), pt2 = this.arc(p, s + .01);
+        const s = pk.s[i] - q * .012; if (s < 0) break;
+        const pt = this.arc(i, s), pt2 = this.arc(i, s + .01);
         g.exc(pt[0], pt[1], q ? lineChar(pt2[0] - pt[0], (pt2[1] - pt[1]) * g.asp) : '@', q ? col[0] : 255, q ? col[1] : 255, q ? col[2] : 255, q ? .9 - q * .09 : 1.4);
       }
-      if (p.s < .03 || true) { const pt = this.arc(p, Math.min(1, p.s + .03)); }
     }
     // faint arcs of the active packets
-    for (const p of this.pk) for (let s = p.s; s < 1; s += .045) { const pt = this.arc(p, s); g.exc(pt[0], pt[1], '.', 84, 214, 255, .16); }
+    for (let i = 0; i < pk.n; i++) for (let s = pk.s[i]; s < 1; s += .045) { const pt = this.arc(i, s); g.exc(pt[0], pt[1], '.', 84, 214, 255, .16); }
     // stations
     const rct = this.rect(); let hov = -1, hd = 6;
     if (P.has && !P.touch || P.down) for (let k = 0; k < STN.length; k++) { const s = this.sc[k], d = Math.hypot((P.x - rct.left) / g.cw - s[0], ((P.y - rct.top) / g.chh - s[1]) * g.asp); if (d < hd) { hd = d; hov = k; } }
@@ -1176,6 +1139,7 @@ class MapS extends Surf {
 
 // ---------- boot ----------
 const $ = id => document.getElementById(id);
+const cur = new Cur($('cur'));
 const hero = new Hero($('heroCv'));
 const navLogo = new Logo($('logoNav'), 'nav', $('navlogo'));
 const smallLogo = new Logo($('logoSmall'), 'nav', $('navlogo2'));
@@ -1187,10 +1151,9 @@ const mdrop = new DropSurf($('mnavCv'), $('mnav'), true);
 const btns = [...document.querySelectorAll('.btn[data-kind]')].map(b => new BtnSurf(b));
 const bySel = id => btns.find(b => b.btn.id === id);
 const map = new MapS($('mapCv'));
-const cur = new Cur($('cur'));
 
 // fonts: rebuild masks once the display face is ready
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { [hero, navLogo, smallLogo, bigLogo, ...btns, wire].forEach(s => s.ready && s.relayout()); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { [hero, navLogo, smallLogo, bigLogo, ...btns, wire].forEach(s => s.ready && s.s.layout()); });
 
 // ---------- dropdown ----------
 const hm = $('hm'), menuBtn = $('menuBtn'), dropEl = $('drop');
@@ -1227,7 +1190,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { if (mnav.classList.contains('open')) { setMobile(false); burger.focus(); } if (hm.classList.contains('open')) { closeMenu(); menuBtn.focus(); } }
 });
 matchMedia('(min-width:901px)').addEventListener('change', e => { if (e.matches) setMobile(false); });
-$('openMenu').addEventListener('click', () => { window.scrollTo({ top: 0, behavior: REDUCE ? 'auto' : 'smooth' }); setTimeout(() => { if (innerWidth > 900) openMenu(); else setMobile(true); }, REDUCE ? 0 : 450); });
+$('openMenu').addEventListener('click', () => { window.scrollTo({ top: 0, behavior: RM() ? 'auto' : 'smooth' }); setTimeout(() => { if (innerWidth > 900) openMenu(); else setMobile(true); }, RM() ? 0 : 450); });
 
 // ---------- toggle ----------
 const tog = $('carrierTog'), togS = bySel('carrierTog');
@@ -1245,13 +1208,13 @@ $('chipForm').addEventListener('click', () => { bigLogo.replay(); });
 
 // ---------- hero copy ----------
 const h1 = $('h1'), eb = $('eb');
-if (!REDUCE) { h1.textContent = ''; eb.textContent = ''; setTimeout(() => { decode(eb, 'CH 01 / signal locked', 800); decode(h1, 'Say it once. Know it arrived.', 1300); }, 2600); }
-$('heroCta').addEventListener('click', () => { document.getElementById('mark').scrollIntoView({ behavior: REDUCE ? 'auto' : 'smooth' }); });
+if (!RM()) { h1.textContent = ''; eb.textContent = ''; setTimeout(() => { decode(eb, 'CH 01 / signal locked', 800); decode(h1, 'Say it once. Know it arrived.', 1300); }, 2600); }
+$('heroCta').addEventListener('click', () => { document.getElementById('mark').scrollIntoView({ behavior: RM() ? 'auto' : 'smooth' }); });
 
 // ---------- pointer ----------
 const heroEl = $('hero');
 const inter = el => el && el.closest && el.closest('a,button,[role=button],input');
-addEventListener('pointermove', e => { P.x = e.clientX; P.y = e.clientY; P.has = true; P.touch = e.pointerType === 'touch'; P.over = !!inter(e.target); if (REDUCE) { clearTimeout(P.rt); P.rt = setTimeout(() => { if (hero.vis) hero.poke(); }, 60); } }, { passive: true });
+addEventListener('pointermove', e => { P.x = e.clientX; P.y = e.clientY; P.has = true; P.touch = e.pointerType === 'touch'; P.over = !!inter(e.target); if (RM()) { clearTimeout(P.rt); P.rt = setTimeout(() => { if (hero.s.visible) hero.poke(); }, 60); } }, { passive: true });
 addEventListener('pointerdown', e => {
   P.x = e.clientX; P.y = e.clientY; P.has = true; P.touch = e.pointerType === 'touch'; P.down = true; P.over = !!inter(e.target);
   if (!P.over) ping(e.clientX, e.clientY, .55, 'tap');
@@ -1278,7 +1241,11 @@ function broadcast(x, y) {
   toast.innerHTML = '<span id="tm"></span><small>' + n.toLocaleString('en-US') + ' stations heard you</small>';
   toast.classList.add('on'); decode($('tm'), 'Broadcast sent', 900);
   clearTimeout(broadcast.t); broadcast.t = setTimeout(() => toast.classList.remove('on'), 3600);
-  if (REDUCE) { hero.poke(); }
+  if (RM()) {
+    // no clock runs under reduced motion, so clear the broadcast state by hand when the toast goes
+    hero.poke(); map.poke();
+    clearTimeout(broadcast.r); broadcast.r = setTimeout(() => { ST.bt = -99; hero.poke(); }, 3600);
+  }
 }
 
 // ---------- footer clock ----------
@@ -1286,28 +1253,8 @@ const utc = $('utc'); let lastS = -1;
 function clock() { const d = new Date(), s = d.getUTCSeconds(); if (s === lastS) return; lastS = s; utc.textContent = String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0') + ':' + String(s).padStart(2, '0'); }
 clock();
 
-// ---------- the one shared loop ----------
-if (!REDUCE) {
-  let last = performance.now(), acc = 0, lastR = 0;
-  const frame = now => {
-    requestAnimationFrame(frame);
-    if (document.hidden) { last = now; return; }
-    const dt = Math.min(.1, (now - last) / 1000); last = now; acc += dt;
-    if (now - lastR < 30) return; lastR = now;
-    NOW = now / 1000;
-    const n = Math.min(4, Math.floor(acc / STEP)); acc -= n * STEP; if (acc > STEP * 4) acc = 0;
-    if (CH.on) CH.v = Math.min(1, CH.v + n * STEP / 1.5); else CH.v = Math.max(0, CH.v - n * STEP * 3);
-    for (let i = 0; i < surfs.length; i++) {
-      const s = surfs[i]; if (!s.on) continue;
-      for (let k = 0; k < n; k++) s.sim(STEP);
-      s.draw(); s.g.present();
-    }
-    updDec(now); clock();
-  };
-  requestAnimationFrame(frame);
-} else {
-  NOW = 1;
-}
+// the engine runs one shared loop for every surface; under reduced motion it never starts
+// and each scene paints a still frame (and repaints from poke() after an interaction)
 })();
 </script>
 </body>

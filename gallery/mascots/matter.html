@@ -339,126 +339,84 @@ footer.end{margin-top:90px;border-top:1px solid var(--line);padding:30px 0 50px;
 </div></section>
 </main>
 <footer class="end"><div class="wrap">Fettle, a mascot pitch for Meltwork. Everything on this page is drawn in text characters on canvas: one shared animation loop, paused offscreen, calm under reduced motion. Fictional brand, fictional product.</div></footer>
+<script src="../../src/glyphmotion.js"></script>
 <script>
 (function(){
 'use strict';
-const reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
-const MONO='"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace';
+const GM=Glyphmotion;
+const {clamp,lerp,rnd,smooth,vnoise,spring,STEP}=GM;
 const DISP='"Archivo Black","Arial Black",Impact,sans-serif';
-const STEP=1/60;
-const clamp=(x,a,b)=>x<a?a:x>b?b:x;
-const lerp=(a,b,t)=>a+(b-a)*t;
-const rnd=(a,b)=>a+Math.random()*(b-a);
-const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
-function hash2(x,y){let h=Math.imul(x|0,374761393)^Math.imul(y|0,668265263);h=Math.imul(h^(h>>>13),1274126177);h^=h>>>16;return(h>>>0)/4294967296}
-function vnoise(x,y){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf);const a=hash2(xi,yi),b=hash2(xi+1,yi),c=hash2(xi,yi+1),d=hash2(xi+1,yi+1);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v}
-const cssC=new Map();
-function css(k){let s=cssC.get(k);if(!s){s='rgb('+((k>>16)&255)+','+((k>>8)&255)+','+(k&255)+')';if(cssC.size>6000)cssC.clear();cssC.set(k,s)}return s}
 const CHR=[];function chr(c){return CHR[c]||(CHR[c]=String.fromCharCode(c))}
 const HT=[[0,34,28,30],[.2,110,24,16],[.45,225,76,18],[.7,255,160,50],[.9,255,226,150],[1,255,250,225]];
 let HR=0,HG=0,HB=0;
 function heat(h){if(h<0)h=0;else if(h>1)h=1;let i=1;while(i<5&&h>HT[i][0])i++;const a=HT[i-1],b=HT[i],t=(h-a[0])/(b[0]-a[0]);HR=a[1]+(b[1]-a[1])*t;HG=a[2]+(b[2]-a[2])*t;HB=a[3]+(b[3]-a[3])*t}
-const RAMP=' .:-=+*#%@';
-const rc=i=>RAMP.charCodeAt(i<0?0:i>9?9:i|0);
-const ptr={x:-999,y:-999,on:false,px:-999,py:-999,sp:0};
+const rc=i=>GM.RAMP.charCodeAt(i<0?0:i>9?9:i|0);
+/* page-level input: pointer over the whole window (the stage canvases ignore pointer events), typing, scrolling */
+const ptr={x:-999,y:-999,on:false};
 addEventListener('pointermove',e=>{ptr.x=e.clientX;ptr.y=e.clientY;ptr.on=true},{passive:true});
 addEventListener('pointerdown',e=>{ptr.x=e.clientX;ptr.y=e.clientY;ptr.on=true},{passive:true});
 document.addEventListener('pointerleave',()=>{ptr.on=false});
 let lastInput=performance.now();
-let scrollV=0,lastSY=scrollY,typeAt=-9;
+let scrollV=0,lastSY=scrollY,scrollAt=0,typeAt=-9;
 addEventListener('scroll',()=>{lastInput=performance.now()},{passive:true});
 addEventListener('keydown',e=>{if(e.key.length===1||e.key==='Backspace'){typeAt=performance.now()}lastInput=performance.now()});
 addEventListener('pointermove',()=>{lastInput=performance.now()},{passive:true});
+function pollScroll(){const n=performance.now();if(n-scrollAt<14)return;scrollAt=n;const sy=scrollY;scrollV=scrollV*.88+(sy-lastSY)*.12;lastSY=sy}
 const live=document.getElementById('live');
 let liveAt=0,liveLast='';
 function announce(t){const n=performance.now();if(t===liveLast||n-liveAt<4000)return;liveAt=n;liveLast=t;live.textContent='';setTimeout(()=>{live.textContent=t},30)}
 
+/* Field: a Glyphmotion surface plus a character-code view of the grid and a particle pool, for the mascots */
 const fields=[];
-const io=new IntersectionObserver(es=>{for(const e of es){const f=e.target._f;if(!f)continue;const was=f.vis;f.vis=e.isIntersecting;if(f.vis&&!was){f.rect=f.cv.getBoundingClientRect();if(!f.laid)f.layout();if(reduce)f.settle(2)}}},{rootMargin:'80px'});
-let rzT=0;
-const ro=new ResizeObserver(es=>{for(const e of es){const f=e.target._f;if(f)f.needLayout=true}clearTimeout(rzT);rzT=setTimeout(()=>{for(const f of fields)if(f.needLayout){f.needLayout=false;f.layout()}},60)});
 class Field{
   constructor(cv,o){
-    this.cv=cv;cv._f=this;this.ctx=cv.getContext('2d');
-    this.o=Object.assign({fs:8,lh:1.15,bloom:.5,maxp:140},o||{});
-    this.bcv=document.createElement('canvas');this.bctx=this.bcv.getContext('2d');
-    this.vis=false;this.laid=false;this.t=0;this.rect=null;
-    const m=this.o.maxp;
-    this.P={n:0,x:new Float32Array(m),y:new Float32Array(m),vx:new Float32Array(m),vy:new Float32Array(m),life:new Float32Array(m),max:new Float32Array(m),g:new Float32Array(m),r:new Uint8Array(m),gg:new Uint8Array(m),b:new Uint8Array(m),ch:new Uint16Array(m)};
-    fields.push(this);io.observe(cv);ro.observe(cv);
+    this.cv=cv;this.o=Object.assign({fs:8,lh:1.12,maxp:140},o||{});
+    this.pool=new GM.Pool(this.o.maxp,['x','y','vx','vy','life','max','g','r','gg','b','ch']);
+    this.s=null;this.laid=false;this.t=0;this.rect=null;this.rcT=0;
+    this.cols=this.rows=this.N=0;this.cw=this.chh=1;this.vw=this.vh=0;
+    fields.push(this);
   }
-  layout(){
-    const r=this.cv.getBoundingClientRect();
-    this.vw=Math.max(1,r.width);this.vh=Math.max(1,r.height);
-    const dpr=this.dpr=Math.min(window.devicePixelRatio||1,2);
-    this.cv.width=Math.round(this.vw*dpr);this.cv.height=Math.round(this.vh*dpr);
-    const fs=this.fs=typeof this.o.fs==='function'?this.o.fs(this.vw,this.vh):this.o.fs;
-    this.font='700 '+fs.toFixed(2)+'px '+MONO;
-    this.ctx.setTransform(dpr,0,0,dpr,0,0);this.ctx.font=this.font;
-    this.cw=this.ctx.measureText('M').width||fs*.6;this.chh=fs*this.o.lh;
-    this.cols=Math.max(1,Math.ceil(this.vw/this.cw));this.rows=Math.max(1,Math.ceil(this.vh/this.chh));
-    const N=this.N=this.cols*this.rows;
-    this.Ch=new Uint16Array(N);this.R=new Uint8Array(N);this.G=new Uint8Array(N);this.B=new Uint8Array(N);
-    this.bcv.width=Math.max(1,Math.round(this.cv.width/5));this.bcv.height=Math.max(1,Math.round(this.cv.height/5));
-    this.P.n=0;this.laid=true;this.rect=r;
+  boot(){
+    this.s=GM.surface(this.cv,{
+      fontSize:this.o.fs,weight:700,lineHeight:this.o.lh,transparent:true,
+      setup:s=>this.relayout(s),
+      step:()=>{pollScroll();this.pre();this.step()},
+      draw:s=>{s.clear();this.render()},
+      still:()=>this.still()
+    });
+    return this;
+  }
+  relayout(s){
+    this.vw=s.vw;this.vh=s.vh;this.cw=s.cw;this.chh=s.chh;this.cols=s.cols;this.rows=s.rows;this.N=s.N;
+    this.pool.clear();this.laid=true;this.rcT=0;this.pre();
     if(this.onLayout)this.onLayout();
-    if(reduce&&this.vis)this.settle(2);
   }
-  put(c,r,code,R,G,B){if(c<0||r<0||c>=this.cols||r>=this.rows)return;const i=r*this.cols+c;this.Ch[i]=code;this.R[i]=R>255?255:R<0?0:R;this.G[i]=G>255?255:G<0?0:G;this.B[i]=B>255?255:B<0?0:B}
+  pre(){const n=performance.now();if(!this.rect||n-this.rcT>8){this.rect=this.cv.getBoundingClientRect();this.rcT=n}}
+  settle(n){this.rcT=0;this.pre();for(let i=0;i<n;i++)this.step()}
+  still(){this.settle(90)}
+  repaint(){if(this.s)this.s.invalidate()}
+  put(c,r,code,R,G,B){
+    if(c<0||r<0||c>=this.cols||r>=this.rows)return;
+    const i=(r|0)*this.cols+(c|0);R=R>255?255:R<0?0:R;G=G>255?255:G<0?0:G;B=B>255?255:B<0?0:B;
+    /* codes 0 and 32, and colors too dark to see, blank the cell */
+    if(!code||code===32||((R&248)|(G&248)|(B&248))===0){this.s.ch[i]=' ';return}
+    this.s.putI(i,chr(code),R,G,B);
+  }
   spawn(x,y,vx,vy,life,R,G,B,ch,g){
-    const P=this.P;if(P.n>=P.x.length)return;const i=P.n++;
+    const P=this.pool,i=P.spawn();if(i<0)return;
     P.x[i]=x;P.y[i]=y;P.vx[i]=vx;P.vy[i]=vy;P.life[i]=life;P.max[i]=life;P.g[i]=g;P.r[i]=R;P.gg[i]=G;P.b[i]=B;P.ch[i]=ch;
   }
   partStep(){
-    const P=this.P;
+    const P=this.pool,cols=this.cols,rows=this.rows;
     for(let i=0;i<P.n;i++){
       P.vy[i]+=P.g[i];P.x[i]+=P.vx[i];P.y[i]+=P.vy[i];P.life[i]--;
-      if(P.life[i]<=0||P.y[i]>this.rows+3||P.y[i]<-6||P.x[i]<-3||P.x[i]>this.cols+3){const j=--P.n;if(i!==j){P.x[i]=P.x[j];P.y[i]=P.y[j];P.vx[i]=P.vx[j];P.vy[i]=P.vy[j];P.life[i]=P.life[j];P.max[i]=P.max[j];P.g[i]=P.g[j];P.r[i]=P.r[j];P.gg[i]=P.gg[j];P.b[i]=P.b[j];P.ch[i]=P.ch[j]}i--}
+      if(P.life[i]<=0||P.y[i]>rows+3||P.y[i]<-6||P.x[i]<-3||P.x[i]>cols+3){P.kill(i);i--}
     }
   }
   partDraw(){
-    const P=this.P;
+    const P=this.pool;
     for(let i=0;i<P.n;i++){const f=Math.min(1,P.life[i]/P.max[i]*1.6);this.put(Math.round(P.x[i]),Math.round(P.y[i]),P.ch[i],P.r[i]*f,P.gg[i]*f,P.b[i]*f)}
   }
-  settle(n){for(let i=0;i<n;i++)this.step();this.paint()}
-  paint(){
-    if(!this.laid)return;
-    this.Ch.fill(0);
-    this.render();
-    const ctx=this.ctx,cw=this.cw,chh=this.chh,cols=this.cols,Ch=this.Ch,R=this.R,G=this.G,B=this.B;
-    ctx.setTransform(this.dpr,0,0,this.dpr,0,0);ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
-    ctx.clearRect(0,0,this.vw,this.vh);
-    ctx.font=this.font;ctx.textBaseline='middle';ctx.textAlign='center';
-    let lastK=-1;
-    for(let i=0,N=this.N;i<N;i++){
-      const code=Ch[i];if(!code||code===32)continue;
-      const k=((R[i]&0xf8)<<16)|((G[i]&0xf8)<<8)|(B[i]&0xf8);
-      if(k===0)continue;
-      if(k!==lastK){ctx.fillStyle=css(k);lastK=k}
-      const r=(i/cols)|0,c=i-r*cols;
-      ctx.fillText(chr(code),(c+.5)*cw,(r+.55)*chh);
-    }
-    if(this.o.bloom>0){
-      this.bctx.globalCompositeOperation='copy';this.bctx.drawImage(this.cv,0,0,this.bcv.width,this.bcv.height);
-      ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='lighter';ctx.globalAlpha=this.o.bloom;
-      ctx.drawImage(this.bcv,0,0,this.cv.width,this.cv.height);
-      ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';
-    }
-  }
-}
-function textMask(f,text,family,fillW,fillH){
-  const oc=f._oc||(f._oc=document.createElement('canvas'));oc.width=f.cols;oc.height=f.rows;
-  const g=oc.getContext('2d',{willReadFrequently:true});const asp=f.chh/f.cw;
-  g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,oc.width,oc.height);
-  g.setTransform(1,0,0,1/asp,0,0);
-  const hs=f.rows*asp;
-  g.font='400 100px '+family;let w=g.measureText(text).width||100;
-  let s=Math.min(100*(f.cols*fillW)/w,hs*fillH/0.72);
-  g.font='400 '+s.toFixed(1)+'px '+family;g.textAlign='center';g.textBaseline='alphabetic';g.fillStyle='#fff';
-  g.fillText(text,f.cols/2,hs/2+s*0.36);
-  const d=g.getImageData(0,0,f.cols,f.rows).data;const m=new Uint8Array(f.N);
-  for(let i=0;i<f.N;i++)m[i]=d[i*4+3]>110?1:0;
-  return m;
 }
 /* ---------- Fettle: a fire-salamander made of slag ---------- */
 const PK=['heat','cool','lid','tilt','happy','eyeS','pupil','mc','mo','mw','perk','flut','lift','curl','wag','wrate','speed','br','ba','blush','size','htilt'];
@@ -488,7 +446,7 @@ class Mascot{
     this.fx=new Float32Array(4);this.fy=new Float32Array(4);this.stp=new Float32Array(4).fill(-1);this.sx=new Float32Array(4);this.sy=new Float32Array(4);this.ex=new Float32Array(4);this.ey=new Float32Array(4);
     this.gx=new Float32Array(6);this.gy=new Float32Array(6);this.gvx=new Float32Array(6);this.gvy=new Float32Array(6);
     this.hipX=new Float32Array(4);this.hipY=new Float32Array(4);this.pxs=new Float32Array(4);this.pys=new Float32Array(4);this.grx=new Float32Array(6);this.gry=new Float32Array(6);this.hd=0;
-    this.t=0;this.age=0;this.mood=this.o.mood||'content';this.moodT=0;this.hold=Infinity;this.night=false;this.asleep=false;
+    this.sp={x:0,v:0};this.t=0;this.age=0;this.mood=this.o.mood||'content';this.moodT=0;this.hold=Infinity;this.night=false;this.asleep=false;
     this.hx=0;this.hy=0;this.vx=0;this.vy=0;this.tx=0;this.ty=0;this.tOn=false;this.stopR=0;this.onArrive=null;
     this.zh=0;this.zv=0;this.sq=0;this.sqv=0;this.ph=0;this.wt=2;this.act=null;this.actT=0;this.blinkT=rnd(1,3);this.blink=0;this.dbl=false;
     this.glx=0;this.gly=0;this.gzx=0;this.gzy=0;this.glT=0;this.petE=0;this.pokeN=0;this.pokeT=0;this.curCd=3;this.touchAt=-99;this.idleBoost=0;this.seen=0;
@@ -565,7 +523,7 @@ class Mascot{
   /* particles in field cells */
   em(ch,x,y,vx,vy,life,R,G,B,g){const f=this.f;f.spawn(this.ox+x/f.cw,this.oy+y/f.chh,vx/f.cw,vy/f.chh,life,R,G,B,ch.charCodeAt(0),g||0)}
   sparks(n,sp){const S=this.S;for(let i=0;i<n;i++){const a=rnd(0,6.28),v=rnd(.4,1.6)*(sp||1);heat(rnd(.6,1));this.em(i%3?'*':'+',this.dX[0],this.dY[0],Math.cos(a)*v,Math.sin(a)*v-.5,rnd(24,50),HR,HG,HB,.02)}}
-  hearts(n){for(let i=0;i<n;i++)this.em('♥',this.dX[0]+rnd(-S(this),S(this)),this.dY[0]-this.S*.9,rnd(-.2,.2),rnd(-.7,-.4),rnd(50,80),255,100,120,-.004)}
+  hearts(n){const S=this.S;for(let i=0;i<n;i++)this.em('♥',this.dX[0]+rnd(-S,S),this.dY[0]-S*.9,rnd(-.2,.2),rnd(-.7,-.4),rnd(50,80),255,100,120,-.004)}
   glyph(c,sp){this.em(c,this.dX[0]+this.S*.9,this.dY[0]-this.S*1.1,0,-.55,56,255,222,150,-.003)}
   confetti(n){const cols=[[255,138,42],[142,160,182],[140,138,255],[182,255,90],[214,170,96],[255,216,154]];for(let i=0;i<n;i++){const c=cols[i%6],a=rnd(-2.6,-.5),v=rnd(1,3.2);this.em('*+#o'[i&3],this.dX[0],this.dY[0]-this.S*.6,Math.cos(a)*v*1.2,Math.sin(a)*v,rnd(50,110),c[0],c[1],c[2],.045)}}
   /* ---------- behavior ---------- */
@@ -655,8 +613,8 @@ class Mascot{
     this.blinkT-=dt;if(this.blinkT<=0&&!this.asleep){this.blink=1;this.blinkT=this.dbl?rnd(1.5,4):.18;this.dbl=!this.dbl&&Math.random()<.2;if(!this.dbl&&this.blinkT===.18)this.blinkT=rnd(2,5.5)}
     if(this.blink>0){this.blink-=dt/.13;if(this.blink<0)this.blink=0}
     /* springs */
-    const k=this.pinned&&!reduce?130:150,c=17;
-    for(let i=0;i<PK.length;i++){let a=(tg[i]-cur[i])*k;vel[i]+=(a-vel[i]*c)*dt;cur[i]+=vel[i]*dt}
+    const k=this.pinned&&!GM.reducedMotion?130:150,c=17,sp=this.sp;
+    for(let i=0;i<PK.length;i++){sp.x=cur[i];sp.v=vel[i];spring(sp,tg[i],k,c,dt);cur[i]=sp.x;vel[i]=sp.v}
     if(this.flash>0)this.flash=Math.max(0,this.flash-dt*1.3);
     /* hop + squash */
     if(this.zh>0||this.zv>0){this.zv-=S*40*dt;this.zh+=this.zv*dt;if(this.zh<=0){if(this.zv<-S*3)this.sqv=this.zv/S*.9;this.zh=0;this.zv=this.zv<-S*5?-this.zv*.25:0}}
@@ -768,7 +726,7 @@ class Mascot{
   }
   emitStuff(dt,idle){
     const S=this.S,cur=this.cur;this.emT-=dt;
-    if(reduce)return;
+    if(GM.reducedMotion)return;
     const hot=cur[PI.heat];
     if(this.emT<=0){
       this.emT=rnd(.12,.3)/(.4+hot);
@@ -782,7 +740,6 @@ class Mascot{
     }
   }
 }
-function S(m){return m.S}
 function curlSh(k){const w=k/8;return w*w*(k>2?1:.2)}
 /* ---------- drawing ---------- */
 Mascot.prototype.P=function(c,r,code,R,G,B){
@@ -1017,9 +974,9 @@ Mascot.prototype.partsOver=function(){};
 const stages=[];
 class Stage extends Field{
   constructor(cv,o){
-    super(cv,{fs:w=>w<520?7:8.5,lh:1.12,bloom:.5,maxp:150});
+    super(cv,{fs:w=>w<520?7:8.5,lh:1.12,maxp:150});
     this.m=new Mascot(this,{main:true,announce:o.announce,glow:true,trail:true,sleepAfter:o.sleepAfter||48});
-    this.m.still=reduce;this.tc=0;this.coal=null;this.name=o.name;
+    this.tc=0;this.coal=null;this.name=o.name;
     const h=new Date().getHours();this.m.night=(h>=22||h<6);
     if(this.m.night){this.m.mood='sleepy';this.m.cur.set(EMO.sleepy);this.m.queue=null}
     stages.push(this);
@@ -1027,10 +984,12 @@ class Stage extends Field{
   onLayout(){
     const S=clamp(Math.min(this.vw*.085,this.vh*.13),15,66);
     this.trail=new Float32Array(this.N);this.m.trail=this.trail;
+    this.m.still=GM.reducedMotion;
     this.m.setRegion(0,0,this.cols,this.rows,S);
-    if(reduce)this.kick();
   }
-  kick(){if(reduce&&this.laid){this.m.touchAt=performance.now();this.settle(100)}}
+  still(){this.m.touchAt=performance.now();this.settle(100)}
+  /* reduced motion has no loop: after any interaction, run the sim forward and repaint */
+  kick(){if(GM.reducedMotion&&this.laid){this.still();this.repaint()}syncUI()}
   act(n){
     const m=this.m;
     if(n==='call'){m.touch();m.feel('curious',3);m.goto(this.W2()*.5+rnd(-1,1)*this.vw*.2,this.vh*.5+rnd(-.2,.2)*this.vh);this.kick();return}
@@ -1044,7 +1003,7 @@ class Stage extends Field{
     const m=this.m;m.touch();
     this.coal=m.coal={x:rnd(this.vw*.15,this.vw*.85),y:rnd(this.vh*.25,this.vh*.8),t:0};
     if(!m.grab)m.feel('curious',Infinity);
-    if(reduce){m.coal=null;this.coal=null;m.feel('delighted',Infinity);m.chew=0;this.kick();}
+    if(GM.reducedMotion){m.coal=null;this.coal=null;m.feel('delighted',Infinity);m.chew=0;this.kick();}
   }
   step(){
     this.t+=STEP;const m=this.m;m.step();if((this.tc++&1)===0)m.trailStep();
@@ -1053,6 +1012,7 @@ class Stage extends Field{
     this.partStep();
   }
   render(){
+    if(this===heroS)syncUI();
     this.m.render();
     const c=this.coal;
     if(c){const cx=Math.round(c.x/this.cw),cy=Math.round(c.y/this.chh);
@@ -1064,7 +1024,7 @@ class Stage extends Field{
 const SHEET=['content','curious','delighted','surprised','sleepy','shy','concerned','proud','focused'];
 class Sheet extends Field{
   constructor(cv,wrap){
-    super(cv,{fs:w=>w<560?7.5:8.5,lh:1.12,bloom:.5,maxp:220});this.wrap=wrap;
+    super(cv,{fs:w=>w<560?7.5:8.5,lh:1.12,maxp:220});this.wrap=wrap;
     this.ms=SHEET.map(n=>{const m=new Mascot(this,{pinned:true,still:true,mood:n,hy:.56});m.feel(n);m.asleep=(n==='sleepy');return m});
   }
   onLayout(){
@@ -1073,18 +1033,18 @@ class Sheet extends Field{
       const ox=Math.round((r.left-wr.left)/this.cw),oy=Math.round((r.top-wr.top)/this.chh),wc=Math.max(4,Math.floor(r.width/this.cw)),hc=Math.max(4,Math.floor(r.height/this.chh));
       m.setRegion(ox,oy,wc,hc,Math.min(r.width*.235,r.height*.29));m.cur.set(EMO[m.asleep?'sleepy':m.mood]);m.vel.fill(0);
     });
-    if(reduce)this.settle(60);
   }
+  still(){this.settle(70)}
   step(){this.t+=STEP;for(const m of this.ms)m.step();this.partStep()}
   render(){for(const m of this.ms)m.render();this.partDraw()}
 }
 /* ---------- in the wild ---------- */
 class Wild extends Field{
   constructor(cv,kind){
-    super(cv,{fs:w=>w<520?7.5:9,lh:1.12,bloom:.5,maxp:180});this.kind=kind;
+    super(cv,{fs:w=>w<520?7.5:9,lh:1.12,maxp:180});this.kind=kind;
     const o={nav:{pinned:true,hy:.78,still:false},err:{},load:{},sign:{},foot:{}}[kind];
     this.m=new Mascot(this,Object.assign({sleepAfter:1e9},o));
-    this.m.still=reduce;this.k=0;this.p=0;this.mask=null;this.show=0;
+    this.m.still=GM.reducedMotion;this.k=0;this.p=0;this.mask=null;this.show=0;
     if(kind==='foot'){this.m.asleep=true;this.m.mood='sleepy';this.m.cur.set(EMO.sleepy)}
     if(kind==='err'){this.m.mood='concerned';this.m.cur.set(EMO.concerned)}
     if(kind==='load'){this.m.busy=true;this.m.mood='focused';this.m.cur.set(EMO.focused)}
@@ -1095,23 +1055,23 @@ class Wild extends Field{
     m.setRegion(0,0,this.cols,this.rows,S);
     if(k==='nav'){m.hx=this.vw*.66}
     if(k==='foot'){m.hx=this.vw*.5;m.hy=this.vh*.6;for(let i=0;i<9;i++){m.cx[i]=m.hx-i*S*.6;m.cy[i]=m.hy+S*.6+Math.sin(i)*S*.25}}
-    if(k==='err'||k==='sign')this.mask=textMask(this,k==='err'?'404':"YOU'RE IN",DISP,k==='err'?.5:.7,k==='err'?.8:.55);
+    if(k==='err'||k==='sign')this.mask=GM.textMask(this.s,k==='err'?'404':"YOU'RE IN",{font:'400 100px '+DISP,fill:k==='err'?.5:.7});
     if(k==='load'){this.bx0=Math.round(this.cols*.1);this.bx1=Math.round(this.cols*.9);this.by=Math.round(this.rows*.78)}
-    if(reduce){this.p=.62;this.show=1;if(k==='load')m.feel('focused');this.settle(100)}
   }
+  still(){this.p=.62;this.show=1;if(this.kind==='load')this.m.feel('focused');this.settle(100)}
   step(){
     this.t+=STEP;const m=this.m,S=m.S;this.k+=STEP;
-    if(this.kind==='err'&&!reduce){
+    if(this.kind==='err'&&!GM.reducedMotion){
       if(this.k>3.4){this.k=0;const r=Math.random();if(r<.4)m.feel('curious',2.2,['concerned',Infinity]);else if(r<.7)m.feel('shy',1.8,['concerned',Infinity]);else m.goto(rnd(S*2,this.vw-S*2),rnd(S*1.5,this.vh-S*1.5));m.touchAt=performance.now()}
     }
-    if(this.kind==='load'&&!reduce){
+    if(this.kind==='load'&&!GM.reducedMotion){
       this.p+=STEP/5.2;
       if(this.p<1){const fx=this.bx0+(this.bx1-this.bx0)*this.p;m.tx=fx*this.cw-S*1.9;m.ty=(this.by-4)*this.chh-S*.3;m.tOn=true;m.stopR=S*.2;m.busy=true;if(m.mood!=='focused'&&m.mood!=='proud'&&m.mood!=='delighted')m.feel('focused')}
       else{if(this.p<1.01){m.event('loaded');m.tOn=false}if(this.p>1.5){this.p=0;m.event('loading')}}
       m.touchAt=performance.now();
     }
     if(this.kind==='sign'){if(this.show>0)this.show=Math.max(0,this.show-STEP/5)}
-    if(this.kind==='foot'&&!reduce){
+    if(this.kind==='foot'&&!GM.reducedMotion){
       const near=m.pOn&&Math.hypot(m.pl-m.hx,m.pq-m.hy)<S*6;
       if(near&&(m.peek||0)<=0&&this.k>6){this.k=0;m.peek=1.6}
     }
@@ -1142,19 +1102,12 @@ class Wild extends Field{
     }
     m.render();this.partDraw();
   }
-  trigger(n){this.m.event(n);if(reduce&&this.kind==='sign'){this.show=1;this.settle(80)}else if(this.kind==='sign')this.show=1;if(reduce)this.settle(80)}
+  trigger(n){this.m.event(n);if(this.kind==='sign')this.show=1;if(GM.reducedMotion){this.settle(80);this.repaint()}}
 }
 /* ---------- other concepts (small sketches) ---------- */
 class Sketch extends Field{
-  constructor(cv,kind){super(cv,{fs:8,lh:1.12,bloom:.5,maxp:120});this.kind=kind;this.sand=[]}
-  onLayout(){this.sand.length=0;this.pile=new Float32Array(this.cols)}
-  step(){
-    this.t+=STEP;const t=this.t;
-    if(this.kind==='dram'){
-      const cx=this.cols>>1;
-    }
-    this.partStep();
-  }
+  constructor(cv,kind){super(cv,{fs:8,lh:1.12,maxp:120});this.kind=kind}
+  step(){this.t+=STEP;this.partStep()}
   render(){
     const t=this.t,cx=this.cols>>1,cy=this.rows>>1,W=this.cols,R=this.rows;
     if(this.kind==='dram'){
@@ -1207,7 +1160,7 @@ function bindStage(st,btn){
   btn.addEventListener('pointermove',e=>{
     if(!pend||pend.moved||pend.pet)return;
     const r=st.cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
-    if(Math.hypot(x-pend.x,y-pend.y)>8){pend.moved=true;clearTimeout(pend.hold);if(!reduce)m.grabAt(x,y)}
+    if(Math.hypot(x-pend.x,y-pend.y)>8){pend.moved=true;clearTimeout(pend.hold);if(!GM.reducedMotion)m.grabAt(x,y)}
   });
   const up=()=>{
     if(!pend)return;clearTimeout(pend.hold);
@@ -1227,7 +1180,7 @@ sleepBtn.addEventListener('click',()=>{if(heroS.m.asleep||sleepBtn.getAttribute(
 function hideHero(on){
   $('heroStage').style.display=on?'none':'';$('heroRest').classList.toggle('on',on);
   document.querySelector('.stagebar').style.display=on?'none':'';
-  if(!on){heroS.m.touch();heroS.needLayout=true;heroS.layout()}
+  if(!on){heroS.m.touch();heroS.s.layout()}
   if(on)announce('Fettle is tucked away.');
 }
 $('heroHide').addEventListener('click',()=>hideHero(true));
@@ -1282,36 +1235,11 @@ addEventListener('keydown',e=>{
   if(buf==='melt'){buf='';heroS.act('melt');$('heroStatus').innerHTML='Fettle <b>melts</b> into a puddle, then pulls itself together.';lastStat=''}
 });
 
-/* ---------- the one loop ---------- */
-let last=0,acc=0,lastR=0,fr=0;
-function frame(t){
-  requestAnimationFrame(frame);
-  if(document.hidden){last=t;return}
-  const dt=Math.min(.1,(t-last)/1000);last=t;acc+=dt;
-  const act=[];for(const f of fields)if(f.vis&&f.laid)act.push(f);
-  for(const f of act)f.rect=f.cv.getBoundingClientRect();
-  const sy=scrollY;scrollV=scrollV*.88+(sy-lastSY)*.12;lastSY=sy;
-  let n=0;
-  while(acc>=STEP&&n<3){for(const f of act)f.step();acc-=STEP;n++}
-  if(n>=3)acc=0;
-  if(t-lastR>=32){lastR=t;for(const f of act)f.paint()}
-  if((fr++&7)===0)syncUI();
-}
-function start(){
-  for(const f of fields)f.layout();
-  syncUI();
-  if(reduce){
-    for(const f of fields){f.vis=true}
-    for(const f of fields)f.settle(f===sheet?70:90);
-    for(const f of fields)f.vis=false;
-    for(const f of fields){if(f.cv.getBoundingClientRect().bottom>-80&&f.cv.getBoundingClientRect().top<innerHeight+80)f.vis=true}
-    // keep stills fresh when mood changes
-    setInterval(syncUI,400);
-  }else requestAnimationFrame(t=>{last=t;frame(t)});
-}
-const fp=(document.fonts&&document.fonts.load)?Promise.race([Promise.all([document.fonts.load('700 16px "JetBrains Mono"'),document.fonts.load('400 40px "Archivo Black"')]),new Promise(r=>setTimeout(r,1800))]):Promise.resolve();
-fp.then(start,start);
-document.fonts&&document.fonts.ready&&document.fonts.ready.then(()=>{for(const f of fields)if(f.laid)f.needLayout=true;clearTimeout(rzT);rzT=setTimeout(()=>{for(const f of fields)if(f.needLayout){f.needLayout=false;f.layout()}},50)});
+/* ---------- boot: every surface runs on the engine's shared loop ---------- */
+syncUI();
+for(const f of fields)f.boot();
+/* the engine waits for the mono font; the word masks also need the display font */
+if(document.fonts&&document.fonts.load)document.fonts.load('400 40px "Archivo Black"').then(()=>{for(const f of [wErr,wSign])if(f.laid)f.s.layout()},()=>{});
 window.__fettle={heroS,pgS,sheet,fields,Mascot};
 })();
 </script>
