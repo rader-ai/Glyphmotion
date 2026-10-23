@@ -413,7 +413,7 @@ class Scene {
     this.g = new Ink();
     this.s = GM.surface(cv, {
       fontSize: o.fs, lineHeight: 1.25, bloom: o.bloom, background: o.bg, transparent: !o.bg,
-      persistence: o.persist, baseline: 'middle',
+      persistence: o.persist, persistenceCurve: 'exp', persistenceHold: true, baseline: 'middle',
       setup: s => { this.s = s; this.g.layout(s); if (this.onLayout) this.onLayout(); },
       step: (s, dt) => this.sim(dt),
       draw: () => this.frame(),
@@ -545,7 +545,7 @@ class Word {
 // ---------- Logo (nav, specimen) ----------
 class Logo extends Scene {
   constructor(cv, v, host) {
-    super(cv, { fs: v === 'big' ? ((w) => clamp(w / 120, 6.5, 10)) : (() => 4.7), persist: .42, bloom: .55 });
+    super(cv, { fs: v === 'big' ? ((w) => clamp(w / 120, 6.5, 10)) : (() => 4.7), persist: .45, bloom: .55 });
     this.v = v; this.word = new Word(); this.att = 0; this.tAtt = 0; this.ft = 0; this.pw = 1; this.pokable = true; this.force = false;
     if (host) {
       const on = () => { this.tAtt = 1; this.poke(); }, offf = () => { this.tAtt = 0; this.poke(); };
@@ -575,7 +575,7 @@ class Logo extends Scene {
 // ---------- NavWire: the menu bar as a spectrum analyzer ----------
 class NavWire extends Scene {
   constructor(cv, links) {
-    super(cv, { fs: () => 7, persist: .28, bloom: .5 }); this.links = links; this.hv = -1; this.act = -1; this.last = -1; this.pokable = true;
+    super(cv, { fs: () => 7, persist: .30, bloom: .5 }); this.links = links; this.hv = -1; this.act = -1; this.last = -1; this.pokable = true;
     this.lvl = new Float32Array(links.length); this.pk = null; this.pkx = 0; this.lastX = 40;
     links.forEach((l, i) => {
       l.addEventListener('pointerenter', () => this.setHover(i)); l.addEventListener('pointerleave', () => this.setHover(-1));
@@ -630,7 +630,7 @@ class NavWire extends Scene {
 // ---------- DropSurf: dropdown and mobile menu panels ----------
 class DropSurf extends Scene {
   constructor(cv, panel, full) {
-    super(cv, { fs: () => 7, persist: .38, bloom: .45 }); this.panel = panel; this.full = full; this.p = 0; this.tgt = 0; this.pokable = true;
+    super(cv, { fs: () => 7, persist: .40, bloom: .45 }); this.panel = panel; this.full = full; this.p = 0; this.tgt = 0; this.pokable = true;
     this.hr = null; this.tr = null; this.band = 0; this.sleepy = true; this.s.pause(); this.items = [...panel.querySelectorAll('a')];
     this.items.forEach(a => {
       const on = () => { this.setItem(a); }, offf = () => { this.tr = null; this.poke(); };
@@ -697,7 +697,7 @@ const CHAN = [[84, 214, 255], [255, 176, 64], [255, 84, 130], [246, 242, 228]];
 class BtnSurf extends Scene {
   constructor(btn) {
     const kind = btn.dataset.kind;
-    super(btn.querySelector('canvas'), { fs: () => 7, persist: kind === 'burger' ? .27 : .38, bloom: .55 });
+    super(btn.querySelector('canvas'), { fs: () => 7, persist: kind === 'burger' ? .28 : .40, bloom: .55 });
     this.btn = btn; this.kind = kind; this.hT = 0; this.hov = 0; this.pT = 0; this.prs = 0; this.kick = 0; this.sp = 0; this.pokable = true;
     this.on_ = true; this.ap = 1; this.cnt = 0; this.pk = new Pool(7, ['c', 't0', 'a0', 'a1', 'ci']); this.open = 0; this.openT = 0; this.per = null;
     const m = btn.matches.bind(btn);
@@ -840,7 +840,7 @@ class BtnSurf extends Scene {
 const WF_T = 0.58;
 class Hero extends Scene {
   constructor(cv) {
-    super(cv, { fs: (w) => clamp(w / 115, 7, 10), persist: .53, bloom: .55, bg: '#05070b' });
+    super(cv, { fs: (w) => clamp(w / 115, 7, 10), persist: .57, bloom: .55, bg: '#05070b' });
     this.word = new Word(); this.att = 0; this.ft = 0; this.pw = 1; this.pokable = true; this.chirps = new Pool(5, ['c0', 't0']);
     this.lock = new Float32Array(7); this.lockCol = null; this.acc = 0;
     listeners.ping.push((x, y) => {
@@ -940,7 +940,7 @@ class Hero extends Scene {
 // ---------- Cursor / charge / shock overlay ----------
 class Cur extends Scene {
   constructor(cv) {
-    super(cv, { fs: () => 11, persist: .38, bloom: 0 });
+    super(cv, { fs: () => 11, persist: .40, bloom: 0 });
     this.rx = 0; this.ry = 0; this.lk = 0; this.trail = new Float32Array(16); this.tn = 0; this.spin = 0;
   }
   sim(dt) { this.t += dt; this.spin += dt * 24; }
@@ -1017,7 +1017,7 @@ function inPoly(poly, x, y) {
 }
 class MapS extends Scene {
   constructor(cv) {
-    super(cv, { fs: (w) => clamp(w / 150, 6.2, 9), persist: .9, bloom: .55 });
+    super(cv, { fs: (w) => clamp(w / 150, 6.2, 9), persist: .95, bloom: .55 });
     this.pk = new Pool(45, ['a', 'b', 's', 'v', 'hh', 'amber']); this.pulse = new Float32Array(STN.length); this.nextSend = 0; this.hov = -1; this.pokable = true;
     listeners.broadcast.push(() => this.broadcast());
     cv.addEventListener('pointerdown', () => { if (this.hov >= 0) this.fan(this.hov, 3); });
