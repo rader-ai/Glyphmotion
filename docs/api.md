@@ -22,6 +22,7 @@ Creates a `Surface` bound to a canvas. Size the canvas with CSS; the engine matc
 | `weight` | `600` | Font weight. |
 | `lineHeight` | `1.2` | Cell height as a multiple of the font size. |
 | `background` | `#070b18` | Color painted under the grid each frame. |
+| `transparent` | `false` | For overlays such as nav strips and button effects: skip the background so the page shows through. |
 | `bloom` | `0.5` | Glow strength, 0 to 1. `0` turns the glow pass off. |
 | `bloomScale` | `5` | How much the glow pass is shrunk. Higher is softer and cheaper. |
 | `fps` | `30` | Paint rate. The simulation always steps at 60Hz. |

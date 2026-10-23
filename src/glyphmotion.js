@@ -123,6 +123,7 @@ class Surface {
    *   fontSize   number or (cssWidth, cssHeight) => number. Default: width / 60, clamped 7..16
    *   family, weight, lineHeight
    *   background css color painted under the grid
+   *   transparent true for overlays: no background, the page shows through
    *   bloom      0..1 strength of the glow pass (0 turns it off). Default 0.5
    *   bloomScale downscale factor for the glow pass. Default 5
    *   fps        render rate (sim always steps at 60Hz). Default 30
@@ -133,7 +134,7 @@ class Surface {
    */
   constructor(canvas, o) {
     this.canvas = canvas; this.o = Object.assign({ bloom: 0.5, bloomScale: 5, fps: 30, lineHeight: 1.2, weight: 600, family: DEFAULT_FAMILY, background: '#070b18' }, o);
-    this.ctx = canvas.getContext('2d', { alpha: false });
+    this.ctx = canvas.getContext('2d', { alpha: !!this.o.transparent });
     this.glow = document.createElement('canvas'); this.gctx = this.glow.getContext('2d');
     this.time = 0; this.acc = 0; this.racc = 1; this.paused = false; this.visible = !io; this.dirty = true;
     this.pointer = { x: -1e9, y: -1e9, inside: false, down: false, vx: 0, vy: 0 };
@@ -222,7 +223,8 @@ class Surface {
     const ctx = this.ctx, { ch, r, g, b, cols, rows, cw, chh } = this;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-    ctx.fillStyle = this.o.background; ctx.fillRect(0, 0, this.vw, this.vh);
+    if (this.o.transparent) ctx.clearRect(0, 0, this.vw, this.vh);
+    else { ctx.fillStyle = this.o.background; ctx.fillRect(0, 0, this.vw, this.vh); }
     ctx.font = this.font; ctx.textBaseline = 'top';
     let lastK = -1;
     for (let row = 0; row < rows; row++) {
@@ -256,7 +258,11 @@ class Surface {
       p.vx = nx - p.x; p.vy = ny - p.y; p.x = nx; p.y = ny;
     };
     this._h = {
-      pointermove: e => { at(e); p.inside = true; if (GM.reducedMotion) this.invalidate(); },
+      pointermove: e => {
+        at(e); p.inside = true;
+        // under reduced motion there is no loop, so repaint on movement, at most ~16 times a second
+        if (GM.reducedMotion && !this._rmT) this._rmT = setTimeout(() => { this._rmT = 0; this.invalidate(); }, 60);
+      },
       pointerdown: e => { at(e); p.inside = true; p.down = true; },
       pointerup: () => { p.down = false; },
       pointerleave: () => { p.inside = false; p.down = false; },
