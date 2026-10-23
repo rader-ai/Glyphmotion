@@ -125,6 +125,7 @@ code,kbd{font:600 .85em var(--mono);background:rgba(110,190,235,.1);border:1px s
 .mock .navbar span.l{display:none}
 @media (min-width:560px){.mock .navbar span.l{display:inline}}
 #wNav{position:absolute;left:0;top:0;height:112px;pointer-events:none}
+.mock .navbar{position:relative;z-index:1}
 #w404{height:290px}
 #wLoad{height:290px}
 #wWin{height:290px}
@@ -331,40 +332,22 @@ footer.end{margin-top:72px;border-top:1px solid var(--line);padding:28px 0 56px;
 
 <footer class="end"><div class="wrap">Vesper, the Carrier mascot. Drawn in full-color text characters on canvas, simulated live, with bloom. One shared animation loop, paused when offscreen or hidden. Respects reduced motion.</div></footer>
 
+<script src="../../src/glyphmotion.js"></script>
 <script>
 (() => {
 'use strict';
-const REDUCE = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const GM = Glyphmotion;
+const { clamp, lerp, smooth, rnd, hash2, spring, lineChar, Pool } = GM;
 const FAMILY = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-const STEP = 1 / 60;
+const STEP = GM.STEP;
 const TAU = Math.PI * 2;
-const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
-const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-function hash2(x, y) {
-  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
-  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
-  return (h >>> 0) / 4294967296;
-}
-function vnoise(x, y) {
-  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
-function lineChar(x, y) {
-  let a = Math.atan2(y, x); if (a < 0) a += Math.PI; if (a >= Math.PI) a -= Math.PI;
-  if (a < Math.PI / 8 || a > 7 * Math.PI / 8) return '-';
-  if (a < 3 * Math.PI / 8) return '\\';
-  if (a < 5 * Math.PI / 8) return '|';
-  return '/';
-}
 function sdSeg(px, py, ax, ay, bx, by) {
   const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
   let t = l2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
   const qx = ax + dx * t - px, qy = ay + dy * t - py; return Math.sqrt(qx * qx + qy * qy);
 }
-const CY = [84, 214, 255], AM = [255, 176, 64], MG = [255, 84, 130], WH = [246, 242, 228];
+const CY = [84, 214, 255], AM = [255, 176, 64], MG = [255, 84, 130], WH = [246, 242, 228], ZC = [160, 190, 255];
+const PAL = [CY, AM, MG, WH, ZC];
 
 // ---------- shared state ----------
 let NOW = 0;
@@ -376,69 +359,35 @@ function isNight() {
   if (TOD.mode === 'day') return false;
   const h = new Date().getHours(); return h >= 19 || h < 6;
 }
-
-// ---------- Grid ----------
-const cssCache = new Map();
-function cssRGB(q) {
-  let s = cssCache.get(q);
-  if (!s) { s = 'rgb(' + (((q >> 10) & 31) << 3) + ',' + (((q >> 5) & 31) << 3) + ',' + ((q & 31) << 3) + ')'; if (cssCache.size > 9000) cssCache.clear(); cssCache.set(q, s); }
-  return s;
+// scroll speed, sampled at most once per frame no matter how many surfaces step
+let scT = 0, scY0 = scrollY;
+function pollScroll() {
+  const now = performance.now(), dt = (now - scT) / 1000; if (dt < .012) return;
+  const sy = scrollY; SC.v = SC.v * .8 + ((sy - scY0) / Math.max(Math.min(dt, .1), .016)) * .2; scY0 = sy; SC.y = sy; scT = now;
 }
+
+// ---------- Grid: the engine surface's cell buffers, written with a per-cell strength ----------
+// The engine stores one color per cell, so strength (a) is folded into the color when a cell is written.
+// a below .04 hides the cell; a above 1 pushes the color toward white.
 class Grid {
-  constructor(cv, o) {
-    this.cv = cv; this.o = o; this.ctx = cv.getContext('2d', { alpha: !o.bg });
-    this.bc = document.createElement('canvas'); this.bx = this.bc.getContext('2d');
-    this.cols = 0; this.rows = 0;
+  bind(s) {
+    this.s = s; this.cols = s.cols; this.rows = s.rows; this.cw = s.cw; this.chh = s.chh; this.asp = s.asp; this.N = s.N;
+    this.w = s.vw; this.h = s.vh; this.fs = s.fs;
   }
-  layout(w, h, fs) {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2); this.dpr = dpr; const cv = this.cv;
-    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-    this.w = w; this.h = h; this.fs = fs; this.font = '700 ' + fs.toFixed(2) + 'px ' + FAMILY;
-    const x = this.ctx; x.setTransform(dpr, 0, 0, dpr, 0, 0); x.font = this.font;
-    this.cw = x.measureText('M').width || fs * .6; this.chh = fs * 1.25;
-    this.cols = Math.ceil(w / this.cw); this.rows = Math.ceil(h / this.chh); this.asp = this.chh / this.cw;
-    const N = this.N = this.cols * this.rows;
-    this.A = new Float32Array(N); this.ch = new Array(N).fill(' ');
-    this.R = new Uint8Array(N); this.G = new Uint8Array(N); this.B = new Uint8Array(N);
-    this.bc.width = Math.max(1, Math.round(cv.width / 5)); this.bc.height = Math.max(1, Math.round(cv.height / 5));
-  }
-  clear() { this.A.fill(0); }
+  clear() { this.s.clear(); }
   put(c, r, ch, R, G, B, a) {
     if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return;
-    const i = r * this.cols + c; this.ch[i] = ch; this.R[i] = R; this.G[i] = G; this.B[i] = B; this.A[i] = a;
+    this.putI(r * this.cols + c, ch, R, G, B, a);
   }
-  putI(i, ch, R, G, B, a) { this.ch[i] = ch; this.R[i] = R; this.G[i] = G; this.B[i] = B; this.A[i] = a; }
+  putI(i, ch, R, G, B, a) {
+    const s = this.s;
+    if (a < .04) { s.ch[i] = ' '; return; }
+    const k = a > 1 ? 1 : a, hot = a > 1 ? Math.min(1, (a - 1) * 1.6) : 0;
+    let rr = R * k, gg = G * k, bb = B * k;
+    if (hot) { rr += (255 - rr) * hot; gg += (255 - gg) * hot; bb += (255 - bb) * hot; }
+    s.putI(i, ch, rr, gg, bb);
+  }
   str(c, r, s, R, G, B, a) { for (let k = 0; k < s.length; k++) if (s[k] !== ' ') this.put(c + k, r, s[k], R, G, B, a); }
-  present() {
-    const x = this.ctx, cv = this.cv, dpr = this.dpr, cols = this.cols, rows = this.rows, A = this.A, cw = this.cw, chh = this.chh;
-    x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1;
-    const bg = typeof this.o.bg === 'function' ? this.o.bg() : this.o.bg;
-    if (bg) { x.fillStyle = bg; x.fillRect(0, 0, cv.width, cv.height); } else x.clearRect(0, 0, cv.width, cv.height);
-    x.setTransform(dpr, 0, 0, dpr, 0, 0); x.font = this.font; x.textBaseline = 'middle';
-    let lastq = -1, any = false;
-    const ch = this.ch, R = this.R, G = this.G, B = this.B;
-    for (let r = 0; r < rows; r++) {
-      const y = (r + .5) * chh, o = r * cols;
-      for (let c = 0; c < cols; c++) {
-        const i = o + c, e = A[i];
-        if (e < .04) continue;
-        const g = ch[i]; if (g === ' ') continue;
-        any = true;
-        const k = e > 1 ? 1 : e, hot = e > 1 ? Math.min(1, (e - 1) * 1.6) : 0;
-        let rr = R[i] * k, gg = G[i] * k, bb = B[i] * k;
-        if (hot) { rr += (255 - rr) * hot; gg += (255 - gg) * hot; bb += (255 - bb) * hot; }
-        const q = ((rr >> 3) << 10) | ((gg >> 3) << 5) | (bb >> 3);
-        if (q !== lastq) { x.fillStyle = cssRGB(q); lastq = q; }
-        x.fillText(g, c * cw, y);
-      }
-    }
-    const bl = this.o.bloom;
-    if (bl && any) {
-      const bx = this.bx; bx.globalCompositeOperation = 'copy'; bx.drawImage(cv, 0, 0, this.bc.width, this.bc.height);
-      x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'lighter'; x.globalAlpha = bl; x.imageSmoothingEnabled = true;
-      x.drawImage(this.bc, 0, 0, cv.width, cv.height); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
-    }
-  }
   // raster helpers (fn is a method called with this = owner)
   ellipse(cx, cy, rx, ry, rot, fn, owner) {
     const cw = this.cw, chh = this.chh, m = Math.max(rx, ry) * 1.06;
@@ -478,24 +427,38 @@ class Grid {
   }
 }
 
-// ---------- Surf ----------
-const surfs = [];
-const io = new IntersectionObserver(es => { for (const e of es) { const s = e.target.__s; if (s) s.vis = e.isIntersecting; } }, { rootMargin: '60px' });
-const ro = new ResizeObserver(es => { for (const e of es) { const s = e.target.__s; if (s) s.relayout(); } });
+// ---------- Surf: one Glyphmotion surface plus the page's own pointer-relative bookkeeping ----------
 class Surf {
   constructor(cv, o) {
-    this.cv = cv; this.o = o; this.g = new Grid(cv, o); this.vis = false; this.t = 0; this.ready = false; this.rc = null;
-    cv.__s = this; surfs.push(this); io.observe(cv); ro.observe(cv);
+    this.cv = cv; this.so = o; this.g = new Grid(); this.t = 0; this.ready = false; this.rc = null; this.rcT = 0; this.s = null;
   }
-  get on() { return this.vis && this.ready; }
-  relayout() {
-    const r = this.cv.getBoundingClientRect(); if (r.width < 4 || r.height < 4) { this.ready = false; return; }
-    this.g.layout(r.width, r.height, this.o.fs(r.width, r.height));
-    this.ready = true; this.onLayout && this.onLayout();
-    if (REDUCE) this.still();
+  // called by each subclass at the end of its constructor, once its fields exist
+  boot() {
+    const o = this.so;
+    this.s = GM.surface(this.cv, {
+      fontSize: o.fs, weight: 700, lineHeight: 1.25, background: o.bg, bloom: o.bloom, bloomScale: 5, fps: 30,
+      setup: s => this.relayout(s),
+      step: (s, dt) => this.advance(dt),
+      draw: () => { if (this.ready) this.draw(); },
+      still: () => { if (this.ready) this.settle(90); }
+    });
   }
-  pre() { this.rc = this.cv.getBoundingClientRect(); }
-  still(n) { if (!this.ready) return; this.pre(); const k = n || 90; for (let i = 0; i < k; i++) this.sim(STEP); this.draw(); this.g.present(); }
+  get on() { return this.ready && this.s.active; }
+  relayout(s) {
+    this.ready = s.vw >= 4 && s.vh >= 4;
+    if (!this.ready) return;
+    this.g.bind(s); this.onLayout && this.onLayout();
+  }
+  pre() { const n = performance.now(); if (!this.rc || n - this.rcT > 8) { this.rc = this.cv.getBoundingClientRect(); this.rcT = n; } }
+  advance(dt) {
+    if (!this.ready) return;
+    NOW = performance.now() / 1000; pollScroll(); this.pre();
+    if (this.tick) this.tick(dt);
+    this.sim(dt);
+  }
+  // reduced motion: run the sim forward so state changes show up, then repaint
+  settle(n) { this.rcT = 0; this.pre(); for (let i = 0; i < n; i++) this.sim(STEP); }
+  still(n) { if (!this.ready) return; this.settle(n || 90); this.s.invalidate(); }
 }
 
 // ---------- Vesper: the character ----------
@@ -528,7 +491,7 @@ const FUR = '+x%%###';
 
 class Vesper extends Surf {
   constructor(cv, o) {
-    super(cv, { fs: o.fs || (() => 10), bloom: o.bloom == null ? .5 : o.bloom, bg: o.bg === undefined ? (() => '#05070b') : (o.bg || undefined) });
+    super(cv, { fs: o.fs || (() => 10), bloom: o.bloom == null ? .5 : o.bloom, bg: o.bg || '#05070b' });
     this.o = Object.assign({ env: {}, perch: [.5, .16], fit: null }, o); this.env = this.o.env;
     this.V = {}; this.W = {}; this.T = {};
     for (const k of KEYS) { this.V[k] = EM.content[k]; this.W[k] = 0; this.T[k] = EM.content[k]; }
@@ -538,7 +501,7 @@ class Vesper extends Surf {
     this.sway = 0; this.swayW = 0; this.sq = 0; this.sqW = 0; this.ang = Math.PI; this.angW = 0; this.angT = Math.PI; this.bank = 0; this.flapPh = 0;
     this.mode = 'perch'; this.task = ''; this.taskT = 0; this.launchT = 0; this.bx = 0; this.by = 0; this.vx = 0; this.vy = 0; this.snapX = 0; this.snapY = 0;
     this.rings = []; this.echoQ = []; this.blips = []; this.carry = 0; this.carryT = 0;
-    this.parts = []; for (let i = 0; i < 80; i++) this.parts.push({ a: false, x: 0, y: 0, vx: 0, vy: 0, l: 0, m: 1, ch: '+', c: CY, gr: 0, w: 0, s: 1 });
+    this.parts = new Pool(80, ['x', 'y', 'vx', 'vy', 'l', 'm', 'gr', 'w', 'ch', 'c']); this.sp = { x: 0, v: 0 };
     this.wire = { x0: 0, t0: -99, amp: 0 }; this.dayK = isNight() ? 0 : 1; this.hits = { hc: [0, 0, 1], ears: [[0, 0], [0, 0]], body: [0, 0, 1, 1] };
     this.wx = new Float32Array(10); this.wy = new Float32Array(10); this.bone = new Float32Array(10);
     this.px = new Float32Array(5); this.py = new Float32Array(5);
@@ -546,6 +509,7 @@ class Vesper extends Surf {
     this.mask = null; this.echo = null; this.stars = [];
     this.cx = 0; this.cy = 0; this.cs = 1; this.sn = 0; this.sx = 1; this.sy = 1; this._x = 0; this._y = 0; this.fr = 0;
     if (this.o.interactive) this.bindPointer();
+    this.boot();
   }
   onLayout() {
     const g = this.g, w = g.w, h = g.h;
@@ -584,16 +548,16 @@ class Vesper extends Surf {
   react(m, dur, noQ) {
     if (this.sleepLock && !this.o.napper && m !== 'asleep') return;
     this.activity(true);
-    if (REDUCE) dur = 1e9;
+    if (GM.reducedMotion) dur = 1e9;
     this.ovr = { m, until: this.time + (dur == null ? 2 : dur) };
     if (!noQ) this.q.length = 0;
     this.onReact(m);
-    if (REDUCE && this.ready) this.still(70);
+    if (GM.reducedMotion && this.ready) this.still(70);
   }
   then(m, dur) { this.q.push({ m, dur }); }
   onReact(m) {
     const k = this.k || 1;
-    if (REDUCE) return;
+    if (GM.reducedMotion) return;
     if (m === 'surprised') {
       this.earKickW[0] += 14; this.earKickW[1] += 14; this.swayW += (Math.random() < .5 ? -1 : 1) * 1.6; this.sqW -= 5; this.W.wing += 6; this.W.eyeSize += 4; this.listen = 1;
       this.ring(this.hits.hc[0], this.hits.hc[1], .5, 0);
@@ -611,8 +575,8 @@ class Vesper extends Surf {
   }
   pet(a) {
     this.petAcc = Math.min(4, this.petAcc + (a == null ? 1.2 : a)); this.activity();
-    if (this.petAcc > .5 && !this.ovr && !REDUCE) { this.sparkT = (this.sparkT || 0) - 1; }
-    if (REDUCE && this.ready) { this.react(this.petAcc > 1.6 ? 'delighted' : 'content', 1e9); }
+    if (this.petAcc > .5 && !this.ovr && !GM.reducedMotion) { this.sparkT = (this.sparkT || 0) - 1; }
+    if (GM.reducedMotion && this.ready) { this.react(this.petAcc > 1.6 ? 'delighted' : 'content', 1e9); }
   }
   ping(big, x, y) {
     if (this.mood === 'asleep' && !big) return;
@@ -621,7 +585,7 @@ class Vesper extends Surf {
     this.ring(x == null ? hx : x, y == null ? hy : y, big ? 1.5 : .8, 0);
     this.echoQ.push({ t: this.time + (big ? .9 : 1.0), big, x: x == null ? hx : x, y: y == null ? hy : y });
     this.mouthT = .35; this.listen = Math.max(this.listen, .5);
-    if (REDUCE) { this.react(big ? 'delighted' : 'curious', 1e9); }
+    if (GM.reducedMotion) { this.react(big ? 'delighted' : 'curious', 1e9); }
   }
   secret() {
     this.react('delighted', 3); this.then('proud', 2.4);
@@ -633,9 +597,9 @@ class Vesper extends Surf {
   toss(x, y) {
     if (this.sleepLock || !this.env.blips) return;
     if (this.blips.length >= 3) this.blips.shift();
-    this.blips.push({ x, y, vx: 0, vy: 0, ph: Math.random() * 6 });
+    this.blips.push({ x, y, vx: 0, vy: 0, ph: rnd(0, 6) });
     this.ring(x, y, .35, 0); this.activity(true);
-    if (REDUCE) { this.react('curious', 1e9); return; }
+    if (GM.reducedMotion) { this.react('curious', 1e9); return; }
     if (this.o.canFly !== false && this.mode === 'perch' && this.mood !== 'asleep') this.startTask('chase');
     else if (this.mood === 'asleep') this.react('curious', 1.5);
   }
@@ -644,7 +608,7 @@ class Vesper extends Surf {
     this.sleepLock = b; this.idle = b ? 999 : 0;
     if (b) { this.ovr = null; this.q.length = 0; if (this.mode === 'fly') this.startTask('return'); }
     else { this.react('sleepy', 1.1); this.then('curious', 1.6); }
-    if (REDUCE && this.ready) this.still(70);
+    if (GM.reducedMotion && this.ready) this.still(70);
   }
   activity(strong) {
     if (this.sleepLock) return;
@@ -653,11 +617,11 @@ class Vesper extends Surf {
   }
   celebrate() {
     this.react('delighted', 1.5); this.then('proud', 2.6); this.carry = 0; this.confetti(this.bx, this.by - this.U * .3, 46);
-    if (this.o.canFly !== false && !REDUCE) this.startTask('celebrate');
+    if (this.o.canFly !== false && !GM.reducedMotion) this.startTask('celebrate');
   }
   busy(on) {
-    if (on) { this.react('focused', 1e9); this.carry = 1; if (this.o.canFly !== false && !REDUCE) this.startTask('orbit'); }
-    else { this.ovr = null; this.carry = 0; if (this.mode === 'fly') this.startTask('return'); }
+    if (on) { this.react('focused', 1e9); this.carry = 1; if (this.o.canFly !== false && !GM.reducedMotion) this.startTask('orbit'); }
+    else { this.ovr = null; this.carry = 0; if (this.mode === 'fly') this.startTask('return'); if (GM.reducedMotion && this.ready) this.still(70); }
   }
   sound(kind) {
     this.listen = Math.max(this.listen, kind === 'key' ? .45 : .9);
@@ -686,7 +650,7 @@ class Vesper extends Surf {
       if (!this.ready) return; const [x, y] = loc(e);
       const px = this.ptr.x, py = this.ptr.y; this.ptr.x = x; this.ptr.y = y; this.ptr.in = true;
       if (this.down) {
-        if (!this.down.moved && Math.hypot(x - this.down.x, y - this.down.y) > 7 && !REDUCE) { this.down.moved = true; this.startDrag(); }
+        if (!this.down.moved && Math.hypot(x - this.down.x, y - this.down.y) > 7 && !GM.reducedMotion) { this.down.moved = true; this.startDrag(); }
         return;
       }
       const h = this.hit(x, y); cv.style.cursor = h ? (h === 'ear' ? 'pointer' : 'grab') : 'default';
@@ -710,7 +674,7 @@ class Vesper extends Surf {
 
   // ---------- flight ----------
   startTask(t, delay) {
-    if (this.o.canFly === false || REDUCE) return;
+    if (this.o.canFly === false || GM.reducedMotion) return;
     this.task = t; this.taskT = -(delay || 0); this.tk = 0;
     if (this.mode === 'perch' && t !== 'return') this.doLaunch(false);
   }
@@ -769,17 +733,17 @@ class Vesper extends Surf {
   // ---------- brain ----------
   brain(dt) {
     const T = this.time, night = isNight();
-    if (!REDUCE) this.idle += dt;
+    if (!GM.reducedMotion) this.idle += dt;
     // pointer on page
     const gpNear = GP.has && (NOW - GP.t < 1.6);
     if (this.o.page && GP.has && NOW - GP.t < .12) this.idle = 0;
     // choose mood
     let m;
-    if (this.ovr && T >= this.ovr.until) { this.ovr = null; if (this.q.length) { const n = this.q.shift(); this.ovr = { m: n.m, until: T + (REDUCE ? 1e9 : n.dur) }; this.onReact(n.m); } }
+    if (this.ovr && T >= this.ovr.until) { this.ovr = null; if (this.q.length) { const n = this.q.shift(); this.ovr = { m: n.m, until: T + (GM.reducedMotion ? 1e9 : n.dur) }; this.onReact(n.m); } }
     if (this.o.locked) m = this.o.locked;
     else if (this.ovr) m = this.ovr.m;
     else if (this.sleepLock) m = this.mode === 'fly' ? 'sleepy' : 'asleep';
-    else if (REDUCE) m = this.baseMood || 'content';
+    else if (GM.reducedMotion) m = this.baseMood || 'content';
     else {
       const sleepyAt = night ? 80 : 18, asleepAt = night ? 150 : 38;
       if (this.idle > asleepAt) m = 'asleep';
@@ -795,16 +759,16 @@ class Vesper extends Surf {
     if (m !== this.lastMood) { this.lastMood = m; this.moodAt = T; if (this.onMood) this.onMood(m, this); }
   }
   micro(dt) {
-    if (REDUCE || this.o.locked && !this.o.alive) return;
+    if (GM.reducedMotion || this.o.locked && !this.o.alive) return;
     const m = this.mood;
     if (this.fx) { this.fx.t += dt; if (this.fx.t >= this.fx.d) this.fx = null; }
     this.microT -= dt;
     if (this.microT > 0 || this.fx || this.ovr || m === 'asleep' || this.mode === 'fly') return;
-    this.microT = 2.5 + Math.random() * 4.5;
+    this.microT = rnd(2.5, 7);
     const r = Math.random(), night = isNight();
     if (m === 'sleepy') { this.fx = { n: 'yawn', t: 0, d: 1.8 }; return; }
     if (m !== 'content') return;
-    if (r < .3) { this.fx = { n: 'look', t: 0, d: 1.5 }; this.lwX = Math.random() * 2 - 1; this.lwY = Math.random() * 1.2 - .6; }
+    if (r < .3) { this.fx = { n: 'look', t: 0, d: 1.5 }; this.lwX = rnd(-1, 1); this.lwY = rnd(-.6, .6); }
     else if (r < .45) { this.earKickW[Math.random() < .5 ? 0 : 1] += 9; }
     else if (r < .6) { this.fx = { n: 'stretch', t: 0, d: 2.2 }; }
     else if (r < .75) { this.fx = { n: 'hum', t: 0, d: .5 }; this.ping(false); }
@@ -840,10 +804,10 @@ class Vesper extends Surf {
     // night glow
     if (isNight() && !this.sleepLock && m === 'content') { Tg.wing = Math.max(Tg.wing, .06); Tg.perk += .12; }
     // springs
-    const Kc = REDUCE ? 600 : 130, Cc = 2 * Math.sqrt(Kc) * .62;
-    if (REDUCE) { for (let i = 0; i < KEYS.length; i++) { const kk = KEYS[i]; V[kk] = Tg[kk]; W[kk] = 0; } }
+    const Kc = GM.reducedMotion ? 600 : 130, Cc = 2 * Math.sqrt(Kc) * .62;
+    if (GM.reducedMotion) { for (let i = 0; i < KEYS.length; i++) { const kk = KEYS[i]; V[kk] = Tg[kk]; W[kk] = 0; } }
     else for (let i = 0; i < KEYS.length; i++) {
-      const kk = KEYS[i]; const a = (Tg[kk] - V[kk]) * Kc - W[kk] * Cc; W[kk] += a * dt; V[kk] += W[kk] * dt;
+      const kk = KEYS[i], sp = this.sp; sp.x = V[kk]; sp.v = W[kk]; spring(sp, Tg[kk], Kc, Cc, dt); V[kk] = sp.x; W[kk] = sp.v;
     }
     // look
     let tx = 0, ty = 0;
@@ -855,34 +819,34 @@ class Vesper extends Surf {
       const s = Math.min(1, d / (1.1 * U)); tx = dx / d * s; ty = dy / d * s * .8;
       if (m === 'shy') { tx = -tx * .5; ty = -.2; }
       if (m === 'sleepy') { tx *= .4; ty = .3; }
-    } else if (!REDUCE) { tx = Math.sin(T * .37) * .3; ty = Math.sin(T * .23) * .15; }
+    } else if (!GM.reducedMotion) { tx = Math.sin(T * .37) * .3; ty = Math.sin(T * .23) * .15; }
     if (this.o.locked) { tx *= .7; }
     const kl = Math.min(1, dt * 9); this.lookX += (tx - this.lookX) * kl; this.lookY += (ty - this.lookY) * kl;
     // ears
-    for (let s = 0; s < 2; s++) { const a = -this.earKick[s] * 140 - this.earKickW[s] * 11; this.earKickW[s] += a * dt; this.earKick[s] += this.earKickW[s] * dt; }
+    for (let s = 0; s < 2; s++) { const sp = this.sp; sp.x = this.earKick[s]; sp.v = this.earKickW[s]; spring(sp, 0, 140, 11, dt); this.earKick[s] = sp.x; this.earKickW[s] = sp.v; }
     this.listen = Math.max(0, this.listen - dt * .7);
     // blink
-    if (!REDUCE) {
+    if (!GM.reducedMotion) {
       this.blinkT -= dt;
-      if (this.blinkT <= 0 && this.blinkP < 0) { this.blinkP = 0; this.blinkT = 2.2 + Math.random() * 4.2; if (Math.random() < .2) this.blinkT = .35; }
+      if (this.blinkT <= 0 && this.blinkP < 0) { this.blinkP = 0; this.blinkT = rnd(2.2, 6.4); if (Math.random() < .2) this.blinkT = .35; }
       if (this.blinkP >= 0) { this.blinkP += dt / .17; if (this.blinkP >= 1) { this.blinkP = -1; this.blink = 1; } else this.blink = Math.abs(this.blinkP * 2 - 1); }
     }
     // flap phase
     const fr = this.mode === 'fly' || this.launchT > 0 ? 11.5 : (m === 'delighted' ? 8 : m === 'focused' ? 9 : 6);
     this.flapPh += dt * fr;
     // squash
-    { const a = (0 - this.sq) * 160 - this.sqW * 12; this.sqW += a * dt; this.sq += this.sqW * dt; }
+    { const sp = this.sp; sp.x = this.sq; sp.v = this.sqW; spring(sp, 0, 160, 12, dt); this.sq = sp.x; this.sqW = sp.v; }
     if (this.launchT > 0) { this.launchT -= dt; this.sq += (.2 - this.sq) * .3; if (this.launchT <= 0) this.liftOff(); }
     // ang
     this.angT = Math.PI;
-    { const a = ((this.angT || 0) - this.ang) * 70 - this.angW * 11; this.angW += a * dt; this.ang += this.angW * dt; }
+    { const sp = this.sp; sp.x = this.ang; sp.v = this.angW; spring(sp, this.angT || 0, 70, 11, dt); this.ang = sp.x; this.angW = sp.v; }
     // motion
     if (this.mode === 'perch') {
-      const w2 = 17, breeze = REDUCE ? 0 : Math.sin(T * .9) * .015 + Math.sin(T * 2.3) * .006;
+      const w2 = 17, breeze = GM.reducedMotion ? 0 : Math.sin(T * .9) * .015 + Math.sin(T * 2.3) * .006;
       const a = -w2 * this.sway - this.swayW * .55 + breeze * 14; this.swayW += a * dt; this.sway += this.swayW * dt;
       this.snapX *= .86; this.snapY *= .86;
       this.bx = this.hangX + Math.sin(this.sway) * .25 * U + this.snapX; this.by = this.hangY - .25 * U * (1 - Math.cos(this.sway)) + this.snapY;
-      if (!REDUCE) { this.by += Math.sin(T * (m === 'asleep' ? 1.1 : 2.2)) * U * (m === 'asleep' ? .012 : .008); }
+      if (!GM.reducedMotion) { this.by += Math.sin(T * (m === 'asleep' ? 1.1 : 2.2)) * U * (m === 'asleep' ? .012 : .008); }
       this.bank *= .9;
       // scroll nudge
       if (Math.abs(SC.v) > 300) this.swayW += clamp(SC.v, -3000, 3000) * .0000035 * dt * 60;
@@ -908,29 +872,30 @@ class Vesper extends Surf {
     }
     if (this.echo) { const E2 = this.echo, N = E2.length; for (let i = 0; i < N; i++) if (E2[i] > .01) E2[i] *= .9945; else E2[i] = 0; }
     // particles
-    for (let i = 0; i < this.parts.length; i++) {
-      const p = this.parts[i]; if (!p.a) continue; p.l += dt; if (p.l >= p.m) { p.a = false; continue; }
-      p.vy += p.gr * dt; p.x += p.vx * dt + (p.w ? Math.sin(p.l * 4 + p.w) * 12 * dt * k : 0); p.y += p.vy * dt; p.vx *= .985;
+    const P = this.parts;
+    for (let i = P.n - 1; i >= 0; i--) {
+      P.l[i] += dt; if (P.l[i] >= P.m[i]) { P.kill(i); continue; }
+      P.vy[i] += P.gr[i] * dt; P.x[i] += P.vx[i] * dt + (P.w[i] ? Math.sin(P.l[i] * 4 + P.w[i]) * 12 * dt * k : 0); P.y[i] += P.vy[i] * dt; P.vx[i] *= .985;
     }
     // sleeping Zs
-    if (m === 'asleep' && !REDUCE) { this.zT = (this.zT || 0) - dt; if (this.zT <= 0) { this.zT = 1.5; this.emit(this.hits.hc[0] + U * .35, this.hits.hc[1] - U * .35, 18 * k, -26 * k, 3.2, Math.random() < .5 ? 'z' : 'Z', [160, 190, 255], -2 * k, 1 + Math.random() * 3); } }
-    if (this.petAcc > 1 && !REDUCE) { this.sparkT = (this.sparkT || 0) - dt; if (this.sparkT <= 0) { this.sparkT = .22; this.burst(this.hits.hc[0] + (Math.random() - .5) * U * .6, this.hits.hc[1] - U * .35, 1, 'spark'); } }
+    if (m === 'asleep' && !GM.reducedMotion) { this.zT = (this.zT || 0) - dt; if (this.zT <= 0) { this.zT = 1.5; this.emit(this.hits.hc[0] + U * .35, this.hits.hc[1] - U * .35, 18 * k, -26 * k, 3.2, Math.random() < .5 ? 'z' : 'Z', ZC, -2 * k, rnd(1, 4)); } }
+    if (this.petAcc > 1 && !GM.reducedMotion) { this.sparkT = (this.sparkT || 0) - dt; if (this.sparkT <= 0) { this.sparkT = .22; this.burst(this.hits.hc[0] + (Math.random() - .5) * U * .6, this.hits.hc[1] - U * .35, 1, 'spark'); } }
     // carry
     if (this.carry > 0) this.carryT = Math.min(1, this.carryT + dt * 3); else this.carryT = Math.max(0, this.carryT - dt * 4);
     // blip auto spawn at night
-    if (this.env.blips && isNight() && !REDUCE && !this.sleepLock && this.blips.length < 1 && m !== 'asleep') { this.nextBlip -= dt; if (this.nextBlip <= 0) { this.nextBlip = 26 + Math.random() * 20; this.toss(this.g.w * (.2 + Math.random() * .6), this.g.h * (.45 + Math.random() * .2)); } }
+    if (this.env.blips && isNight() && !GM.reducedMotion && !this.sleepLock && this.blips.length < 1 && m !== 'asleep') { this.nextBlip -= dt; if (this.nextBlip <= 0) { this.nextBlip = 26 + Math.random() * 20; this.toss(this.g.w * (.2 + Math.random() * .6), this.g.h * (.45 + Math.random() * .2)); } }
     // day colour
     const dk = isNight() ? 0 : 1; this.dayK += (dk - this.dayK) * Math.min(1, dt * 2);
   }
   liftOff() {
     this.mode = 'fly'; this.bx = this.hangX + Math.sin(this.sway) * .25 * this.U; this.by = this.hangY - .25 * this.U * (1 - Math.cos(this.sway)); this.bx += this.snapX; this.by += this.snapY;
-    this.vx = this.swayW * 80 * this.k + (Math.random() - .5) * 40 * this.k; this.vy = -330 * this.k; this.sqW += -6; this.angT = Math.PI; this.sway = 0; this.swayW = 0;
+    this.vx = this.swayW * 80 * this.k + rnd(-20, 20) * this.k; this.vy = -330 * this.k; this.sqW += -6; this.angT = Math.PI; this.sway = 0; this.swayW = 0;
     this.wire = { x0: this.hangX, t0: this.time, amp: 1.2 };
     if (!this.task) this.task = 'lap';
   }
   stepBlips(dt) {
     for (const b of this.blips) {
-      b.ph += dt * 9; b.vx += (Math.random() - .5) * 900 * dt * this.k; b.vy += (Math.random() - .5) * 900 * dt * this.k;
+      b.ph += dt * 9; b.vx += rnd(-450, 450) * dt * this.k; b.vy += rnd(-450, 450) * dt * this.k;
       b.vx *= .94; b.vy *= .94; b.x += b.vx * dt; b.y += b.vy * dt;
       b.x = clamp(b.x, 12, this.g.w - 12); b.y = clamp(b.y, this.hy + this.U * .9, this.g.h - 12);
     }
@@ -960,24 +925,21 @@ class Vesper extends Surf {
     this.rings.push({ x, y, r: 0, v: 360 * this.k, life: 2.1, age: -(delay || 0), str, col: CY });
   }
   emit(x, y, vx, vy, life, ch, col, gr, w) {
-    for (let i = 0; i < this.parts.length; i++) {
-      const p = this.parts[i]; if (p.a) continue;
-      p.a = true; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.l = 0; p.m = life; p.ch = ch; p.c = col; p.gr = gr || 0; p.w = w || 0; return;
-    }
+    this.parts.spawn({ x, y, vx, vy, l: 0, m: life, ch: ch.charCodeAt(0), c: PAL.indexOf(col), gr: gr || 0, w: w || 0 });
   }
   burst(x, y, n, kind) {
-    if (REDUCE) return; const k = this.k;
+    if (GM.reducedMotion) return; const k = this.k;
     for (let i = 0; i < n; i++) {
-      const a = Math.random() * TAU, s = (40 + Math.random() * 110) * k;
+      const a = rnd(0, TAU), s = rnd(40, 150) * k;
       const col = kind === 'gold' ? (Math.random() < .5 ? AM : WH) : (Math.random() < .5 ? CY : (Math.random() < .5 ? WH : MG));
-      this.emit(x, y, Math.cos(a) * s, Math.sin(a) * s - 40 * k, .7 + Math.random() * .7, '+*.x'[(Math.random() * 4) | 0], col, 90 * k);
+      this.emit(x, y, Math.cos(a) * s, Math.sin(a) * s - 40 * k, rnd(.7, 1.4), '+*.x'[(Math.random() * 4) | 0], col, 90 * k);
     }
   }
   confetti(x, y, n) {
-    if (REDUCE) return; const k = this.k;
+    if (GM.reducedMotion) return; const k = this.k;
     for (let i = 0; i < n; i++) {
-      const a = -Math.PI / 2 + (Math.random() - .5) * 2.6, s = (120 + Math.random() * 260) * k, r = Math.random();
-      this.emit(x, y, Math.cos(a) * s, Math.sin(a) * s, 1.4 + Math.random() * 1.2, '01+=x#%*'[(Math.random() * 8) | 0], r < .34 ? CY : r < .67 ? AM : r < .9 ? MG : WH, 330 * k, Math.random() * 6);
+      const a = -Math.PI / 2 + (Math.random() - .5) * 2.6, s = rnd(120, 380) * k, r = Math.random();
+      this.emit(x, y, Math.cos(a) * s, Math.sin(a) * s, rnd(1.4, 2.6), '01+=x#%*'[(Math.random() * 8) | 0], r < .34 ? CY : r < .67 ? AM : r < .9 ? MG : WH, 330 * k, rnd(0, 6));
     }
   }
 
@@ -990,7 +952,7 @@ class Vesper extends Surf {
     // pose
     const th = this.ang + (this.mode === 'perch' ? this.sway : this.bank) * Math.cos(this.ang);
     this.cs = Math.cos(th); this.sn = Math.sin(th);
-    const brth = REDUCE ? 0 : Math.sin(this.time * (this.mood === 'asleep' ? 1.3 : this.mood === 'sleepy' ? 1.6 : 2.4));
+    const brth = GM.reducedMotion ? 0 : Math.sin(this.time * (this.mood === 'asleep' ? 1.3 : this.mood === 'sleepy' ? 1.6 : 2.4));
     const br = 1 + brth * (.022 + V.puff * .01) + V.puff * .07;
     this.sx = (1 + this.sq * .6) * br; this.sy = (1 - this.sq * .8) * (1 + V.puff * .02);
     this.drawWire();
@@ -999,7 +961,7 @@ class Vesper extends Surf {
     // head
     const hy = .64 - V.sag * .04 + V.puff * .03;
     this.W2(0, hy); this.hcx = this._x; this.hcy = this._y;
-    this.fr = V.tilt + 0.45 * (this.mode === 'perch' ? this.sway : this.bank) + (V.trem > .05 && !REDUCE ? Math.sin(this.time * 41) * .022 * V.trem : 0) + (REDUCE ? 0 : Math.sin(this.time * .8) * .012);
+    this.fr = V.tilt + 0.45 * (this.mode === 'perch' ? this.sway : this.bank) + (V.trem > .05 && !GM.reducedMotion ? Math.sin(this.time * 41) * .022 * V.trem : 0) + (GM.reducedMotion ? 0 : Math.sin(this.time * .8) * .012);
     const H = this.hits; H.hc[0] = this.hcx; H.hc[1] = this.hcy;
     this.W2(0, 0); H.body[0] = this._x; H.body[1] = this._y;
     this.cool = V.cool; this.glow = V.glow;
@@ -1123,7 +1085,7 @@ class Vesper extends Surf {
     const U = this.U, V = this.V;
     const perk = clamp(V.perk, 0, 1.3), th0 = lerp(1.0, .1, clamp(perk, 0, 1)) + (perk > 1 ? -(perk - 1) * .2 : 0);
     const aim = clamp((this.ptr.x - this.hcx) / (3.2 * U), -1, 1) * .22 * (this.mood === 'asleep' ? 0 : 1);
-    const th = s * (th0 + V.droop * .95) + aim + this.earKick[s < 0 ? 0 : 1] * .3 + Math.sin(this.time * 1.7 + s) * (REDUCE ? 0 : .012);
+    const th = s * (th0 + V.droop * .95) + aim + this.earKick[s < 0 ? 0 : 1] * .3 + Math.sin(this.time * 1.7 + s) * (GM.reducedMotion ? 0 : .012);
     this.F(s * .24, -.26); const bx = this._x, by = this._y;
     const fcs = Math.cos(this.fr), fsn = Math.sin(this.fr);
     const dx = Math.sin(th) * fcs - (-Math.cos(th)) * fsn, dy = Math.sin(th) * fsn + (-Math.cos(th)) * fcs; // direction in world (rotate by fr)
@@ -1304,13 +1266,14 @@ class Vesper extends Surf {
   }
   drawParts() {
     const g = this.g;
-    for (const p of this.parts) { if (!p.a) continue; const f = 1 - p.l / p.m; g.put(Math.floor(p.x / g.cw), Math.floor(p.y / g.chh), p.ch, p.c[0], p.c[1], p.c[2], Math.min(1.1, f * 1.6)); }
+    const P = this.parts;
+    for (let i = 0; i < P.n; i++) { const f = 1 - P.l[i] / P.m[i], c = PAL[P.c[i]]; g.put(Math.floor(P.x[i] / g.cw), Math.floor(P.y[i] / g.chh), String.fromCharCode(P.ch[i]), c[0], c[1], c[2], Math.min(1.1, f * 1.6)); }
   }
 }
 
 // ---------- Rejected sketches (kept live and small) ----------
 class SketchBase extends Surf {
-  constructor(cv) { super(cv, { fs: () => 6.6, bloom: .55, bg: () => '#070b12' }); this.mx = -1; this.my = -1; this.near = 0; }
+  constructor(cv) { super(cv, { fs: () => 6.6, bloom: .55, bg: '#070b12' }); this.mx = -1; this.my = -1; this.near = 0; this.boot(); }
   lamp() {
     const g = this.g, rc = this.rc; let x = g.w * .5, y = g.h * .5, has = false;
     if (rc && GP.has && GP.x > rc.left - 30 && GP.x < rc.right + 30 && GP.y > rc.top - 30 && GP.y < rc.bottom + 30) { x = GP.x - rc.left; y = GP.y - rc.top; has = true; }
@@ -1393,7 +1356,6 @@ class SproutSketch extends SketchBase {
 
 // ---------- page wiring ----------
 const $ = s => document.querySelector(s), $$ = s => Array.from(document.querySelectorAll(s));
-const ticks = [];
 NOW = performance.now() / 1000;
 const stageEl = $('#stage');
 const main = new Vesper(stageEl, {
@@ -1434,14 +1396,14 @@ function feel(m) {
   else if (m === 'surprised') { main.react('surprised', 2.4); }
   else main.react(m, 5.2);
   const r = stageEl.getBoundingClientRect();
-  if (r.bottom < 120 || r.top > innerHeight - 120) $('#meet').scrollIntoView({ behavior: REDUCE ? 'auto' : 'smooth', block: 'start' });
+  if (r.bottom < 120 || r.top > innerHeight - 120) $('#meet').scrollIntoView({ behavior: GM.reducedMotion ? 'auto' : 'smooth', block: 'start' });
 }
 $$('[data-feel]').forEach(b => b.addEventListener('click', () => feel(b.dataset.feel)));
-$('#bPet').addEventListener('click', () => { main.pet(2.6); if (REDUCE) main.react('delighted', 1e9); else if (main.petAcc > 2) { } });
+$('#bPet').addEventListener('click', () => { main.pet(2.6); if (GM.reducedMotion) main.react('delighted', 1e9); else if (main.petAcc > 2) { } });
 $('#bPoke').addEventListener('click', () => main.poke());
 $('#bPing').addEventListener('click', () => { pingCount++; clearTimeout(pingT); pingT = setTimeout(() => pingCount = 0, 2600); if (pingCount >= 5) { pingCount = 0; main.secret(); } else main.ping(false); });
 let pingCount = 0, pingT = 0;
-$('#bToss').addEventListener('click', () => { const g = main.g; main.toss(g.w * (.25 + Math.random() * .5), g.h * (.5 + Math.random() * .2)); });
+$('#bToss').addEventListener('click', () => { const g = main.g; main.toss(g.w * rnd(.25, .75), g.h * rnd(.5, .7)); });
 const bSleep = $('#bSleep');
 bSleep.addEventListener('click', () => { const on = !main.sleepLock; main.setSleep(on); bSleep.textContent = on ? 'Wake her' : 'Send to sleep'; bSleep.setAttribute('aria-pressed', on); });
 const box = $('#stageBox'), rest = $('#resting');
@@ -1490,18 +1452,16 @@ const tiles = $$('canvas[data-m]').map(cv => {
 });
 
 // ---- in the wild
-const wNav = new Vesper($('#wNav'), { id: 'nav', bg: null, bloom: .5, canFly: false, env: { wire: true }, perch: [.5, 0], perchY: 64, fs: () => 6, fit: (w, h) => 44 });
-const w404 = new Vesper($('#w404'), { id: '404', bloom: .5, env: { wire: true, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 3.2, h / 3.3), canFly: false, bg: () => '#080c14' });
-const wLoad = new Vesper($('#wLoad'), { id: 'load', bloom: .5, env: { wire: false, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 4.2, h / 3.8), bg: () => '#080c14' });
-const wWin = new Vesper($('#wWin'), { id: 'win', bloom: .5, env: { wire: true, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 3.4, h / 3.3), bg: () => '#080c14' });
-const wFoot = new Vesper($('#wFoot'), { id: 'foot', bg: null, bloom: .45, canFly: false, napper: true, env: { wire: true }, perch: [.5, 0], fs: () => 6.2, fit: (w, h) => h / 2.6 });
+const wNav = new Vesper($('#wNav'), { id: 'nav', bg: '#080c14', bloom: .5, canFly: false, env: { wire: true }, perch: [.5, 0], perchY: 64, fs: () => 6, fit: (w, h) => 44 });
+const w404 = new Vesper($('#w404'), { id: '404', bloom: .5, env: { wire: true, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 3.2, h / 3.3), canFly: false, bg: '#080c14' });
+const wLoad = new Vesper($('#wLoad'), { id: 'load', bloom: .5, env: { wire: false, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 4.2, h / 3.8), bg: '#080c14' });
+const wWin = new Vesper($('#wWin'), { id: 'win', bloom: .5, env: { wire: true, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 3.4, h / 3.3), bg: '#080c14' });
+const wFoot = new Vesper($('#wFoot'), { id: 'foot', bg: '#04060a', bloom: .45, canFly: false, napper: true, env: { wire: true }, perch: [.5, 0], fs: () => 6.2, fit: (w, h) => h / 2.6 });
 w404.baseMood = 'concerned'; wLoad.baseMood = 'focused'; wWin.baseMood = 'content'; wNav.baseMood = 'content';
 wFoot.sleepLock = true; wFoot.idle = 999;
 w404.react('concerned', 1e9, true); wLoad.carry = 1; wLoad.carryT = 1; wWin.carry = 1; wWin.carryT = 1;
 let t404 = 0;
-ticks.push(dt => {
-  if (w404.on) { t404 -= dt; if (t404 <= 0 && !w404.found) { t404 = 3.4; w404.ping(false); } }
-});
+w404.tick = dt => { t404 -= dt; if (t404 <= 0 && !w404.found) { t404 = 3.4; w404.ping(false); } };
 w404.heardCb = big => { };
 $('#b404').addEventListener('click', () => {
   w404.found = true; w404.ping(true); const msg = $('#m404'); msg.textContent = 'Echo found: /home';
@@ -1512,11 +1472,12 @@ $('#b404').addEventListener('click', () => {
 let progT = 0; const bar = $('#bar'), pct = $('#pct'); let prog = 0;
 function setProg(p) { const n = 30, f = Math.round(p * n); bar.textContent = '['.concat('#'.repeat(f), '.'.repeat(n - f), ']'); pct.textContent = Math.round(p * 100) + '%'; }
 setProg(.62);
-ticks.push(dt => {
-  if (!wLoad.on) return;
-  if (!wLoad.started && !REDUCE) { wLoad.started = true; wLoad.react('focused', 1e9); wLoad.startTask('orbit'); }
-  prog = (prog + dt / 7) % 1.0; if (REDUCE) return; setProg(prog);
-});
+let lastPct = -1;
+wLoad.tick = dt => {
+  if (!wLoad.started && !GM.reducedMotion) { wLoad.started = true; wLoad.react('focused', 1e9); wLoad.startTask('orbit'); }
+  prog = (prog + dt / 7) % 1.0; if (GM.reducedMotion) return;
+  const pc = Math.round(prog * 100); if (pc !== lastPct) { lastPct = pc; setProg(prog); }
+};
 // signup
 $('#bWin').addEventListener('click', () => {
   wWin.celebrate(); const m = $('#mWin'); m.textContent = 'You are in. Check your inbox.'; m.classList.add('on');
@@ -1532,41 +1493,17 @@ const sketches = [new MothSketch($('#sMoth')), new CrabSketch($('#sCrab')), new 
 
 // ---- entrance on first view
 let entered = false;
-ticks.push(dt => {
-  if (entered || !main.on || REDUCE) return; entered = true;
+main.tick = dt => {
+  if (entered || GM.reducedMotion) return; entered = true;
   const g = main.g; main.mode = 'fly'; main.bx = -main.U * .6; main.by = g.h * .5; main.vx = 360 * main.k; main.vy = -160 * main.k; main.ang = Math.PI; main.angT = Math.PI; main.task = 'return'; main.taskT = 0;
   main.W.wing = .9; main.V.wing = .9; main.V.flap = 1;
   main.ovr = { m: 'curious', until: main.time + 2.2 };
-});
+};
 
-// ---- the shared loop
-const all = surfs;
-if (!REDUCE) {
-  let last = performance.now(), acc = 0, lastR = 0, lsy = scrollY;
-  const frame = now => {
-    requestAnimationFrame(frame);
-    if (document.hidden) { last = now; return; }
-    const dt = Math.min(.1, (now - last) / 1000); last = now; acc += dt;
-    if (now - lastR < 30) return; lastR = now;
-    NOW = now / 1000;
-    const n = Math.min(4, Math.floor(acc / STEP)); acc -= n * STEP; if (acc > STEP * 4) acc = 0;
-    const sy = scrollY; SC.v = SC.v * .8 + ((sy - lsy) / Math.max(dt, .016)) * .2; lsy = sy; SC.y = sy;
-    for (let i = 0; i < ticks.length; i++) ticks[i](n * STEP);
-    for (let i = 0; i < all.length; i++) {
-      const s = all[i]; if (!s.on) continue;
-      s.pre(); for (let k = 0; k < n; k++) s.sim(STEP);
-      s.draw(); s.g.present();
-    }
-  };
-  requestAnimationFrame(frame);
-}
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { for (const s of surfs) s.relayout(); });
-// reduced motion: still poses re-render when something changes
-if (REDUCE) {
-  setProg(.62); $('#ctl-motion').hidden = false;
-  addEventListener('resize', () => { for (const s of surfs) if (s.ready) s.still(); });
-}
-window.Vesper = { react: m => main.react(m, REDUCE ? 1e9 : 3), celebrate: () => main.celebrate(), busy: b => main.busy(b), error: () => main.react('concerned', 3.5), success: () => main.celebrate() };
+// The engine runs one shared loop for every surface; under reduced motion it never starts,
+// and pose changes repaint through surface.invalidate().
+if (GM.reducedMotion) { setProg(.62); $('#ctl-motion').hidden = false; }
+window.Vesper = { react: m => main.react(m, GM.reducedMotion ? 1e9 : 3), celebrate: () => main.celebrate(), busy: b => main.busy(b), error: () => main.react('concerned', 3.5), success: () => main.celebrate() };
 document.addEventListener('carrier:mood', e => main.react(e.detail, 3));
 
 

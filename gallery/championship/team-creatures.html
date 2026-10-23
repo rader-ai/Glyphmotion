@@ -352,33 +352,24 @@ footer{position:relative;background:#030912;border-top:1px solid var(--edge)}
 <canvas id="whaleCv" aria-hidden="true"></canvas>
 <p class="sr" id="live" role="status" aria-live="polite"></p>
 
+<script src="../../src/glyphmotion.js"></script>
 <script>
 (() => {
 'use strict';
-const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const STEP = 1 / 60;
-const FAM = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
-const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
-const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-const rnd = (a, b) => a + Math.random() * (b - a);
+const GM = Glyphmotion;
+const { clamp, lerp, smooth, rnd, hash2, vnoise, lineChar } = GM;
+const STEP = GM.STEP;
 let _seed = 90210;
 const rr = () => { _seed = (_seed * 1664525 + 1013904223) >>> 0; return _seed / 4294967296; };
-function hash2(x, y) { let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
-function vnoise(x, y) {
-  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
+// Sprites keep small char codes (typed arrays, cheap tables); cell() turns a code into the glyph the engine grid stores.
 const GLYPH = Array.from({ length: 256 }, (_, i) => String.fromCharCode(i));
 const cc = s => s.charCodeAt(0);
-const RAMP = [...' .:-=+*#%@'].map(cc);
+const RAMP = [...GM.RAMP].map(cc);
 const DIRS = [62, 92, 118, 47, 60, 92, 94, 47];
 function dirCode(vx, vy) { let k = Math.round(Math.atan2(vy, vx) / (Math.PI / 4)); if (k < 0) k += 8; return DIRS[k & 7]; }
-function lineCode(dx, dy) { let a = Math.atan2(dy, dx); if (a < 0) a += Math.PI; if (a >= Math.PI) a -= Math.PI; if (a < 0.39 || a > 2.75) return 45; if (a < 1.18) return 92; if (a < 1.96) return 124; return 47; }
-const cssCache = new Map();
-function css(k) { let s = cssCache.get(k); if (!s) { s = 'rgb(' + ((k >> 16) & 255) + ',' + ((k >> 8) & 255) + ',' + (k & 255) + ')'; if (cssCache.size > 9000) cssCache.clear(); cssCache.set(k, s); } return s; }
+const lineCode = (dx, dy) => cc(lineChar(dx, dy));
+function cell(s, c, r, code, R, G, B) { if (!(c >= 0 && r >= 0 && c < s.cols && r < s.rows)) return; s.putI(r * s.cols + c, GLYPH[code], R, G, B); }
+function cellW(s, x, y, code, R, G, B) { cell(s, Math.floor(x), Math.floor(y / s.asp), code, R, G, B); }
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const live = $('#live');
@@ -388,133 +379,89 @@ function say(t) { if (live) { live.textContent = ''; setTimeout(() => { live.tex
 const SLEEP = { v: 0, t: 0 };
 const WHALE = { on: false, x: 0, y: 0, r: 0 };
 const PT = { x: -9999, y: -9999, in: false, down: false, speed: 0, lt: 0, touch: false };
+const scenes = [];
+// Under reduced motion nothing steps, so a moving pointer asks the scenes it is over for one repaint (throttled, no rAF).
+let hoverTimer = 0;
+function hoverSoon() { if (hoverTimer) return; hoverTimer = setTimeout(() => { hoverTimer = 0; for (const s of scenes) s.hoverRefresh(); }, 60); }
 addEventListener('pointermove', e => {
   const dt = Math.max(1, e.timeStamp - PT.lt), d = Math.hypot(e.clientX - PT.x, e.clientY - PT.y);
   if (PT.lt && PT.in) PT.speed = PT.speed * 0.55 + (d / dt * 1000) * 0.45;
   PT.x = e.clientX; PT.y = e.clientY; PT.lt = e.timeStamp; PT.in = true; PT.touch = e.pointerType === 'touch';
+  if (GM.reducedMotion) hoverSoon();
 }, { passive: true });
-document.documentElement.addEventListener('mouseleave', () => { PT.in = false; });
+document.documentElement.addEventListener('mouseleave', () => { PT.in = false; if (GM.reducedMotion) hoverSoon(); });
 
-// ---------- View: a canvas grid ----------
-class View {
-  constructor(cv, o = {}) {
-    this.cv = cv; this.o = o; this.alpha = !!o.alpha;
-    this.ctx = cv.getContext('2d', { alpha: this.alpha });
-    this.bcv = document.createElement('canvas'); this.bctx = this.bcv.getContext('2d');
-    this.bloom = o.bloom == null ? 0.5 : o.bloom; this.bdiv = o.bdiv || 5; this.bg = o.bg || '#040a14';
-    this.paintBg = null; this.cols = 1; this.rows = 1; this.pin = false; this.px = 0; this.py = 0; this.psp = 0; this.rect = null;
-  }
-  layout() {
-    const r = this.cv.getBoundingClientRect();
-    this.vw = Math.max(1, r.width); this.vh = Math.max(1, r.height);
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.cv.width = Math.round(this.vw * this.dpr); this.cv.height = Math.round(this.vh * this.dpr);
-    const o = this.o;
-    this.fs = o.fs || clamp(this.vw / (o.fsDiv || 44), o.fsMin || 7, o.fsMax || 10);
-    this.font = '600 ' + this.fs.toFixed(2) + 'px ' + FAM;
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); this.ctx.font = this.font;
-    this.cw = this.ctx.measureText('M').width || this.fs * 0.6; this.chh = this.fs * 1.2;
-    this.cols = Math.ceil(this.vw / this.cw); this.rows = Math.ceil(this.vh / this.chh);
-    this.asp = this.chh / this.cw; this.W = this.cols; this.H = this.rows * this.asp;
-    const N = this.cols * this.rows;
-    this.code = new Uint8Array(N); this.R = new Uint8ClampedArray(N); this.G = new Uint8ClampedArray(N); this.B = new Uint8ClampedArray(N);
-    this.bcv.width = Math.max(1, Math.round(this.cv.width / this.bdiv)); this.bcv.height = Math.max(1, Math.round(this.cv.height / this.bdiv));
-    this.size = this.vw + 'x' + this.vh;
-  }
-  updateRect() {
-    const r = this.rect = this.cv.getBoundingClientRect();
-    this.px = (PT.x - r.left) / this.cw; this.py = (PT.y - r.top) / this.cw; this.psp = PT.speed / this.cw;
-    this.pin = PT.in && PT.x >= r.left && PT.x <= r.right && PT.y >= r.top && PT.y <= r.bottom;
-  }
-  clear() { this.code.fill(0); }
-  put(c, r, ch, R, G, B) {
-    if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return;
-    const i = r * this.cols + c; this.code[i] = ch; this.R[i] = R; this.G[i] = G; this.B[i] = B;
-  }
-  putW(x, y, ch, R, G, B) { this.put(Math.floor(x), Math.floor(y / this.asp), ch, R, G, B); }
-  render() {
-    const { ctx, cols, rows, code, R, G, B, vw, vh, dpr } = this;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-    if (this.alpha) ctx.clearRect(0, 0, vw, vh);
-    else if (this.paintBg) this.paintBg(ctx, vw, vh);
-    else { ctx.fillStyle = this.bg; ctx.fillRect(0, 0, vw, vh); }
-    ctx.font = this.font; ctx.textBaseline = 'top';
-    let lastK = -1;
-    for (let r = 0; r < rows; r++) {
-      const y = r * this.chh, base = r * cols;
-      for (let c = 0; c < cols; c++) {
-        const ch = code[base + c]; if (!ch) continue;
-        const i = base + c, k = ((R[i] & 0xf8) << 16) | ((G[i] & 0xf8) << 8) | (B[i] & 0xf8);
-        if (k !== lastK) { ctx.fillStyle = css(k); lastK = k; }
-        ctx.fillText(GLYPH[ch], c * this.cw, y);
-      }
-    }
-    if (this.bloom > 0) {
-      this.bctx.globalCompositeOperation = 'copy'; this.bctx.drawImage(this.cv, 0, 0, this.bcv.width, this.bcv.height);
-      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = this.bloom;
-      ctx.imageSmoothingEnabled = true; ctx.drawImage(this.bcv, 0, 0, this.cv.width, this.cv.height);
-      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    }
-  }
-}
-
-// ---------- Scene registry and the one shared loop ----------
-const scenes = [];
-const rzTimers = new Map();
-const IO = new IntersectionObserver(es => es.forEach(e => {
-  const s = e.target.__s; if (!s || s.manual) return;
-  s.vis = e.isIntersecting;
-  if (s.vis && !s.shown) { s.shown = true; if (s.ready && s.onFirstShow) s.onFirstShow(); }
-  if (s.vis) s.dirty = true;
-}), { rootMargin: '60px' });
-const RO = new ResizeObserver(es => es.forEach(e => {
-  const s = e.target.__s; if (!s) return;
-  clearTimeout(rzTimers.get(s));
-  rzTimers.set(s, setTimeout(() => { if (s.ready && s.v.size !== (e.target.getBoundingClientRect().width + 'x' + e.target.getBoundingClientRect().height)) s.relayout(); }, 140));
-}));
-class Scene {
-  constructor(v, o = {}) {
-    this.v = v; this.vis = false; this.ready = false; this.acc = 0; this.rAcc = 1; this.pend = 0; this.dirty = true; this.shown = false; this.manual = !!o.manual; this.T = 0;
-    v.cv.__s = this; scenes.push(this);
-    if (!this.manual) { IO.observe(v.cv); } RO.observe(v.cv);
-  }
-  start() { this.v.layout(); this.onLayout(); this.ready = true; if (reduce) this.settle(this.still || 2.5); this.dirty = true; if (this.vis && !this.shown) { this.shown = true; if (this.onFirstShow) this.onFirstShow(); } }
-  relayout() { this.v.layout(); this.onLayout(); if (reduce) this.settle(this.still || 2.5); this.dirty = true; }
-  settle(sec) { this.v.updateRect(); const n = Math.round(sec * 60); for (let i = 0; i < n; i++) this.sim(STEP); this.draw(); this.v.render(); }
-  poke(sec) { if (reduce) this.pend = Math.max(this.pend, Math.round(sec * 60)); else this.dirty = true; }
-  onLayout() {} sim() {} draw() {}
-}
-let last = performance.now();
-function frame(now) {
-  requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  if (document.hidden) return;
+// ---------- page-wide per-frame state (the engine has one loop, so this rides on whichever surface steps first) ----------
+let tickAt = performance.now();
+function tick() {
+  const now = performance.now(); if (now - tickAt < 4) return;
+  const dt = Math.min(0.1, (now - tickAt) / 1000); tickAt = now;
   PT.speed *= Math.exp(-dt * 5);
-  SLEEP.v += (SLEEP.t - SLEEP.v) * Math.min(1, dt * (reduce ? 60 : 1.6));
-  for (let k = 0; k < scenes.length; k++) {
-    const s = scenes[k]; if (!s.vis || !s.ready) continue;
-    s.v.updateRect();
-    if (reduce) {
-      if (s.pend > 0 || s.dirty) { const n = s.pend; s.pend = 0; s.dirty = false; for (let i = 0; i < n; i++) s.sim(STEP); s.draw(); s.v.render(); }
-      continue;
-    }
-    s.acc += dt; let n = 0;
-    while (s.acc >= STEP && n < 4) { s.sim(STEP); s.acc -= STEP; n++; }
-    if (n === 4) s.acc = 0;
-    s.rAcc += dt;
-    if (s.rAcc >= 1 / 30 || s.dirty) { s.rAcc = 0; s.dirty = false; s.draw(); s.v.render(); }
+  SLEEP.v += (SLEEP.t - SLEEP.v) * Math.min(1, dt * 1.6);
+}
+// The pointer is tracked on the window (the hero canvas sits under its own copy), then placed in each surface's own units.
+function track(s) {
+  const r = s.rect = s.canvas.getBoundingClientRect();
+  s.px = (PT.x - r.left) / s.cw; s.py = (PT.y - r.top) / s.cw;
+  s.pin = PT.in && PT.x >= r.left && PT.x <= r.right && PT.y >= r.top && PT.y <= r.bottom;
+}
+
+// ---------- Scene: one Glyphmotion surface plus the behavior that lives on it ----------
+class Scene {
+  constructor(cv, o = {}) {
+    this.cv = cv; this.so = o; this.v = null; this.T = 0; this.key = ''; this.fresh = false; this.shown = false; this.stillSec = 2.5; this.hover = null; this.wasIn = false;
+    scenes.push(this);
   }
+  get vis() { return !!(this.v && this.v.visible); }
+  get ready() { return !!(this.v && this.key); }
+  start() {
+    const o = this.so;
+    this.v = GM.surface(this.cv, {
+      fontSize: o.fs || (w => clamp(w / (o.fsDiv || 44), o.fsMin || 7, o.fsMax || 10)),
+      bloom: o.bloom == null ? 0.5 : o.bloom, bloomScale: o.bdiv || 5, background: o.bg || '#040a14', transparent: !!o.alpha,
+      setup: s => this.setup(s),
+      step: () => { tick(); track(this.v); if (!this.shown) { this.shown = true; if (this.onFirstShow) this.onFirstShow(); } this.sim(STEP); },
+      draw: s => { track(s); this.draw(); },
+      still: () => this.rest(),
+    });
+  }
+  // the engine re-lays-out on every size change; rebuild the world only when the grid really changed
+  setup(s) {
+    this.v = s;
+    const key = s.cols + 'x' + s.rows + ':' + s.vw + 'x' + s.vh + ':' + s.fs.toFixed(2);
+    this.fresh = key !== this.key; if (!this.fresh) return;
+    this.key = key; this.onLayout();
+  }
+  // reduced motion: settle the world into a resting pose once, no loop
+  rest() { if (!this.fresh) return; this.fresh = false; track(this.v); this.restPose(); }
+  restPose() { const n = Math.round(this.stillSec * 60); for (let i = 0; i < n; i++) this.sim(STEP); }
+  // show an interaction: animated mode just repaints, reduced motion runs the sim ahead and paints one still frame
+  poke(sec) {
+    const v = this.v; if (!v || !this.key) return;
+    if (!GM.reducedMotion) { v.dirty = true; return; }
+    if (!v.visible) return;
+    track(v); const n = Math.round(sec * 60); for (let i = 0; i < n; i++) this.sim(STEP);
+    v.invalidate();
+  }
+  hoverRefresh() {
+    const v = this.v; if (!this.hover || !v || !v.visible || !this.key) return;
+    track(v); const was = this.wasIn; this.wasIn = v.pin;
+    if (!v.pin && !was) return;
+    if (this.hover === 'draw') v.invalidate(); else this.poke(v.pin ? (was ? 0.12 : 0.5) : 1.5);
+  }
+  onLayout() {} sim() {} draw() {}
 }
 addEventListener('pointerdown', e => {
   PT.x = e.clientX; PT.y = e.clientY; PT.in = true; PT.down = true; PT.touch = e.pointerType === 'touch';
   if (e.target.closest && e.target.closest('button,a,.panel,.mpanel')) return;
-  for (const s of scenes) { if (!s.vis || !s.ready || !s.onDown) continue; s.v.updateRect(); if (s.v.pin) s.onDown(s.v.px, s.v.py); }
+  for (const s of scenes) { if (!s.vis || !s.ready || !s.onDown) continue; track(s.v); if (s.v.pin) s.onDown(s.v.px, s.v.py); }
 });
 const upAll = () => { PT.down = false; for (const s of scenes) if (s.onUp && s.ready) s.onUp(); if (PT.touch) setTimeout(() => { if (!PT.down) PT.in = false; }, 900); };
 addEventListener('pointerup', upAll); addEventListener('pointercancel', upAll);
 
 // ---------- flocking helpers ----------
-function mkS(n) { return { n, x: new Float32Array(n), y: new Float32Array(n), vx: new Float32Array(n), vy: new Float32Array(n), ph: new Float32Array(n), fl: new Float32Array(n), free: null, hc: new Uint8Array(n).fill(62) }; }
+function mkPool(n, fields) { const p = new GM.Pool(n, fields); p.n = n; return p; }
+function mkS(n) { const S = mkPool(n, ['x', 'y', 'vx', 'vy', 'ph', 'fl']); S.free = null; S.hc = new Uint8Array(n).fill(62); return S; }
 function flock(S, dt, p) {
   const n = S.n, x = S.x, y = S.y, vx = S.vx, vy = S.vy, free = S.free;
   const R2 = p.R * p.R, S2 = p.sep * p.sep, T = p.T || 0;
@@ -555,7 +502,7 @@ function fishTail(v, x, y, vx, vy, r, g, b) {
   const sp = Math.hypot(vx, vy); if (sp < 3.5) return;
   const d = 1.25 + (v.asp - 1.25) * Math.abs(vy) / sp, k = d / sp;
   const ax = Math.abs(vx), ay = Math.abs(vy), ch = ay < ax * 0.45 ? 61 : ax < ay * 0.45 ? 124 : ((vx * vy) > 0 ? 92 : 47);
-  v.putW(x - vx * k, y - vy * k, ch, r, g, b);
+  cellW(v, x - vx * k, y - vy * k, ch, r, g, b);
 }
 // ---------- sprites: jellyfish ----------
 function drawJelly(v, bx, by, sz, pul, T, col, ph, dim) {
@@ -573,7 +520,7 @@ function drawJelly(v, bx, by, sz, pul, T, col, ph, dim) {
       else if (k === 0) { ch = 95; b = 0.9; }
       else { ch = (hash2(c + ph * 9, k) > 0.5) ? 58 : 46; b = 0.5 + 0.2 * Math.sin(T * 3 + c + ph); }
       b *= dim;
-      v.put(Math.round(bx) + c, r0 + k, ch, col[0] * b, col[1] * b, col[2] * b);
+      cell(v, Math.round(bx) + c, r0 + k, ch, col[0] * b, col[1] * b, col[2] * b);
     }
   }
   const L = Math.round(6 * sz + 3 * pul + 1), cnt = Math.max(3, Math.round(hwMax * 0.9));
@@ -582,7 +529,7 @@ function drawJelly(v, bx, by, sz, pul, T, col, ph, dim) {
     for (let m = 1; m <= L; m++) {
       const xx = bx + off + Math.sin(T * 2.3 - m * 0.5 + s * 1.7 + ph) * (0.5 + 0.2 * m) * (0.45 + 0.55 * (1 - pul));
       const a = (1 - m / (L + 1)) * 0.8 * dim;
-      v.put(Math.round(xx), r0 + rowsN - 1 + m, (m + s) % 3 === 0 ? 59 : 58, col[0] * a, col[1] * a, col[2] * a);
+      cell(v, Math.round(xx), r0 + rowsN - 1 + m, (m + s) % 3 === 0 ? 59 : 58, col[0] * a, col[1] * a, col[2] * a);
     }
   }
 }
@@ -621,23 +568,24 @@ function rasterBurger(v, open) {
 const FOAM = [127, 232, 224], LAMP = [255, 210, 122], CORAL = [255, 111, 97];
 class Wordmark extends Scene {
   constructor(cv, o) {
-    super(new View(cv, { fsDiv: o.fsDiv, fsMin: o.fsMin, fsMax: o.fsMax, fs: o.fs, bloom: 0.6, bdiv: o.bdiv || 4, alpha: true }));
+    super(cv, { fsDiv: o.fsDiv, fsMin: o.fsMin, fsMax: o.fsMax, fs: o.fs, bloom: 0.6, bdiv: o.bdiv || 4, alpha: true });
     this.o = o; this.cap = 1600; const n = this.cap;
     this.x = new Float32Array(n); this.y = new Float32Array(n); this.vx = new Float32Array(n); this.vy = new Float32Array(n);
     this.tx = new Float32Array(n); this.ty = new Float32Array(n); this.cov = new Float32Array(n); this.ph = new Float32Array(n); this.dl = new Float32Array(n); this.fl = new Float32Array(n);
-    this.n = 0; this.attn = 0; this.force = 0; this.wave = -9; this.nextWave = 3; this.formed = false; this.still = 3.2;
+    this.n = 0; this.attn = 0; this.force = 0; this.wave = -9; this.nextWave = 3; this.formed = false; this.stillSec = 3.2; this.hover = 'sim';
   }
   onLayout() {
     const r = rasterText(this.v, this.o.text || 'shoal', this.o.hf || 0.62), n = Math.min(r.tx.length, this.cap);
     this.n = n;
     for (let i = 0; i < n; i++) { this.tx[i] = r.tx[i]; this.ty[i] = r.ty[i]; this.cov[i] = r.cov[i]; this.ph[i] = rnd(0, 6.28); }
     if (this.formed) this.form(true);
-    else if (this.o.auto) this.form(reduce);
+    else if (this.o.auto) this.form(GM.reducedMotion);
     else for (let i = 0; i < n; i++) { this.dl[i] = 99; }
   }
   onFirstShow() { if (!this.formed && !this.o.auto) this.form(false); }
+  restPose() { if (!this.formed) this.form(true); super.restPose(); }
   form(instant) {
-    const v = this.v, n = this.n; this.formed = true; if (reduce) instant = true;
+    const v = this.v, n = this.n; this.formed = true; if (GM.reducedMotion) instant = true;
     for (let i = 0; i < n; i++) {
       if (instant) { this.x[i] = this.tx[i]; this.y[i] = this.ty[i]; this.vx[i] = this.vy[i] = 0; this.dl[i] = 0; continue; }
       const side = i & 1 ? 1 : -1, ang = Math.random() * 6.28;
@@ -653,7 +601,7 @@ class Wordmark extends Scene {
     const v = this.v, n = this.n, T = this.T += dt, sl = SLEEP.v;
     const hov = v.pin ? 1 : 0; this.attn += ((hov || this.force > 0 ? 1 : 0) - this.attn) * Math.min(1, dt * 4); if (this.force > 0) this.force -= dt;
     const loose = (0.4 + this.attn * 1.0) * (1 - sl * 0.6), K = 28, C = 7.2, R = this.o.R || 10, R2 = R * R;
-    if (!reduce && this.formed) {
+    if (!GM.reducedMotion && this.formed) {
       this.nextWave -= dt; if (this.nextWave < 0) { this.nextWave = 4.5 + Math.random() * 3; this.wave = -3; }
       if (Math.random() < dt * 2.2) { const i = (Math.random() * n) | 0; const a = Math.random() * 6.28; this.vx[i] += Math.cos(a) * 26; this.vy[i] += Math.sin(a) * 26; this.fl[i] = 1; }
     }
@@ -686,7 +634,7 @@ class Wordmark extends Scene {
       let r = lerp(FOAM[0], LAMP[0], g), gg = lerp(FOAM[1], LAMP[1], g), b = lerp(FOAM[2], LAMP[2], g);
       const br = (0.62 + 0.3 * shim + this.attn * 0.14) * (1 - sl * 0.45);
       r = r * br + fl * 150; gg = gg * br + fl * 150; b = b * br + fl * 150;
-      v.put(Math.floor(x), Math.floor(y / v.asp), ch, r, gg, b);
+      cell(v, Math.floor(x), Math.floor(y / v.asp), ch, r, gg, b);
     }
   }
 }
@@ -724,27 +672,26 @@ function drawReef(v, pts, T, amp, dim, glow, bio) {
     let r = c[0] * b, g = c[1] * b, bl = c[2] * b;
     if (p.tip) { const tw = 0.6 + 0.4 * Math.sin(T * 2 + p.ph * 3); r = r * (0.9 + 0.5 * tw) + glow * 30; g = g * (0.9 + 0.5 * tw) + glow * 30; bl = bl * (0.9 + 0.5 * tw) + glow * 30; }
     if (bio > 0.02) { r += bio * 20 * p.hw; g += bio * 130 * p.hw; bl += bio * 120 * p.hw; }
-    v.put(Math.floor(p.x + sw), Math.floor(p.y / v.asp), p.tip ? (bio > 0.2 ? 64 : 42) : p.ch, r, g, bl);
+    cell(v, Math.floor(p.x + sw), Math.floor(p.y / v.asp), p.tip ? (bio > 0.2 ? 64 : 42) : p.ch, r, g, bl);
   }
 }
 
 // ---------- Lagoon: flocking fish, jellyfish, plankton, coral, a lantern, a hold-to-charge bloom ----------
 class Lagoon extends Scene {
   constructor(cv, o) {
-    super(new View(cv, { fsDiv: 40, fsMin: 8, fsMax: 11.5, bloom: 0.55 }));
+    super(cv, { fsDiv: 40, fsMin: 8, fsMax: 11.5, bloom: 0.55 });
     this.o = o; this.pulses = []; for (let i = 0; i < 6; i++) this.pulses.push({ on: false, x: 0, y: 0, t: 0 });
-    this.charge = 0; this.holding = false; this.hx = 0; this.hy = 0; this.ox = 0; this.oy = 0; this.bloomO = { on: false, x: 0, y: 0, t: 0, pow: 0 }; this.still = 3;
-    this.v.paintBg = (ctx, w, h) => { ctx.fillStyle = this.grad || '#061a2c'; ctx.fillRect(0, 0, w, h); };
+    this.charge = 0; this.holding = false; this.hx = 0; this.hy = 0; this.ox = 0; this.oy = 0; this.bloomO = { on: false, x: 0, y: 0, t: 0, pow: 0 }; this.stillSec = 3; this.hover = 'draw';
     this.holdExt = false;
   }
   onLayout() {
     const v = this.v, o = this.o; if (!v.cols) return;
     const g = v.ctx.createLinearGradient(0, 0, 0, v.vh);
     const top = o.night ? ['#04202e', '#03101e', '#02060e'] : ['#0b3a4f', '#061f33', '#030b16'];
-    g.addColorStop(0, top[0]); g.addColorStop(0.55, top[1]); g.addColorStop(1, top[2]); this.grad = g;
+    g.addColorStop(0, top[0]); g.addColorStop(0.55, top[1]); g.addColorStop(1, top[2]); v.o.background = g;
     const n = Math.round(o.fish * clamp(v.W / 170, 0.55, 1.15));
     this.S = mkS(n); for (let i = 0; i < n; i++) { this.S.x[i] = rnd(v.W * 0.2, v.W * 0.8); this.S.y[i] = rnd(v.H * 0.15, v.H * 0.6); const a = rnd(0, 6.28); this.S.vx[i] = Math.cos(a) * 12; this.S.vy[i] = Math.sin(a) * 12; this.S.ph[i] = rnd(0, 6.28); }
-    const pn = Math.min(280, Math.round(v.W * v.H / 150)); this.P = { n: pn, x: new Float32Array(pn), y: new Float32Array(pn), z: new Float32Array(pn), ph: new Float32Array(pn), tw: new Float32Array(pn) };
+    const pn = Math.min(280, Math.round(v.W * v.H / 150)); this.P = mkPool(pn, ['x', 'y', 'z', 'ph', 'tw']);
     for (let i = 0; i < pn; i++) { this.P.x[i] = rnd(0, v.W); this.P.y[i] = rnd(0, v.H); this.P.z[i] = rnd(0.3, 1); this.P.ph[i] = rnd(0, 6.28); }
     this.groundY = v.H * (o.night ? 0.72 : 0.78);
     this.J = []; const jn = o.jelly; for (let i = 0; i < jn; i++) this.J.push({ x: v.W * (0.15 + 0.7 * (i + 0.5) / jn), y: rnd(v.H * 0.25, v.H * 0.55), vx: 0, vy: 0, ph: rnd(0, 6.28), sz: rnd(0.8, 1.35), col: [[197, 139, 255], [255, 140, 200], [127, 232, 224], [160, 180, 255]][i % 4], pul: 0, fl: 0 });
@@ -831,7 +778,7 @@ class Lagoon extends Scene {
         let gl = 0;
         if (bio > 0.01) { const dd = Math.hypot(c + 0.5 - b.x, y - b.y); if (dd < br) gl = bio * 0.55 * (0.5 + 0.5 * Math.sin(dd * 0.4 - T * 3)); if (Math.abs(dd - br) < 2.2) gl = 1; }
         const q = Math.max(I, gl);
-        if (q > 0.1) { const k = clamp((q * 5) | 0, 1, 9); v.put(c, r, gl > 0.9 ? 35 : RAMP[k], 40 + 210 * gl, 150 * I * dim + 230 * gl, 165 * I * dim + 220 * gl); }
+        if (q > 0.1) { const k = clamp((q * 5) | 0, 1, 9); cell(v, c, r, gl > 0.9 ? 35 : RAMP[k], 40 + 210 * gl, 150 * I * dim + 230 * gl, 165 * I * dim + 220 * gl); }
       }
     }
     // lantern
@@ -849,7 +796,7 @@ class Lagoon extends Scene {
       if (orb) { const d = Math.hypot(P.x[i] - orb.x, P.y[i] - orb.y); if (d < 20) lt += (1 - d / 20) * orb.c; }
       lt = clamp(lt * dim, 0, 1.3);
       const ch = lt > 0.85 ? 42 : lt > 0.5 ? 43 : lt > 0.32 ? 183 : 46;
-      v.putW(P.x[i], P.y[i], ch, 130 * lt + 70 * P.tw[i], 215 * lt, 230 * lt);
+      cellW(v, P.x[i], P.y[i], ch, 130 * lt + 70 * P.tw[i], 215 * lt, 230 * lt);
     }
     for (const j of this.J) {
       drawJelly(v, j.x, j.y / asp, j.sz, j.pul, T, [clamp(j.col[0] + j.fl * 100, 0, 255), clamp(j.col[1] + j.fl * 100, 0, 255), clamp(j.col[2] + j.fl * 100, 0, 255)], j.ph, dim);
@@ -859,15 +806,15 @@ class Lagoon extends Scene {
       const dpt = 0.7 + 0.3 * (1 - S.y[i] / H), f = S.fl[i] > 0 ? S.fl[i] : 0;
       const r = (lerp(120, 255, f) * dpt) * dim + f * 40, g = (lerp(235, 215, f) * dpt) * dim + f * 30, bl = (lerp(250, 150, f) * dpt) * dim + f * (b.on ? 60 : 0);
       fishTail(v, S.x[i], S.y[i], S.vx[i], S.vy[i], r * 0.5, g * 0.5, bl * 0.5);
-      v.putW(S.x[i], S.y[i], S.hc[i], r, g, bl);
+      cellW(v, S.x[i], S.y[i], S.hc[i], r, g, bl);
     }
     // pulses
     for (const p of this.pulses) if (p.on) {
       const rad = p.t * 62, a = 1 - p.t / 1.6, n = Math.max(12, Math.round(rad * 2.4));
-      for (let k = 0; k < n; k++) { const th = k / n * 6.283; v.putW(p.x + Math.cos(th) * rad, p.y + Math.sin(th) * rad, k % 2 ? 111 : 46, 255 * a, 215 * a, 150 * a); }
+      for (let k = 0; k < n; k++) { const th = k / n * 6.283; cellW(v, p.x + Math.cos(th) * rad, p.y + Math.sin(th) * rad, k % 2 ? 111 : 46, 255 * a, 215 * a, 150 * a); }
     }
-    if (L.on) { v.putW(L.x, L.y, 64, 255, 240, 200); v.putW(L.x - 1, L.y, 40, 255, 220, 150); v.putW(L.x + 1, L.y, 41, 255, 220, 150); }
-    if (orb) { const rr2 = 2 + orb.c * 7; for (let k = 0; k < 26; k++) { const th = k / 26 * 6.283 + T * 3; v.putW(orb.x + Math.cos(th) * rr2, orb.y + Math.sin(th) * rr2, k % 3 ? 42 : 64, 160 + 90 * orb.c, 255, 240); } v.putW(orb.x, orb.y, 64, 255, 255, 255); }
+    if (L.on) { cellW(v, L.x, L.y, 64, 255, 240, 200); cellW(v, L.x - 1, L.y, 40, 255, 220, 150); cellW(v, L.x + 1, L.y, 41, 255, 220, 150); }
+    if (orb) { const rr2 = 2 + orb.c * 7; for (let k = 0; k < 26; k++) { const th = k / 26 * 6.283 + T * 3; cellW(v, orb.x + Math.cos(th) * rr2, orb.y + Math.sin(th) * rr2, k % 3 ? 42 : 64, 160 + 90 * orb.c, 255, 240); } cellW(v, orb.x, orb.y, 64, 255, 255, 255); }
     const chg = $('#charge'); if (chg && o.charge) chg.style.setProperty('--c', this.charge.toFixed(3));
   }
   halo(x, y, R, r, g, b, a) {
@@ -875,7 +822,7 @@ class Lagoon extends Scene {
     for (let rr_ = r0; rr_ <= r1; rr_++) for (let c = c0; c <= c1; c++) {
       const d = Math.hypot(c + 0.5 - x, (rr_ + 0.5) * asp - y); if (d >= R) continue;
       const q = (1 - d / R); const w = q * q * a; if (w < 0.05) continue;
-      v.put(c, rr_, RAMP[clamp((w * 9) | 0, 1, 7)], r * w * 1.4, g * w * 1.4, b * w * 1.4);
+      cell(v, c, rr_, RAMP[clamp((w * 9) | 0, 1, 7)], r * w * 1.4, g * w * 1.4, b * w * 1.4);
     }
   }
 }
@@ -885,8 +832,8 @@ const PALF = [[127, 232, 224], [255, 224, 140], [170, 255, 190], [205, 170, 255]
 class BtnFx extends Scene {
   constructor(btn) {
     const cv = $('canvas.fx', btn);
-    super(new View(cv, { fs: 11, alpha: true, bloom: 0.75, bdiv: 3 }));
-    this.btn = btn; this.kind = btn.dataset.fx; this.hov = false; this.foc = false; this.prs = false; this.pressT = -9; this.np = 0; this.still = 1.2;
+    super(cv, { fs: 11, alpha: true, bloom: 0.75, bdiv: 3 });
+    this.btn = btn; this.kind = btn.dataset.fx; this.hov = false; this.foc = false; this.prs = false; this.pressT = -9; this.np = 0; this.stillSec = 1.2;
     this.tp = { x: 0, y: 0 };
     const on = (t, f) => btn.addEventListener(t, f);
     on('pointerenter', () => { this.hov = true; this.poke(1.0); }); on('pointerleave', () => { this.hov = false; this.poke(1.0); this.prs = false; });
@@ -895,10 +842,10 @@ class BtnFx extends Scene {
     on('keydown', e => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) this.press(); });
     on('pointerup', () => this.release()); on('keyup', e => { if (e.key === ' ' || e.key === 'Enter') this.release(); });
     on('pointercancel', () => this.release());
-    if (this.kind === 'toggle') on('click', () => { const on_ = btn.getAttribute('aria-checked') !== 'true'; btn.setAttribute('aria-checked', on_); $('.lbl', btn).textContent = on_ ? 'Asleep' : 'Awake'; SLEEP.t = on_ ? 1 : 0; this.flip = this.T; say(on_ ? 'The schools are asleep.' : 'The schools are awake.'); this.poke(2.2); if (reduce) this.refreshStill(); });
-    if (this.kind === 'hold') on('click', () => { if (reduce) { this.fire(); this.poke(1.2); } });
+    if (this.kind === 'toggle') on('click', () => { const on_ = btn.getAttribute('aria-checked') !== 'true'; btn.setAttribute('aria-checked', on_); $('.lbl', btn).textContent = on_ ? 'Asleep' : 'Awake'; SLEEP.t = on_ ? 1 : 0; if (GM.reducedMotion) SLEEP.v = SLEEP.t; this.flip = this.T; say(on_ ? 'The schools are asleep.' : 'The schools are awake.'); this.poke(2.2); if (GM.reducedMotion) this.refreshStill(); });
+    if (this.kind === 'hold') on('click', () => { if (GM.reducedMotion) { this.fire(); this.poke(1.2); } });
   }
-  refreshStill() { scenes.forEach(s => { if (s !== this && s.ready) { s.dirty = true; if (reduce) s.pend = 1; } }); }
+  refreshStill() { scenes.forEach(s => { if (s !== this) s.poke(1 / 60); }); }
   press() {
     this.prs = true; this.pressT = this.T; this.np++; this.btn.classList.add('pressed');
     if (this.kind === 'hold') { this.holding = true; return; }
@@ -910,7 +857,7 @@ class BtnFx extends Scene {
   }
   release() { this.prs = false; this.btn.classList.remove('pressed'); if (this.kind === 'hold' && this.holding) { this.holding = false; if (this.ch > 0.2 && !this.gone) { this.btn.classList.remove('shake'); void this.btn.offsetWidth; this.btn.classList.add('shake'); } } }
   onLayout() {
-    const v = this.v, cr = v.cv.getBoundingClientRect(), br = this.btn.getBoundingClientRect(), cw = v.cw;
+    const v = this.v, cr = v.canvas.getBoundingClientRect(), br = this.btn.getBoundingClientRect(), cw = v.cw;
     this.bx = (br.left - cr.left) / cw; this.by = (br.top - cr.top) / cw; this.bw = br.width / cw; this.bh = br.height / cw; this.cx = this.bx + this.bw / 2; this.cy = this.by + this.bh / 2;
     this['init_' + this.kind]();
   }
@@ -927,7 +874,7 @@ class BtnFx extends Scene {
   draw() { this.v.clear(); this['draw_' + this.kind](); }
   bubbles(n, x, y, spread) { for (let k = 0; k < n; k++) { const b = this.bub; for (let i = 0; i < b.length; i++) if (!b[i].on) { b[i].on = true; b[i].x = x + rnd(-spread, spread); b[i].y = y + rnd(-1, 1); b[i].vy = -rnd(6, 14); b[i].t = 0; b[i].c = Math.random() < 0.5 ? 111 : 79; break; } } }
   simBub(dt) { for (const b of this.bub) if (b.on) { b.t += dt; b.y += b.vy * dt; b.x += Math.sin(b.t * 6 + b.y) * 4 * dt; if (b.t > 1.3) b.on = false; } }
-  drawBub(col) { for (const b of this.bub) if (b.on) { const a = 1 - b.t / 1.3; this.v.putW(b.x, b.y, a > 0.5 ? b.c : 46, col[0] * a, col[1] * a, col[2] * a); } }
+  drawBub(col) { for (const b of this.bub) if (b.on) { const a = 1 - b.t / 1.3; cellW(this.v, b.x, b.y, a > 0.5 ? b.c : 46, col[0] * a, col[1] * a, col[2] * a); } }
   mkBub(n) { this.bub = Array.from({ length: n }, () => ({ on: false, x: 0, y: 0, vy: 0, t: 0, c: 111 })); }
 
   // ----- shelter: primary, fish orbit the coral and scatter on press -----
@@ -959,10 +906,10 @@ class BtnFx extends Scene {
   }
   draw_shelter() {
     const v = this.v, S = this.S, pal = PALF[this.pal], hot = this.hov || this.foc ? 1 : 0, T = this.T;
-    if (this.rip >= 0) { const a = 1 - this.rip / 46, n = Math.round(this.rip * 3 + 10); for (let k = 0; k < n; k++) { const th = k / n * 6.283; v.putW(this.cx + Math.cos(th) * this.rip * 1.5, this.cy + Math.sin(th) * this.rip * 0.8, k % 2 ? 111 : 46, pal[0] * a, pal[1] * a, pal[2] * a); } }
+    if (this.rip >= 0) { const a = 1 - this.rip / 46, n = Math.round(this.rip * 3 + 10); for (let k = 0; k < n; k++) { const th = k / n * 6.283; cellW(v, this.cx + Math.cos(th) * this.rip * 1.5, this.cy + Math.sin(th) * this.rip * 0.8, k % 2 ? 111 : 46, pal[0] * a, pal[1] * a, pal[2] * a); } }
     for (let i = 0; i < S.n; i++) {
       const tw = 0.75 + 0.25 * Math.sin(T * 5 + S.ph[i]), b = (0.85 + 0.15 * hot) * tw;
-      v.putW(S.x[i], S.y[i], S.hc[i], pal[0] * b, pal[1] * b, pal[2] * b);
+      cellW(v, S.x[i], S.y[i], S.hc[i], pal[0] * b, pal[1] * b, pal[2] * b);
     }
     this.drawBub(pal);
   }
@@ -984,7 +931,7 @@ class BtnFx extends Scene {
     const v = this.v, act = this.hov || this.foc, col = act ? [215, 170, 255] : [197, 139, 255];
     const g = act ? 0.5 : 0.28, R = act ? 13 : 9;
     for (let r = Math.floor((this.jy - R) / v.asp); r <= Math.ceil((this.jy + R) / v.asp); r++) for (let c = Math.floor(this.jx - R); c <= Math.ceil(this.jx + R); c++) {
-      const d = Math.hypot(c + 0.5 - this.jx, (r + 0.5) * v.asp - this.jy); if (d >= R) continue; const w = (1 - d / R) * (1 - d / R) * g; if (w > 0.04) v.put(c, r, RAMP[clamp((w * 9) | 0, 1, 5)], col[0] * w * 1.5, col[1] * w * 1.5, col[2] * w * 1.5);
+      const d = Math.hypot(c + 0.5 - this.jx, (r + 0.5) * v.asp - this.jy); if (d >= R) continue; const w = (1 - d / R) * (1 - d / R) * g; if (w > 0.04) cell(v, c, r, RAMP[clamp((w * 9) | 0, 1, 5)], col[0] * w * 1.5, col[1] * w * 1.5, col[2] * w * 1.5);
     }
     drawJelly(v, this.jx, this.jy / v.asp - 1.2, 0.8, this.pulJ, this.T, col, 0, 1);
     this.drawBub([200, 150, 255]);
@@ -1009,7 +956,7 @@ class BtnFx extends Scene {
     for (let i = 0; i < S.n; i++) {
       const sp = Math.hypot(S.vx[i], S.vy[i]), b = (act ? 1 : 0.8) + this.fb * 0.3 + 0.2 * Math.sin(T * 3 + S.ph[i]);
       const col = act ? LAMP : FOAM, ch = sp > 8 ? dirCode(S.vx[i], S.vy[i]) : act ? 42 : 43;
-      v.putW(S.x[i], S.y[i], ch, col[0] * b, col[1] * b, col[2] * b);
+      cellW(v, S.x[i], S.y[i], ch, col[0] * b, col[1] * b, col[2] * b);
     }
   }
 
@@ -1033,11 +980,11 @@ class BtnFx extends Scene {
   }
   draw_fireflies() {
     const v = this.v, S = this.S;
-    if (this.ring >= 0) { const a = 1 - this.ring / 20, n = 40; for (let k = 0; k < n; k++) { const th = k / n * 6.283; v.putW(this.cx + Math.cos(th) * this.ring * 1.4, this.cy + Math.sin(th) * this.ring * 0.9, 46, 255 * a, 220 * a, 120 * a); } }
+    if (this.ring >= 0) { const a = 1 - this.ring / 20, n = 40; for (let k = 0; k < n; k++) { const th = k / n * 6.283; cellW(v, this.cx + Math.cos(th) * this.ring * 1.4, this.cy + Math.sin(th) * this.ring * 0.9, 46, 255 * a, 220 * a, 120 * a); } }
     for (let i = 0; i < S.n; i++) {
       const cs = Math.max(0, Math.cos(this.phi[i])), b = Math.pow(cs, 5), g = 0.45 + 0.55 * b;
       const ch = b > 0.55 ? 42 : 43;
-      v.putW(S.x[i], S.y[i], ch, (200 + 55 * b) * g, (235 + 20 * b) * g, (110 + 40 * b) * g * (1 - 0.3 * b));
+      cellW(v, S.x[i], S.y[i], ch, (200 + 55 * b) * g, (235 + 20 * b) * g, (110 + 40 * b) * g * (1 - 0.3 * b));
     }
   }
 
@@ -1058,10 +1005,10 @@ class BtnFx extends Scene {
   draw_toggle() {
     const v = this.v, asleep = this.btn.getAttribute('aria-checked') === 'true', k = asleep ? 0.5 : 1, x = Math.round(this.fx), r = Math.floor(this.fy / v.asp);
     const col = asleep ? [150, 160, 255] : FOAM, right = this.fdir > 0;
-    v.put(x - 1, r, right ? 62 : 60, col[0] * k, col[1] * k, col[2] * k);
-    v.put(x, r, asleep ? 45 : (right ? 60 : 62), col[0] * k, col[1] * k, col[2] * k);
-    v.put(x + 1, r, right ? 62 : 60, col[0] * k, col[1] * k, col[2] * k);
-    for (const z of this.zs) if (z.on) { const a = 1 - z.t / 2.4; v.putW(z.x, z.y, z.t > 1.2 ? 90 : 122, 170 * a, 180 * a, 255 * a); }
+    cell(v, x - 1, r, right ? 62 : 60, col[0] * k, col[1] * k, col[2] * k);
+    cell(v, x, r, asleep ? 45 : (right ? 60 : 62), col[0] * k, col[1] * k, col[2] * k);
+    cell(v, x + 1, r, right ? 62 : 60, col[0] * k, col[1] * k, col[2] * k);
+    for (const z of this.zs) if (z.on) { const a = 1 - z.t / 2.4; cellW(v, z.x, z.y, z.t > 1.2 ? 90 : 122, 170 * a, 180 * a, 255 * a); }
     this.drawBub(col);
   }
 
@@ -1097,7 +1044,7 @@ class BtnFx extends Scene {
   }
   draw_hold() {
     const v = this.v, S = this.S, a = this.ch;
-    for (let i = 0; i < S.n; i++) { const b = 0.7 + 0.3 * a; v.putW(S.x[i], S.y[i], S.hc[i], 255 * b, lerp(120, 190, a) * b, lerp(100, 110, a) * b); }
+    for (let i = 0; i < S.n; i++) { const b = 0.7 + 0.3 * a; cellW(v, S.x[i], S.y[i], S.hc[i], 255 * b, lerp(120, 190, a) * b, lerp(100, 110, a) * b); }
     const q = Math.round(a * 100) / 100; if (q !== this.lastHold) { this.lastHold = q; this.btn.style.setProperty('--hold', q); }
   }
 }
@@ -1105,8 +1052,8 @@ class BtnFx extends Scene {
 // ---------- NavFx: pilot fish that live under the current link ----------
 class NavFx extends Scene {
   constructor(cv) {
-    super(new View(cv, { fs: 7.5, alpha: true, bloom: 0.55, bdiv: 3 }));
-    this.links = $$('.links .nl'); this.hoverEl = null; this.activeEl = null; this.menuEl = null; this.brand = $('.brand'); this.still = 2;
+    super(cv, { fs: 7.5, alpha: true, bloom: 0.55, bdiv: 3 });
+    this.links = $$('.links .nl'); this.hoverEl = null; this.activeEl = null; this.menuEl = null; this.brand = $('.brand'); this.stillSec = 2;
     for (const l of this.links) {
       l.addEventListener('pointerenter', () => { this.hoverEl = l; this.poke(1.6); }); l.addEventListener('pointerleave', () => { if (this.hoverEl === l) this.hoverEl = null; this.poke(1.6); });
       l.addEventListener('focus', () => { if (l.matches(':focus-visible')) { this.hoverEl = l; this.poke(1.6); } }); l.addEventListener('blur', () => { if (this.hoverEl === l) this.hoverEl = null; this.poke(1.6); });
@@ -1116,7 +1063,7 @@ class NavFx extends Scene {
   }
   onLayout() {
     const n = 12, v = this.v; this.S = mkS(n);
-    const br = this.brand.getBoundingClientRect(), cr = v.cv.getBoundingClientRect();
+    const br = this.brand.getBoundingClientRect(), cr = v.canvas.getBoundingClientRect();
     for (let i = 0; i < n; i++) { this.S.x[i] = (br.right - cr.left) / v.cw + rnd(0, 6); this.S.y[i] = 3 + rnd(0, 6); this.S.ph[i] = rnd(0, 6.28); }
   }
   spy() {
@@ -1143,9 +1090,9 @@ class NavFx extends Scene {
     const v = this.v, S = this.S, col = this.hot ? LAMP : FOAM, sl = SLEEP.v; v.clear();
     for (let i = 0; i < S.n; i++) {
       const sp = Math.hypot(S.vx[i], S.vy[i]);
-      if (sp > 6) v.putW(S.x[i] - S.vx[i] * 0.06, S.y[i] - S.vy[i] * 0.06, 46, col[0] * 0.4, col[1] * 0.4, col[2] * 0.4);
+      if (sp > 6) cellW(v, S.x[i] - S.vx[i] * 0.06, S.y[i] - S.vy[i] * 0.06, 46, col[0] * 0.4, col[1] * 0.4, col[2] * 0.4);
       const b = (0.65 + 0.35 * Math.sin(this.T * 4 + S.ph[i])) * (1 - sl * 0.4);
-      v.putW(S.x[i], S.y[i], sp < 2.5 ? 45 : S.hc[i], col[0] * b, col[1] * b, col[2] * b);
+      cellW(v, S.x[i], S.y[i], sp < 2.5 ? 45 : S.hc[i], col[0] * b, col[1] * b, col[2] * b);
     }
   }
 }
@@ -1153,19 +1100,20 @@ class NavFx extends Scene {
 // ---------- PanelFx: a swarm that builds a menu panel's frame ----------
 class PanelFx extends Scene {
   constructor(panel, trigger) {
-    super(new View($('canvas.pfx', panel), { fs: 7, alpha: true, bloom: 0.6, bdiv: 3 }), { manual: true });
+    super($('canvas.pfx', panel), { fs: 7, alpha: true, bloom: 0.6, bdiv: 3 });
     this.panel = panel; this.trigger = trigger; this.state = 'closed'; this.cap = 700; this.x = new Float32Array(this.cap); this.y = new Float32Array(this.cap); this.vx = new Float32Array(this.cap); this.vy = new Float32Array(this.cap);
-    this.tx = new Float32Array(this.cap); this.ty = new Float32Array(this.cap); this.kd = new Uint8Array(this.cap); this.dl = new Float32Array(this.cap); this.n = 0; this.ox = 0; this.oy = 0; this.timer = 0;
+    this.tx = new Float32Array(this.cap); this.ty = new Float32Array(this.cap); this.kd = new Uint8Array(this.cap); this.dl = new Float32Array(this.cap); this.n = 0; this.ox = 0; this.oy = 0; this.timer = 0; this.stillSec = 0;
   }
   build() {
-    const v = this.v; v.layout(); const cr = v.cv.getBoundingClientRect(), tr = this.trigger.getBoundingClientRect();
+    const v = this.v; const cr = v.canvas.getBoundingClientRect(), tr = this.trigger.getBoundingClientRect();
     this.ox = (tr.left + tr.width / 2 - cr.left) / v.cw; this.oy = (tr.top + tr.height / 2 - cr.top) / v.cw;
     let n = 0; const C = v.cols, R = v.rows, add = (c, r, k) => { if (n < this.cap) { this.tx[n] = c + 0.5; this.ty[n] = (r + 0.5) * v.asp; this.kd[n] = k; n++; } };
     for (let c = 0; c < C; c++) { add(c, 0, c === 0 || c === C - 1 ? 43 : 61); add(c, R - 1, c === 0 || c === C - 1 ? 43 : 61); }
     for (let r = 1; r < R - 1; r++) { add(0, r, 124); add(C - 1, r, 124); }
-    this.n = n; this.ready = true;
+    this.n = n;
   }
-  relayout() { if (this.state === 'closed') return; this.build(); for (let i = 0; i < this.n; i++) { this.x[i] = this.tx[i]; this.y[i] = this.ty[i]; this.dl[i] = 0; } this.dirty = true; }
+  // the engine lays this canvas out when the panel opens or the window resizes; the frame snaps to its new size
+  onLayout() { if (this.state === 'closed') return; this.build(); for (let i = 0; i < this.n; i++) { this.x[i] = this.tx[i]; this.y[i] = this.ty[i]; this.dl[i] = 0; } }
   place() {
     const v = this.v, open = this.state === 'opening' || this.state === 'open';
     for (let i = 0; i < this.n; i++) {
@@ -1176,17 +1124,18 @@ class PanelFx extends Scene {
   }
   open() {
     if (this.state === 'open' || this.state === 'opening') return; clearTimeout(this.timer);
-    this.panel.hidden = false; this.panel.classList.remove('closing'); this.build(); this.vis = true; this.T = 0;
-    if (reduce) { for (let i = 0; i < this.n; i++) { this.x[i] = this.tx[i]; this.y[i] = this.ty[i]; this.dl[i] = 0; } this.state = 'open'; this.panel.classList.add('open'); this.draw(); this.v.render(); return; }
-    this.state = 'opening'; this.place(); requestAnimationFrame(() => this.panel.classList.add('open'));
+    this.panel.hidden = false; this.panel.classList.remove('closing'); this.T = 0;
+    this.state = GM.reducedMotion ? 'open' : 'opening'; this.v.layout();
+    if (GM.reducedMotion) { this.panel.classList.add('open'); return; }
+    this.place(); requestAnimationFrame(() => this.panel.classList.add('open'));
   }
   close() {
     if (this.state === 'closed' || this.state === 'closing') return; clearTimeout(this.timer);
     this.panel.classList.remove('open'); this.panel.classList.add('closing');
-    if (reduce) { this.state = 'closed'; this.panel.hidden = true; this.vis = false; this.panel.classList.remove('closing'); return; }
+    if (GM.reducedMotion) { this.state = 'closed'; this.panel.hidden = true; this.panel.classList.remove('closing'); return; }
     this.state = 'closing'; this.T = 0;
     for (let i = 0; i < this.n; i++) { const d = Math.hypot(this.tx[i] - this.ox, this.ty[i] - this.oy); this.dl[i] = 0.18 - Math.min(0.17, d * 0.0014); }
-    this.timer = setTimeout(() => { this.state = 'closed'; this.panel.hidden = true; this.vis = false; this.panel.classList.remove('closing'); }, 520);
+    this.timer = setTimeout(() => { this.state = 'closed'; this.panel.hidden = true; this.panel.classList.remove('closing'); }, 520);
   }
   sim(dt) {
     this.T += dt; const closing = this.state === 'closing', T = this.T;
@@ -1206,14 +1155,14 @@ class PanelFx extends Scene {
       const sp = Math.hypot(this.vx[i], this.vy[i]), home = Math.abs(this.x[i] - this.tx[i]) + Math.abs(this.y[i] - this.ty[i]) / v.asp < 0.8;
       const wave = 0.5 + 0.5 * Math.sin(T * 2.4 - i * 0.07), b = 0.5 + 0.5 * wave;
       const ch = home && sp < 6 ? (wave > 0.85 ? 35 : this.kd[i]) : dirCode(this.vx[i], this.vy[i]);
-      const k = home ? 0.8 + 0.2 * wave : 0.9; v.putW(this.x[i], this.y[i], ch, (home ? lerp(110, 255, wave * wave) : 127) * k, (home ? lerp(225, 235, wave) : 232) * k, (home ? lerp(215, 170, wave * wave) : 224) * k);
+      const k = home ? 0.8 + 0.2 * wave : 0.9; cellW(v, this.x[i], this.y[i], ch, (home ? lerp(110, 255, wave * wave) : 127) * k, (home ? lerp(225, 235, wave) : 232) * k, (home ? lerp(215, 170, wave * wave) : 224) * k);
     }
   }
 }
 
 // ---------- GlyphFx: the hamburger icon, drawn by fish ----------
 class GlyphFx extends Scene {
-  constructor(cv) { super(new View(cv, { fs: 4.4, alpha: true, bloom: 0.7, bdiv: 3 })); this.open = false; this.still = 2; }
+  constructor(cv) { super(cv, { fs: 4.4, alpha: true, bloom: 0.7, bdiv: 3 }); this.open = false; this.stillSec = 2; this.hover = 'sim'; }
   onLayout() {
     const v = this.v, A = rasterBurger(v, false), B = rasterBurger(v, true); this.A = A; this.B = B;
     const n = Math.max(A.tx.length, B.tx.length); this.n = n; this.S = mkS(n);
@@ -1233,7 +1182,7 @@ class GlyphFx extends Scene {
     const v = this.v, S = this.S, T = this.T; v.clear();
     for (let i = 0; i < S.n; i++) {
       const sp = Math.hypot(S.vx[i], S.vy[i]), b = 0.7 + 0.3 * Math.sin(T * 3 + S.ph[i]), col = this.open ? LAMP : FOAM;
-      v.putW(S.x[i], S.y[i], sp > 5 ? dirCode(S.vx[i], S.vy[i]) : 35, col[0] * b, col[1] * b, col[2] * b);
+      cellW(v, S.x[i], S.y[i], sp > 5 ? dirCode(S.vx[i], S.vy[i]) : 35, col[0] * b, col[1] * b, col[2] * b);
     }
   }
 }
@@ -1251,17 +1200,13 @@ function clockStr(h) { const hh = Math.floor(h) % 24, mm = Math.floor((h % 1) * 
 
 class Estuary extends Scene {
   constructor(cv) {
-    super(new View(cv, { fsDiv: 44, fsMin: 8, fsMax: 11, bloom: 0.5 }));
-    this.hours = 17.7; this.goal = null; this.still = 3.5; this.timeEl = $('#clockT'); this.lastMin = -1; this.cs = ['#000', '#000', '#000', '#000'];
-    this.v.paintBg = (ctx, w, h) => {
-      const wp = clamp(this.waterY * this.v.cw, 1, h - 1), g = ctx.createLinearGradient(0, 0, 0, wp); g.addColorStop(0, this.cs[0]); g.addColorStop(1, this.cs[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, w, wp + 1);
-      const g2 = ctx.createLinearGradient(0, wp, 0, h); g2.addColorStop(0, this.cs[2]); g2.addColorStop(1, this.cs[3]); ctx.fillStyle = g2; ctx.fillRect(0, wp, w, h - wp);
-    };
+    super(cv, { fsDiv: 44, fsMin: 8, fsMax: 11, bloom: 0.5 });
+    this.hours = 17.7; this.goal = null; this.stillSec = 3.5; this.hover = 'draw'; this.timeEl = $('#clockT'); this.lastMin = -1; this.cs = ['#000', '#000', '#000', '#000'];
     this.food = Array.from({ length: 20 }, () => ({ on: false, x: 0, y: 0 })); this.zs = Array.from({ length: 14 }, () => ({ on: false, x: 0, y: 0, t: 0 }));
     this.rip = Array.from({ length: 6 }, () => ({ on: false, x: 0, t: 0 })); this.startle = { on: false, x: 0, y: 0, t: 0 };
     this.crab = { x: 30, dir: 1, wait: 1, alarm: 0, step: 0 };
   }
-  setHour(h) { if (reduce) { this.hours = h; this.poke(3.5); this.dirty = true; } else this.goal = h; }
+  setHour(h) { if (GM.reducedMotion) { this.hours = h; this.poke(3.5); } else this.goal = h; }
   onLayout() {
     const v = this.v, W = v.W, H = v.H; this.waterY = H * 0.38; this.sandTop = H - 3 * v.asp;
     const nb = Math.round(100 * clamp(W / 200, 0.55, 1.1)), nf = Math.round(130 * clamp(W / 200, 0.55, 1.1));
@@ -1271,7 +1216,7 @@ class Estuary extends Scene {
     const nr = 16; this.reeds = []; for (let k = 0; k < nr; k++) { const left = k < 8, f = (left ? k : k - 8) / 7; this.reeds.push({ x: W * (left ? 0.025 + 0.14 * f : 0.84 + 0.14 * f) + (rr() - 0.5) * 2, top: this.waterY - H * (0.1 + 0.15 * rr()), ph: rr() * 6.28 }); }
     for (let i = 0; i < nb; i++) { this.bth[i] = rr(); this.B.x[i] = rnd(W * 0.2, W * 0.8); this.B.y[i] = rnd(2, this.waterY * 0.6); const a = rnd(0, 6.28); this.B.vx[i] = Math.cos(a) * 14; this.B.vy[i] = Math.sin(a) * 14; this.B.ph[i] = rnd(0, 6.28); }
     for (let i = 0; i < nf; i++) { this.fth[i] = rr(); this.F.x[i] = rnd(W * 0.1, W * 0.9); this.F.y[i] = rnd(this.waterY + 6, this.sandTop - 8); const a = rnd(0, 6.28); this.F.vx[i] = Math.cos(a) * 12; this.F.vy[i] = Math.sin(a) * 12; this.F.ph[i] = rnd(0, 6.28); this.fsx[i] = rr() * W; this.fsy[i] = this.sandTop - v.asp * (1 + rr() * 5); }
-    const nff = 40; this.FF = { n: nff, x: new Float32Array(nff), y: new Float32Array(nff), vx: new Float32Array(nff), vy: new Float32Array(nff), hx: new Float32Array(nff), hy: new Float32Array(nff), phi: new Float32Array(nff), om: new Float32Array(nff) };
+    const nff = 40; this.FF = mkPool(nff, ['x', 'y', 'vx', 'vy', 'hx', 'hy', 'phi', 'om']);
     for (let i = 0; i < nff; i++) { const near = rr() < 0.6; this.FF.hx[i] = near ? (rr() < 0.5 ? W * (0.02 + 0.2 * rr()) : W * (0.78 + 0.2 * rr())) : W * rr(); this.FF.hy[i] = this.waterY - v.asp * (2 + rr() * 8); this.FF.x[i] = this.FF.hx[i]; this.FF.y[i] = this.FF.hy[i]; this.FF.phi[i] = rr() * 6.28; this.FF.om[i] = 6.283 / (1.6 + rr() * 1.4); }
     this.J = []; for (let i = 0; i < 4; i++) this.J.push({ x: W * (0.2 + 0.2 * i) + rnd(-8, 8), y: this.sandTop - 14, vx: 0, vy: 0, ph: rnd(0, 6.28), sz: rnd(0.9, 1.3), col: [[197, 139, 255], [255, 140, 200], [127, 232, 224], [160, 180, 255]][i], pul: 0 });
     this.reef = genReef(v, { baseY: this.sandTop + v.asp * 0.3, topY: this.sandTop - H * 0.3, gap: 15, cap: 1500 });
@@ -1286,7 +1231,7 @@ class Estuary extends Scene {
   sim(dt) {
     const v = this.v, W = v.W, H = v.H, T = this.T += dt, asp = v.asp, wy = this.waterY, st = this.sandTop;
     if (this.goal !== null) { const dh = (this.goal - this.hours + 24) % 24; if (dh < 0.04) { this.goal = null; } else this.hours = (this.hours + Math.min(dh, 8 * dt)) % 24; }
-    else if (!reduce) this.hours = (this.hours + dt * 0.2) % 24;
+    else if (!GM.reducedMotion) this.hours = (this.hours + dt * 0.2) % 24;
     const h = this.hours, Nf = nightF(h), Pf = perchF(h), Sf = sleepFn(h), Df = duskF(h);
     this.Nf = Nf; this.Df = Df; const sun = h >= 6 && h <= 18 ? Math.sin(Math.PI * (h - 6) / 12) : 0; this.L = clamp(sun + 0.1 * (1 - Nf), 0, 1); this.Lw = 0.22 + 0.78 * this.L;
     // pointer
@@ -1359,18 +1304,20 @@ class Estuary extends Scene {
     const v = this.v, wr = Math.floor(this.waterY / v.asp);
     for (let r = Math.floor((y - R * 1.6) / v.asp); r <= Math.ceil((y + R * 1.6) / v.asp); r++) for (let c = Math.floor(x - R * 1.6); c <= Math.ceil(x + R * 1.6); c++) {
       if (r >= wr || r < 0) continue; const d = Math.hypot(c + 0.5 - x, (r + 0.5) * v.asp - y);
-      if (d < R) { let q = 1 - d / R * 0.55; if (craters && hash2(c * 3, r * 5) > 0.82) q *= 0.55; v.put(c, r, RAMP[clamp((q * 9) | 0, 5, 9)], col[0] * q, col[1] * q, col[2] * q); }
-      else if (d < R * 1.5) { const q = (1 - (d - R) / (R * 0.5)) * 0.5; v.put(c, r, 46, col[0] * q, col[1] * q, col[2] * q); }
+      if (d < R) { let q = 1 - d / R * 0.55; if (craters && hash2(c * 3, r * 5) > 0.82) q *= 0.55; cell(v, c, r, RAMP[clamp((q * 9) | 0, 5, 9)], col[0] * q, col[1] * q, col[2] * q); }
+      else if (d < R * 1.5) { const q = (1 - (d - R) / (R * 0.5)) * 0.5; cell(v, c, r, 46, col[0] * q, col[1] * q, col[2] * q); }
     }
   }
   draw() {
     const v = this.v, W = v.W, H = v.H, T = this.T, asp = v.asp, h = this.hours, Nf = this.Nf, L = this.L, Lw = this.Lw, wy = this.waterY, st = this.sandTop; if (!this.B) return;
     v.clear(); const wr = Math.floor(wy / asp), sk = this.sky || skyAt(h), bot = sk[1];
+    // sky and water as one gradient with a hard edge at the waterline
+    { const t = clamp(wy * v.cw, 1, v.vh - 1) / v.vh, g = v.ctx.createLinearGradient(0, 0, 0, v.vh); g.addColorStop(0, this.cs[0]); g.addColorStop(t, this.cs[1]); g.addColorStop(t, this.cs[2]); g.addColorStop(1, this.cs[3]); v.o.background = g; }
     // stars
-    for (const s of this.stars) { if (s.r >= wr - 1) continue; const a = Math.pow(Nf, 1.2) * (0.35 + 0.65 * Math.abs(Math.sin(T * 1.3 + s.ph))) * (1 - s.r / wr * 0.8); if (a > 0.08) v.put(s.x, s.r, a > 0.7 ? 42 : a > 0.4 ? 43 : 46, 255 * a, 250 * a, 235 * a); }
+    for (const s of this.stars) { if (s.r >= wr - 1) continue; const a = Math.pow(Nf, 1.2) * (0.35 + 0.65 * Math.abs(Math.sin(T * 1.3 + s.ph))) * (1 - s.r / wr * 0.8); if (a > 0.08) cell(v, s.x, s.r, a > 0.7 ? 42 : a > 0.4 ? 43 : 46, 255 * a, 250 * a, 235 * a); }
     // clouds
     const cl = mix(bot, [255, 255, 255], 0.35 + 0.3 * L), cd = 0.35 + 0.65 * (L + 0.15);
-    for (let r = 1; r < wr - 2; r++) for (let c = 0; c < v.cols; c++) { const n = vnoise(c * 0.04 + T * 0.02, r * 0.19 + 3); if (n > 0.64) { const q = (n - 0.64) * 3.2; v.put(c, r, q > 0.7 ? 61 : q > 0.35 ? 45 : 126 & 127, cl[0] * cd, cl[1] * cd, cl[2] * cd); } }
+    for (let r = 1; r < wr - 2; r++) for (let c = 0; c < v.cols; c++) { const n = vnoise(c * 0.04 + T * 0.02, r * 0.19 + 3); if (n > 0.64) { const q = (n - 0.64) * 3.2; cell(v, c, r, q > 0.7 ? 61 : q > 0.35 ? 45 : 126 & 127, cl[0] * cd, cl[1] * cd, cl[2] * cd); } }
     // sun and moon
     const sunS = (h - 6) / 12, sunUp = sunS > -0.04 && sunS < 1.04;
     let reflX = -1, reflC = null;
@@ -1378,19 +1325,19 @@ class Estuary extends Scene {
     const mh = h >= 18 ? h - 18 : h + 6, ms = mh / 12, moonUp = ms > -0.04 && ms < 1.04 && (h >= 17.5 || h < 6.5);
     if (moonUp) { const mx = W * (0.1 + 0.8 * ms), my = wy * (1 - 0.82 * Math.sin(Math.PI * clamp(ms, 0, 1))); this.disc(mx, my, 3.2, [215, 225, 248], true); if (reflX < 0) { reflX = mx; reflC = [190, 205, 235]; } }
     // water surface and reflection
-    for (let c = 0; c < v.cols; c++) { const w = Math.sin(c * 0.5 + T * 2) + Math.sin(c * 0.23 - T * 1.3); const sc = mix(bot, [255, 255, 255], 0.3); v.put(c, wr, w > -0.4 ? 126 & 127 : 45, sc[0] * (0.5 + 0.5 * L), sc[1] * (0.5 + 0.5 * L), sc[2] * (0.5 + 0.5 * L)); if (w > 0.9) v.put(c, wr + 1, 45, sc[0] * 0.4, sc[1] * 0.4, sc[2] * 0.4); }
-    if (reflC) for (let r = wr + 1; r < wr + 14; r++) { const dy = r - wr, half = 2 + dy * 0.5; for (let c = Math.floor(reflX - half); c <= Math.ceil(reflX + half); c++) if (vnoise(c * 0.35 + T * 0.8, r * 0.9 - T * 0.6) > 0.55 - 0.02 * dy * 0) v.put(c, r, dy < 5 ? 61 : 45, reflC[0] * (1 - dy / 14) * 0.9, reflC[1] * (1 - dy / 14) * 0.9, reflC[2] * (1 - dy / 14) * 0.9); }
+    for (let c = 0; c < v.cols; c++) { const w = Math.sin(c * 0.5 + T * 2) + Math.sin(c * 0.23 - T * 1.3); const sc = mix(bot, [255, 255, 255], 0.3); cell(v, c, wr, w > -0.4 ? 126 & 127 : 45, sc[0] * (0.5 + 0.5 * L), sc[1] * (0.5 + 0.5 * L), sc[2] * (0.5 + 0.5 * L)); if (w > 0.9) cell(v, c, wr + 1, 45, sc[0] * 0.4, sc[1] * 0.4, sc[2] * 0.4); }
+    if (reflC) for (let r = wr + 1; r < wr + 14; r++) { const dy = r - wr, half = 2 + dy * 0.5; for (let c = Math.floor(reflX - half); c <= Math.ceil(reflX + half); c++) if (vnoise(c * 0.35 + T * 0.8, r * 0.9 - T * 0.6) > 0.55 - 0.02 * dy * 0) cell(v, c, r, dy < 5 ? 61 : 45, reflC[0] * (1 - dy / 14) * 0.9, reflC[1] * (1 - dy / 14) * 0.9, reflC[2] * (1 - dy / 14) * 0.9); }
     // rays by day
-    if (L > 0.15) for (let r = wr + 2; r < wr + (st - wy) / asp * 0.7; r++) { const dep = (r - wr) / ((st - wy) / asp); for (let c = 0; c < v.cols; c++) { const n = vnoise((c + (r - wr) * 0.9 - (reflX > 0 ? reflX * 0.1 : 0)) * 0.06 + T * 0.05, 9.3), I = smooth(0.52, 0.9, n) * L * Math.pow(1 - dep, 1.4) * 0.55; if (I > 0.1) v.put(c, r, RAMP[clamp((I * 6) | 0, 1, 4)], 70 * I * 1.4, 170 * I * 1.4, 185 * I * 1.4); } }
+    if (L > 0.15) for (let r = wr + 2; r < wr + (st - wy) / asp * 0.7; r++) { const dep = (r - wr) / ((st - wy) / asp); for (let c = 0; c < v.cols; c++) { const n = vnoise((c + (r - wr) * 0.9 - (reflX > 0 ? reflX * 0.1 : 0)) * 0.06 + T * 0.05, 9.3), I = smooth(0.52, 0.9, n) * L * Math.pow(1 - dep, 1.4) * 0.55; if (I > 0.1) cell(v, c, r, RAMP[clamp((I * 6) | 0, 1, 4)], 70 * I * 1.4, 170 * I * 1.4, 185 * I * 1.4); } }
     // sand
-    for (let r = Math.floor(st / asp); r < v.rows; r++) for (let c = 0; c < v.cols; c++) { const n = hash2(c, r), ripl = Math.sin(c * 0.4 + r * 2 + vnoise(c * 0.1, r) * 6) > 0.6; v.put(c, r, ripl ? 45 : n > 0.7 ? 44 : n > 0.4 ? 46 : 58, 200 * Lw * (0.5 + n * 0.5), 175 * Lw * (0.5 + n * 0.5), 125 * Lw * (0.5 + n * 0.5)); }
+    for (let r = Math.floor(st / asp); r < v.rows; r++) for (let c = 0; c < v.cols; c++) { const n = hash2(c, r), ripl = Math.sin(c * 0.4 + r * 2 + vnoise(c * 0.1, r) * 6) > 0.6; cell(v, c, r, ripl ? 45 : n > 0.7 ? 44 : n > 0.4 ? 46 : 58, 200 * Lw * (0.5 + n * 0.5), 175 * Lw * (0.5 + n * 0.5), 125 * Lw * (0.5 + n * 0.5)); }
     // reeds
-    for (const rd of this.reeds) { const base = st, tp = rd.top; for (let y = tp; y < base; y += asp) { const w = 1 - (y - tp) / (base - tp), sway = Math.sin(T * 0.7 + rd.ph + y * 0.05) * 2.4 * w * w, nx = Math.sin(T * 0.7 + rd.ph + (y + asp) * 0.05) * 2.4 * (1 - (y + asp - tp) / (base - tp)) ** 2; const under = y > wy; const gl = (under ? 0.45 : 1) * (0.28 + 0.72 * Lw); v.putW(rd.x + sway, y, lineCode(nx - sway + 0.01, asp), 55 * gl, 150 * gl, 95 * gl); } const topSw = Math.sin(T * 0.7 + rd.ph + tp * 0.05) * 2.4; v.putW(rd.x + topSw, tp - asp * 0.6, 34, 170 * Lw, 130 * Lw, 80 * Lw); }
+    for (const rd of this.reeds) { const base = st, tp = rd.top; for (let y = tp; y < base; y += asp) { const w = 1 - (y - tp) / (base - tp), sway = Math.sin(T * 0.7 + rd.ph + y * 0.05) * 2.4 * w * w, nx = Math.sin(T * 0.7 + rd.ph + (y + asp) * 0.05) * 2.4 * (1 - (y + asp - tp) / (base - tp)) ** 2; const under = y > wy; const gl = (under ? 0.45 : 1) * (0.28 + 0.72 * Lw); cellW(v, rd.x + sway, y, lineCode(nx - sway + 0.01, asp), 55 * gl, 150 * gl, 95 * gl); } const topSw = Math.sin(T * 0.7 + rd.ph + tp * 0.05) * 2.4; cellW(v, rd.x + topSw, tp - asp * 0.6, 34, 170 * Lw, 130 * Lw, 80 * Lw); }
     drawReef(v, this.reef, T, 2.2, 0.3 + 0.7 * Lw, Nf * 0.45, 0);
     // food ripples
-    for (const r of this.rip) if (r.on) { const rad = r.t * 9, a = 1 - r.t / 2; v.putW(r.x - rad, wy - asp * 0.2, 40, 220 * a, 240 * a, 255 * a); v.putW(r.x + rad, wy - asp * 0.2, 41, 220 * a, 240 * a, 255 * a); }
+    for (const r of this.rip) if (r.on) { const rad = r.t * 9, a = 1 - r.t / 2; cellW(v, r.x - rad, wy - asp * 0.2, 40, 220 * a, 240 * a, 255 * a); cellW(v, r.x + rad, wy - asp * 0.2, 41, 220 * a, 240 * a, 255 * a); }
     // jellies and glow
-    const halo = (x, y, R, col, a) => { for (let rr_ = Math.floor((y - R) / asp); rr_ <= Math.ceil((y + R) / asp); rr_++) for (let c = Math.floor(x - R); c <= Math.ceil(x + R); c++) { const d = Math.hypot(c + 0.5 - x, (rr_ + 0.5) * asp - y); if (d >= R) continue; const w = (1 - d / R) * (1 - d / R) * a; if (w > 0.05) v.put(c, rr_, RAMP[clamp((w * 9) | 0, 1, 6)], col[0] * w * 1.5, col[1] * w * 1.5, col[2] * w * 1.5); } };
+    const halo = (x, y, R, col, a) => { for (let rr_ = Math.floor((y - R) / asp); rr_ <= Math.ceil((y + R) / asp); rr_++) for (let c = Math.floor(x - R); c <= Math.ceil(x + R); c++) { const d = Math.hypot(c + 0.5 - x, (rr_ + 0.5) * asp - y); if (d >= R) continue; const w = (1 - d / R) * (1 - d / R) * a; if (w > 0.05) cell(v, c, rr_, RAMP[clamp((w * 9) | 0, 1, 6)], col[0] * w * 1.5, col[1] * w * 1.5, col[2] * w * 1.5); } };
     for (const j of this.J) { const g = 0.12 + 0.3 * Nf; halo(j.x, j.y + 3, 15 * j.sz, j.col, g); }
     for (const j of this.J) drawJelly(v, j.x, j.y / asp, j.sz, j.pul, T, j.col, j.ph, 0.35 + 0.65 * Nf);
     // fish
@@ -1399,25 +1346,25 @@ class Estuary extends Scene {
       const sp = Math.hypot(F.vx[i], F.vy[i]), asleep = F.free[i] < 0.2 && sp < 3, dpt = 0.45 + 0.55 * (1 - (F.y[i] - wy) / (st - wy)), f = F.fl[i];
       const k = (asleep ? 0.38 : 1) * dpt * (0.4 + 0.6 * Lw + 0.2 * Nf) + f * 0.4;
       if (!asleep) fishTail(v, F.x[i], F.y[i], F.vx[i], F.vy[i], 60 * k, 120 * k, 135 * k);
-      v.putW(F.x[i], F.y[i], F.hc[i], 120 * k + f * 140, 235 * k + f * 30, 250 * k);
+      cellW(v, F.x[i], F.y[i], F.hc[i], 120 * k + f * 140, 235 * k + f * 30, 250 * k);
     }
-    for (const f of this.food) if (f.on) v.putW(f.x, f.y, 46, 255, 214, 130);
-    for (const z of this.zs) if (z.on) { const a = 1 - z.t / 3; v.putW(z.x, z.y, z.t > 1.5 ? 90 : 122, 170 * a, 185 * a, 255 * a); }
+    for (const f of this.food) if (f.on) cellW(v, f.x, f.y, 46, 255, 214, 130);
+    for (const z of this.zs) if (z.on) { const a = 1 - z.t / 3; cellW(v, z.x, z.y, z.t > 1.5 ? 90 : 122, 170 * a, 185 * a, 255 * a); }
     // crab
     const c = this.crab, cr = Math.floor(st / asp) - 1, awake = Nf > 0.3 || c.alarm > 0, cx = Math.round(c.x);
     const spr = c.alarm > 0 ? '\\(OO)/' : awake ? (((c.step | 0) & 1) ? '/(oo)\\' : '\\(oo)/') : '_(-.-)_'; const cq = 0.5 + 0.5 * Lw + 0.2 * Nf;
-    for (let k = 0; k < spr.length; k++) v.put(cx - 3 + k, cr, spr.charCodeAt(k), 240 * cq, 110 * cq, 90 * cq);
+    for (let k = 0; k < spr.length; k++) cell(v, cx - 3 + k, cr, spr.charCodeAt(k), 240 * cq, 110 * cq, 90 * cq);
     // birds
     const dayInk = [14, 16, 36], moonI = [125, 140, 185], bc = mix(dayInk, moonI, smooth(0.2, 0.9, Nf));
     for (let i = 0; i < B.n; i++) {
       const perched = B.free[i] < 0.15 && Math.hypot(B.vx[i], B.vy[i]) < 4, sn = Math.sin(B.ph[i]);
-      v.putW(B.x[i], B.y[i], perched ? 118 : sn > 0.35 ? 118 : sn < -0.35 ? 94 : 45, bc[0], bc[1], bc[2]);
+      cellW(v, B.x[i], B.y[i], perched ? 118 : sn > 0.35 ? 118 : sn < -0.35 ? 94 : 45, bc[0], bc[1], bc[2]);
     }
     // fireflies
-    const FF = this.FF; if (Nf > 0.12) for (let i = 0; i < FF.n; i++) { const b = Math.pow(Math.max(0, Math.cos(FF.phi[i])), 6) * Nf; if (b > 0.1) { v.putW(FF.x[i], FF.y[i], b > 0.6 ? 42 : 43, 210 * b + 40, 255 * b, 120 * b); if (b > 0.7) { v.putW(FF.x[i] - 1, FF.y[i], 46, 120 * b, 160 * b, 60 * b); v.putW(FF.x[i] + 1, FF.y[i], 46, 120 * b, 160 * b, 60 * b); } } else if (Nf > 0.5) v.putW(FF.x[i], FF.y[i], 183, 50, 70, 40); }
+    const FF = this.FF; if (Nf > 0.12) for (let i = 0; i < FF.n; i++) { const b = Math.pow(Math.max(0, Math.cos(FF.phi[i])), 6) * Nf; if (b > 0.1) { cellW(v, FF.x[i], FF.y[i], b > 0.6 ? 42 : 43, 210 * b + 40, 255 * b, 120 * b); if (b > 0.7) { cellW(v, FF.x[i] - 1, FF.y[i], 46, 120 * b, 160 * b, 60 * b); cellW(v, FF.x[i] + 1, FF.y[i], 46, 120 * b, 160 * b, 60 * b); } } else if (Nf > 0.5) cellW(v, FF.x[i], FF.y[i], 183, 50, 70, 40); }
     // pointer light underwater at night
     if (v.pin && v.py > wy && Nf > 0.3) halo(v.px, v.py, 14, [255, 205, 125], 0.4 * Nf);
-    const sw = this.startle; if (sw.on) { const rad = sw.t * 48, a = 1 - sw.t / 1.4; for (let k = 0; k < 36; k++) { const th = k / 36 * 6.283; v.putW(sw.x + Math.cos(th) * rad, sw.y + Math.sin(th) * rad * 0.6, 46, 255 * a, 255 * a, 255 * a); } }
+    const sw = this.startle; if (sw.on) { const rad = sw.t * 48, a = 1 - sw.t / 1.4; for (let k = 0; k < 36; k++) { const th = k / 36 * 6.283; cellW(v, sw.x + Math.cos(th) * rad, sw.y + Math.sin(th) * rad * 0.6, 46, 255 * a, 255 * a, 255 * a); } }
   }
 }
 
@@ -1425,27 +1372,28 @@ class Estuary extends Scene {
 function thickAt(u) { if (u > 1 || u < -0.8) return 0; if (u >= 0.12) { const q = (u - 0.12) / 0.88; return 0.27 * Math.sqrt(Math.max(0, 1 - q * q)); } const q = (u + 0.8) / 0.92; return 0.035 + 0.235 * Math.pow(Math.sin(q * Math.PI / 2), 1.4); }
 class WhaleFx extends Scene {
   constructor(cv) {
-    super(new View(cv, { fs: 11, alpha: true, bloom: 0.5, bdiv: 4 }), { manual: true });
-    this.on = false; this.bub = Array.from({ length: 90 }, () => ({ on: false, x: 0, y: 0, vy: 0, vx: 0, t: 0 })); this.E = mkS(34); this.dir = 1; this.xc = 0; this.yc = 0; this.L = 100; this.ph = 0;
+    super(cv, { fs: 11, alpha: true, bloom: 0.5, bdiv: 4 });
+    this.on = false; this.bub = Array.from({ length: 90 }, () => ({ on: false, x: 0, y: 0, vy: 0, vx: 0, t: 0 })); this.E = mkS(34); this.dir = 1; this.xc = 0; this.yc = 0; this.L = 100; this.ph = 0; this.stillSec = 0;
   }
-  start() {
-    if (this.on) return; this.on = true; const cv = this.v.cv; cv.style.display = 'block'; this.v.layout(); const v = this.v; this.ready = true; this.vis = true; this.T = 0;
-    this.dir = Math.random() < 0.5 ? 1 : -1; this.L = Math.min(v.W * 0.64, 120); this.yc = v.H * 0.5; this.xc = reduce ? v.W / 2 : (this.dir > 0 ? -this.L * 0.55 : v.W + this.L * 0.55);
+  call() {
+    if (this.on) return; const v = this.v; this.cv.style.display = 'block'; v.layout(); this.on = true; this.T = 0;
+    this.dir = Math.random() < 0.5 ? 1 : -1; this.L = Math.min(v.W * 0.64, 120); this.yc = v.H * 0.5; this.xc = GM.reducedMotion ? v.W / 2 : (this.dir > 0 ? -this.L * 0.55 : v.W + this.L * 0.55);
     this.speed = (v.W + this.L * 1.1) / 11;
     const E = this.E; for (let i = 0; i < E.n; i++) { E.x[i] = this.xc - this.dir * this.L * 0.6 + rnd(-8, 8); E.y[i] = this.yc + rnd(5, 16); E.vx[i] = this.dir * 20; E.vy[i] = 0; }
     WHALE.on = true; say('A whale passes overhead.');
-    if (reduce) { this.sim(0.016); this.draw(); v.render(); setTimeout(() => this.stop(), 4200); }
+    if (GM.reducedMotion) { this.sim(0.016); v.invalidate(); setTimeout(() => this.stop(), 4200); }
+    else { v.visible = true; v.resume(); }
   }
-  stop() { this.on = false; this.vis = false; WHALE.on = false; this.v.cv.style.display = 'none'; }
+  stop() { this.on = false; WHALE.on = false; this.cv.style.display = 'none'; }
   sim(dt) {
     const v = this.v, T = this.T += dt, d = this.dir, L = this.L; if (!this.on) return;
-    if (!reduce) this.xc += d * this.speed * dt; this.yc = v.H * 0.5 + Math.sin(T * 0.5) * v.H * 0.05; this.ph += dt * 2.6;
+    if (!GM.reducedMotion) this.xc += d * this.speed * dt; this.yc = v.H * 0.5 + Math.sin(T * 0.5) * v.H * 0.05; this.ph += dt * 2.6;
     WHALE.x = this.xc * v.cw; WHALE.y = this.yc * v.cw; WHALE.r = L * 0.5 * v.cw * 0.7;
     const tailX = this.xc - d * L * 0.5;
     if (Math.random() < dt * 40) for (const b of this.bub) if (!b.on) { b.on = true; b.x = tailX + rnd(-3, 3) - d * 2; b.y = this.yc + rnd(-6, 6) + Math.sin(this.ph + 1) * 4; b.vx = -d * rnd(2, 8); b.vy = -rnd(1, 6); b.t = 0; break; }
     for (const b of this.bub) if (b.on) { b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt; if (b.t > 2.4) b.on = false; }
     const E = this.E; flock(E, dt, { R: 12, sep: 3, sepW: 30, ali: 3, coh: 0.8, wand: 10, wall: 0.1, m: 0, x0: -40, x1: v.W + 40, y0: -10, y1: v.H + 10, ax: this.xc - d * L * 0.25, ay: this.yc + L * 0.16, aw: 0.35, swirl: 0.25, T }); moveS(E, dt, 38, 8);
-    if (!reduce && ((d > 0 && this.xc > v.W + L * 0.6) || (d < 0 && this.xc < -L * 0.6))) this.stop();
+    if (!GM.reducedMotion && ((d > 0 && this.xc > v.W + L * 0.6) || (d < 0 && this.xc < -L * 0.6))) this.stop();
   }
   draw() {
     const v = this.v, d = this.dir, L = this.L, half = L / 2, yc = this.yc, xc = this.xc, asp = v.asp; v.clear(); if (!this.on) return;
@@ -1469,10 +1417,10 @@ class WhaleFx extends Scene {
       let R = lerp(95, 215, tt) * q + 10, G = lerp(130, 232, tt) * q + 10, B = lerp(178, 245, tt) * q + 10;
       let ch = RAMP[clamp(1 + (br * 8.6 | 0), 1, 9)];
       if (part === 0 && Math.abs(u - 0.8) < 0.025 && Math.abs(vb - 0.04) < 0.022) { ch = 64; R = 12; G = 16; B = 30; }
-      v.put(c, r, ch, R, G, B);
+      cell(v, c, r, ch, R, G, B);
     }
-    for (const b of this.bub) if (b.on) { const a = 1 - b.t / 2.4; v.putW(b.x, b.y, a > 0.6 ? 79 : a > 0.3 ? 111 : 46, 150 * a, 220 * a, 240 * a); }
-    const E = this.E; for (let i = 0; i < E.n; i++) v.putW(E.x[i], E.y[i], E.hc[i], 140, 225, 235);
+    for (const b of this.bub) if (b.on) { const a = 1 - b.t / 2.4; cellW(v, b.x, b.y, a > 0.6 ? 79 : a > 0.3 ? 111 : 46, 150 * a, 220 * a, 240 * a); }
+    const E = this.E; for (let i = 0; i < E.n; i++) cellW(v, E.x[i], E.y[i], E.hc[i], 140, 225, 235);
   }
 }
 function s_(u) { return u * 6; }
@@ -1490,13 +1438,14 @@ function boot() {
   const glyph = new GlyphFx($('#burger canvas'));
   const hab = $('#habPanel'), mp = $('#mPanel'), habBtn = $('#habBtn'), burger = $('#burger');
   const habFx = new PanelFx(hab, habBtn), mFx = new PanelFx(mp, burger);
+  const whale = new WhaleFx($('#whaleCv'));
   hero.onDownBase = hero.onDown;
   const origDown = hero.onDown.bind(hero);
-  hero.onDown = (x, y) => { origDown(x, y); if (reduce) hero.poke(0.8); };
+  hero.onDown = (x, y) => { origDown(x, y); if (GM.reducedMotion) hero.poke(0.8); };
   const reefDown = reef.onDown.bind(reef);
-  reef.onDown = (x, y) => { if (reduce) { reef.ox = x; reef.oy = y; reef.bloom(0.8); reef.poke(1.8); return; } reefDown(x, y); };
+  reef.onDown = (x, y) => { if (GM.reducedMotion) { reef.ox = x; reef.oy = y; reef.bloom(0.8); reef.poke(1.8); return; } reefDown(x, y); };
 
-  scenes.filter(s => !s.manual).forEach(s => s.start());
+  scenes.forEach(s => s.start());
   // ----- logo state chips -----
   const chips = $$('[data-state]');
   const setChip = st => chips.forEach(c => c.setAttribute('aria-pressed', c.dataset.state === st ? 'true' : 'false'));
@@ -1505,19 +1454,18 @@ function boot() {
     if (st === 'attention') { logoBig.force = 2.6; logoBig.wave = -3; logoBig.poke(1.6); setTimeout(() => setChip('idle'), 2800); }
     else if (st === 'form') { logoBig.formed = true; logoBig.form(false); logoBig.poke(3); setTimeout(() => setChip('idle'), 3200); }
   }));
-  logoNav.v.cv.closest('.brand').addEventListener('pointerenter', () => { logoNav.force = 1.2; logoNav.poke(0.8); });
+  logoNav.cv.closest('.brand').addEventListener('pointerenter', () => { logoNav.force = 1.2; logoNav.poke(0.8); });
   $('#logoBig').addEventListener('click', () => { logoBig.scatter(); });
   // ----- reef hold button -----
   const hb = $('#holdBtn');
-  hb.addEventListener('pointerdown', () => { if (!reduce) reef.holdStart(); }); hb.addEventListener('pointerleave', () => reef.holdEnd());
-  hb.addEventListener('keydown', e => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat && !reduce) { reef.holdStart(); e.preventDefault(); } });
+  hb.addEventListener('pointerdown', () => { if (!GM.reducedMotion) reef.holdStart(); }); hb.addEventListener('pointerleave', () => reef.holdEnd());
+  hb.addEventListener('keydown', e => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat && !GM.reducedMotion) { reef.holdStart(); e.preventDefault(); } });
   hb.addEventListener('keyup', e => { if (e.key === ' ' || e.key === 'Enter') reef.holdEnd(); }); hb.addEventListener('blur', () => reef.holdEnd());
-  hb.addEventListener('click', () => { if (reduce) { reef.ox = reef.v.W / 2; reef.oy = reef.v.H * 0.45; reef.bloom(0.8); reef.poke(1.8); } });
+  hb.addEventListener('click', () => { if (GM.reducedMotion) { reef.ox = reef.v.W / 2; reef.oy = reef.v.H * 0.45; reef.bloom(0.8); reef.poke(1.8); } });
   // ----- estuary clock -----
   $$('[data-hour]').forEach(b => b.addEventListener('click', () => { est.setHour(parseFloat(b.dataset.hour)); say('The estuary moves to ' + b.textContent.trim().toLowerCase() + '.'); }));
   // ----- whale -----
-  const whale = new WhaleFx($('#whaleCv'));
-  const callWhale = () => whale.start();
+  const callWhale = () => whale.call();
   $$('[data-whale]').forEach(b => b.addEventListener('click', callWhale));
   let keys = '';
   addEventListener('keydown', e => { if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return; if (/input|textarea|select/i.test((e.target.tagName || ''))) return; keys = (keys + e.key.toLowerCase()).slice(-5); if (keys === 'whale') { keys = ''; callWhale(); } });
@@ -1544,7 +1492,9 @@ function boot() {
   document.addEventListener('pointerdown', e => { if (!e.target.closest('.has-menu')) closeHab(); if (!e.target.closest('#mPanel,#burger')) closeM(); });
   addEventListener('resize', () => { if (innerWidth > 860) closeM(); });
   habBtn.parentElement.addEventListener('focusout', e => { if (!li.contains(e.relatedTarget)) closeHab(); });
-  requestAnimationFrame(t => { last = t; frame(t); });
+  // reduced motion has no loop: keep the current-section fish in step with scrolling by hand
+  let scrollT = 0;
+  addEventListener('scroll', () => { if (!GM.reducedMotion || scrollT) return; scrollT = setTimeout(() => { scrollT = 0; navFx.poke(1.6); }, 150); }, { passive: true });
 }
 const fontsReady = (document.fonts && document.fonts.load)
   ? Promise.race([Promise.all([document.fonts.load('600 16px "JetBrains Mono"'), document.fonts.load('700 40px "Unbounded"')]), new Promise(r => setTimeout(r, 1600))]).catch(() => 0)
