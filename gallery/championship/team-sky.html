@@ -1,0 +1,1189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meridian: one sky</title>
+<meta name="description" content="Meridian is a shared calendar that follows the sun. A design language where the whole page is one continuous sky.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#f1f5ff; --mut:#bccade; --sun:#ffc27a; --sun2:#ff9f6b; --cool:#8fd0ff; --night:#070b1e;
+  --panel:rgba(6,10,28,.66); --edge:rgba(190,215,255,.24);
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --disp:"Bebas Neue", Impact, "Arial Narrow", "Helvetica Neue", sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:#0a1030;scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:#0a1030;color:var(--ink);font:400 15px/1.65 var(--mono);overflow-x:hidden;min-height:100vh}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+canvas{display:block}
+#sky{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+#fx{position:fixed;inset:0;width:100%;height:100%;z-index:60;pointer-events:none}
+main{position:relative;z-index:1}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+a{color:inherit}
+:focus-visible{outline:2px solid #fff;outline-offset:4px;box-shadow:0 0 0 5px rgba(255,194,122,.55)}
+
+/* ---------- nav ---------- */
+.nav{position:fixed;top:0;left:0;right:0;height:60px;z-index:50;background:linear-gradient(to bottom,rgba(5,8,24,.72),rgba(5,8,24,.5));border-bottom:1px solid var(--edge)}
+.nav-in{height:100%;max-width:1180px;margin:0 auto;padding:0 16px;display:flex;align-items:center;gap:20px}
+.brand{display:flex;align-items:center;gap:8px;text-decoration:none;border-radius:6px;padding:2px 4px}
+.brand canvas{width:54px;height:44px}
+.brand span{font:400 28px/1 var(--disp);letter-spacing:.09em;color:#fff;text-shadow:0 0 14px rgba(255,194,122,.45)}
+.links{display:flex;gap:2px;list-style:none;margin:0 0 0 12px;padding:0}
+.links a,.links button.tl{font:600 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#e7eefc;text-decoration:none;background:none;border:0;padding:12px 12px;border-radius:6px;cursor:pointer;position:relative;display:inline-flex;align-items:center;gap:6px}
+.links a::after,.links button.tl::after{content:"";position:absolute;left:12px;right:12px;bottom:6px;height:1px;background:linear-gradient(90deg,transparent,var(--sun),transparent);transform:scaleX(0);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.links a:hover::after,.links button.tl:hover::after,.links button.tl[aria-expanded=true]::after{transform:scaleX(1)}
+.links a:hover,.links button.tl:hover{color:#fff;background:rgba(255,194,122,.1)}
+.chev{width:8px;height:8px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);transition:transform .35s}
+button[aria-expanded=true] .chev{transform:rotate(225deg) translateY(-2px)}
+.sp{flex:1}
+.nav .live{display:inline-flex}
+.burger{display:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--edge);background:rgba(6,10,28,.5);cursor:pointer;position:relative;color:#fff}
+.burger i{position:absolute;left:12px;right:12px;height:2px;background:currentColor;border-radius:2px;transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .3s,top .45s}
+.burger i:nth-child(1){top:15px}.burger i:nth-child(2){top:21px}.burger i:nth-child(3){top:27px}
+.burger[aria-expanded=true] i:nth-child(1){top:21px;transform:rotate(45deg)}
+.burger[aria-expanded=true] i:nth-child(2){opacity:0;transform:scaleX(.2)}
+.burger[aria-expanded=true] i:nth-child(3){top:21px;transform:rotate(-45deg)}
+
+.mega{position:fixed;top:60px;left:0;right:0;z-index:55;background:rgba(7,11,32,.985);border-bottom:1px solid var(--edge);padding:30px 16px 34px;clip-path:circle(0px at 50% 0)}
+.mega[hidden]{display:none}
+#menucv{position:fixed;left:0;top:60px;width:100%;height:0;z-index:56;pointer-events:none}
+.mega-in{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr) 1.25fr;gap:28px}
+.mega h3{margin:0 0 10px;font:600 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--sun)}
+.mega ul{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.mega li a{display:block;padding:8px 10px;margin:0 -10px;border-radius:6px;text-decoration:none;color:#e9f0ff;font-size:14px;transition:background .3s,transform .3s}
+.mega li a small{display:block;color:var(--mut);font-size:12px;line-height:1.4}
+.mega li a:hover{background:rgba(143,208,255,.12);transform:translateX(4px)}
+.mega .now{border:1px solid var(--edge);border-radius:10px;padding:16px;background:rgba(143,208,255,.06)}
+.mega .now b{display:block;font:400 44px/1 var(--disp);letter-spacing:.04em;color:#fff}
+.mega .now p{margin:6px 0 0;font-size:12px;color:var(--mut)}
+.mob{display:none}
+
+/* ---------- sections ---------- */
+section{position:relative;padding:110px 16px}
+.wrap{max-width:1100px;margin:0 auto}
+h2{margin:0 0 14px;font:400 clamp(46px,8vw,92px)/.92 var(--disp);letter-spacing:.02em;text-shadow:0 2px 28px rgba(0,0,0,.5);text-wrap:balance}
+.eyebrow{display:inline-block;font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:#fff;background:var(--panel);border:1px solid var(--edge);padding:8px 10px;border-radius:4px;margin-bottom:16px}
+.lede{max-width:560px;margin:0 0 28px;background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:14px 16px;color:#eaf0ff}
+.panel{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:20px}
+
+.hero{min-height:100svh;padding-top:96px;padding-bottom:70px;display:flex;align-items:center}
+.hero .wrap{width:100%;text-align:center}
+.logo-btn{display:block;width:100%;max-width:1100px;margin:0 auto;background:radial-gradient(ellipse 60% 60% at 50% 50%,rgba(5,8,30,.42),transparent 72%);border:0;padding:0;cursor:pointer;border-radius:12px;color:inherit}
+.logo-btn canvas{width:100%;height:240px}
+.hero .lede{margin-left:auto;margin-right:auto;text-align:left}
+.cta{display:flex;flex-wrap:wrap;justify-content:center;gap:18px 22px;margin:34px 0 20px}
+.hint{display:inline-block;font-size:12px;letter-spacing:.04em;color:#e8eefc;background:var(--panel);border:1px solid var(--edge);border-radius:999px;padding:8px 14px;margin:6px 0 0}
+.hint b{color:var(--sun)}
+
+/* ---------- buttons ---------- */
+.btn{font:700 13px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;border:1px solid transparent;border-radius:8px;padding:17px 26px;cursor:pointer;color:#fff;background:none;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:50px;position:relative;transition:transform .25s cubic-bezier(.2,.8,.2,1),background .35s,border-color .35s,color .35s,box-shadow .35s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.btn:active{transform:translateY(2px) scale(.975)}
+.btn-primary{background:linear-gradient(180deg,#ffd49b,#ff9f6b);color:#2a1424;box-shadow:0 8px 26px -8px rgba(255,150,90,.7),inset 0 1px 0 rgba(255,255,255,.55)}
+.btn-primary:hover{box-shadow:0 12px 34px -6px rgba(255,170,100,.85),inset 0 1px 0 rgba(255,255,255,.7);transform:translateY(-2px)}
+.btn-primary:active{transform:translateY(2px) scale(.975)}
+.btn-second{background:rgba(6,10,28,.62);border-color:rgba(190,225,255,.5);color:#e8f4ff}
+.btn-second:hover{border-color:#bfe6ff;background:rgba(40,80,130,.55);box-shadow:0 0 28px -4px rgba(143,208,255,.5)}
+.btn-ghost{padding:15px 10px;background:rgba(6,10,28,.38);border-radius:6px;color:#fff;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:6px}
+.btn-ghost:hover{background:rgba(6,10,28,.55);text-decoration-style:solid}
+.btn-icon{width:54px;height:54px;padding:0;border-radius:50%;background:rgba(6,10,28,.62);border-color:var(--edge)}
+.btn-icon:hover{border-color:var(--sun);box-shadow:0 0 30px -2px rgba(255,194,122,.6)}
+.btn-icon svg{width:26px;height:26px;transition:transform .8s cubic-bezier(.2,.8,.2,1)}
+.btn-icon:hover svg{transform:rotate(90deg)}
+.btn-danger{background:rgba(40,8,18,.7);border-color:rgba(255,130,130,.6);color:#ffd5d5}
+.btn-danger:hover{background:rgba(90,16,32,.8);border-color:#ff9a9a}
+.shake{animation:shake .42s linear}
+@keyframes shake{20%{transform:translate(-4px,1px)}40%{transform:translate(4px,-1px)}60%{transform:translate(-3px,0)}80%{transform:translate(2px,1px)}}
+.tog{display:inline-flex;align-items:center;gap:12px;padding:10px 18px 10px 10px;background:rgba(6,10,28,.62);border:1px solid var(--edge);border-radius:999px;color:#fff;font:700 12px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;cursor:pointer;min-height:46px}
+.tog .knob{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#cfd8f5,#6b7cb0);display:grid;place-items:center;transition:transform .5s cubic-bezier(.2,.8,.2,1),background .5s,box-shadow .5s;transform:translateX(0)}
+.tog[aria-pressed=true] .knob{background:radial-gradient(circle at 35% 35%,#fff3c4,#ffb04d);box-shadow:0 0 20px rgba(255,190,90,.8);transform:translateX(2px) rotate(180deg)}
+.tog:hover{border-color:var(--sun)}
+.tog .st::before{content:"off"}.tog[aria-pressed=true] .st::before{content:"on"}
+.nav .tog{min-height:38px;padding:5px 14px 5px 6px;font-size:11px}
+.nav .tog .knob{width:24px;height:24px}
+
+.grid6{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.cell{display:flex;flex-direction:column;gap:14px;align-items:flex-start}
+.cell .stage{min-height:76px;display:flex;align-items:center}
+.cell p{margin:0;font-size:13px;color:#dfe8fa}
+.cell p b{color:var(--sun);font-weight:600}
+.cell .tag{font:600 10px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--cool)}
+
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:8px}
+.three h3{margin:0 0 8px;font:400 32px/1 var(--disp);letter-spacing:.05em;color:#fff}
+.three p{margin:0;font-size:14px;color:#dfe8fa}
+kbd{font:600 12px var(--mono);border:1px solid var(--edge);border-bottom-width:2px;border-radius:4px;padding:1px 6px;background:rgba(255,255,255,.08)}
+
+/* ---------- storm ---------- */
+.storm{min-height:110vh;display:flex;align-items:center;text-align:center}
+.storm .wrap{display:flex;flex-direction:column;align-items:center}
+.storm .lede{text-align:left}
+.hold{font:400 clamp(34px,6vw,56px)/1 var(--disp);letter-spacing:.08em;padding:34px 54px;border-radius:999px;background:rgba(8,12,34,.8);border:1px solid rgba(190,215,255,.45);color:#fff;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;position:relative;overflow:hidden;transition:border-color .3s,box-shadow .3s;margin:18px 0 10px;-webkit-touch-callout:none}
+.hold .fill{position:absolute;left:0;bottom:0;height:100%;width:calc(var(--c,0)*100%);background:linear-gradient(90deg,rgba(143,208,255,.0),rgba(143,208,255,.38));pointer-events:none}
+.hold span{position:relative}
+.hold:hover{border-color:var(--cool);box-shadow:0 0 40px -6px rgba(143,208,255,.6)}
+.hold.on{border-color:#fff;box-shadow:0 0 60px -2px rgba(190,230,255,.9)}
+.meter{font-size:12px;color:#e8eefc;background:var(--panel);border:1px solid var(--edge);border-radius:999px;padding:7px 14px;margin-top:8px}
+.meter b{color:var(--cool)}
+
+/* ---------- notes ---------- */
+.notes{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;margin-top:28px}
+.note{grid-column:span 2;display:flex;flex-direction:column;gap:10px}
+.note:nth-child(4){grid-column:2/span 2}.note:nth-child(5){grid-column:4/span 2}
+.note .n{font:400 18px/1 var(--disp);letter-spacing:.2em;color:var(--sun)}
+.note h3{margin:0;font:400 34px/1 var(--disp);letter-spacing:.04em}
+.note p{margin:0;font-size:13.5px;color:#dfe8fa}
+.ramp{font:700 22px/1 var(--mono);letter-spacing:.12em;color:#fff;background:rgba(0,0,0,.28);border-radius:6px;padding:10px 12px;overflow:hidden;white-space:pre}
+.pal{height:18px;border-radius:4px;background:linear-gradient(90deg,#071029,#2f3a86 12%,#ff8d6b 24%,#ffc59a 32%,#4a9bea 48%,#1f5fb8 62%,#7c8aa0 74%,#ff7a4a 86%,#2a2b66 94%,#04050f)}
+
+/* ---------- footer ---------- */
+footer{position:relative;min-height:120vh;padding:100px 16px 28px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+#footcv{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+footer .wrap{position:relative;z-index:1;width:100%}
+footer h2{max-width:900px}
+.clocks{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:26px 0 0;max-width:820px}
+.clock{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:12px 14px}
+.clock b{display:block;font:400 38px/1 var(--disp);letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.clock span{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);display:flex;align-items:center;gap:6px}
+.clock i{width:8px;height:8px;border-radius:50%;background:#556;display:inline-block}
+.clock.day i{background:var(--sun);box-shadow:0 0 10px var(--sun)}
+.clock.night i{background:#9db4ff;box-shadow:0 0 8px #9db4ff}
+.footbar{position:relative;z-index:1;background:linear-gradient(to bottom,rgba(3,5,16,0),rgba(3,5,16,.9) 60px,rgba(3,5,16,.94));padding:90px 0 0;margin:0 -16px;padding-left:16px;padding-right:16px}
+.fcols{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:26px;max-width:1100px;margin:0 auto}
+.fcols h3{margin:0 0 10px;font:600 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--sun)}
+.fcols ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.fcols a{text-decoration:none;color:#e5ecfb;font-size:14px;display:inline-block;padding:3px 0}
+.fcols a:hover{color:#fff;text-decoration:underline;text-decoration-style:wavy;text-underline-offset:5px}
+.sub{display:flex;flex-wrap:wrap;gap:10px}
+.sub input{flex:1 1 170px;min-width:0;font:400 14px var(--mono);color:#fff;background:rgba(255,255,255,.07);border:1px solid var(--edge);border-radius:8px;padding:14px 14px}
+.sub input::placeholder{color:#93a3c2}
+.fine{max-width:1100px;margin:34px auto 0;padding-top:16px;border-top:1px solid var(--edge);display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between;font-size:12px;color:var(--mut)}
+.readout{transition:opacity .6s;position:fixed;left:16px;bottom:14px;z-index:40;font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#fff;background:rgba(5,8,24,.7);border:1px solid var(--edge);border-radius:999px;padding:9px 14px;display:flex;gap:10px;align-items:center;pointer-events:none}
+.readout i{width:8px;height:8px;border-radius:50%;background:var(--sun);box-shadow:0 0 10px var(--sun)}
+.readout em{font-style:normal;color:var(--sun)}
+.status{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+@media (max-width:900px){
+  .links,.nav .live{display:none}
+  .burger{display:block;margin-left:auto}
+  .nav-in{gap:10px}
+  .mega{bottom:0;overflow:auto;padding:22px 16px 40px}
+  .mega-in{grid-template-columns:1fr 1fr;gap:22px}
+  .mega .now{grid-column:1/-1}
+  .mob{display:grid;grid-column:1/-1;gap:2px}
+  .mob a{font:400 38px/1.05 var(--disp);letter-spacing:.05em;text-decoration:none;padding:6px 0;color:#fff}
+  .grid6,.three{grid-template-columns:1fr 1fr}
+  .notes{grid-template-columns:1fr 1fr}.note,.note:nth-child(4),.note:nth-child(5){grid-column:auto}
+  .fcols{grid-template-columns:1fr 1fr}
+  .clocks{grid-template-columns:1fr 1fr}
+}
+@media (max-width:620px){
+  section{padding:84px 16px}
+  .grid6,.three,.notes,.mega-in{grid-template-columns:1fr}
+  .hero{padding-top:84px}
+  .logo-btn canvas{height:150px}
+  .btn{padding:16px 20px}
+  .hold{padding:28px 34px}
+  .fcols{grid-template-columns:1fr 1fr}
+  .readout{font-size:10px;padding:8px 11px}
+  footer{min-height:130vh}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<header class="nav" id="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top" aria-label="Meridian, home"><canvas id="logo-nav" aria-hidden="true"></canvas><span>Meridian</span></a>
+    <ul class="links">
+      <li><button class="tl" type="button" id="trig" aria-expanded="false" aria-controls="mega" data-fx="link">Product <i class="chev"></i></button></li>
+      <li><a href="#buttons" data-fx="link">Buttons</a></li>
+      <li><a href="#storm" data-fx="link">Storm</a></li>
+      <li><a href="#notes" data-fx="link">Notes</a></li>
+    </ul>
+    <span class="sp"></span>
+    <button class="tog live js-live" type="button" aria-pressed="false" data-fx="toggle"><span class="knob" aria-hidden="true"></span><span>Live sky <span class="st"></span></span></button>
+    <button class="burger" type="button" id="burger" aria-expanded="false" aria-controls="mega" aria-label="Open menu" data-fx="icon"><i></i><i></i><i></i></button>
+  </div>
+  <div class="mega" id="mega" hidden>
+    <div class="mega-in">
+      <nav class="mob" aria-label="Sections">
+        <a href="#buttons">Buttons</a><a href="#storm">Storm</a><a href="#notes">Notes</a>
+      </nav>
+      <div><h3>Plan</h3><ul>
+        <li><a href="#buttons">Sun calendar<small>Every hour colored by daylight</small></a></li>
+        <li><a href="#buttons">Handoff windows<small>Where two mornings overlap</small></a></li>
+        <li><a href="#buttons">Quiet hours<small>Protected, like a night sky</small></a></li>
+      </ul></div>
+      <div><h3>Watch</h3><ul>
+        <li><a href="#storm">Team weather<small>Who is swamped, who is clear</small></a></li>
+        <li><a href="#storm">Daylight map<small>The terminator, live</small></a></li>
+        <li><a href="#storm">Storm alerts<small>Overbooked days, flagged early</small></a></li>
+      </ul></div>
+      <div><h3>Learn</h3><ul>
+        <li><a href="#notes">Field guide<small>Language notes for the sky</small></a></li>
+        <li><a href="#notes">Changelog<small>What changed this season</small></a></li>
+        <li><a href="#top">Back to dawn<small>Start over</small></a></li>
+      </ul></div>
+      <div class="now"><h3>Right now</h3><b id="nowclock">06:00</b><p id="nowtxt">The sky is following your scroll. Switch on Live sky to follow your own clock.</p></div>
+    </div>
+  </div>
+</header>
+<canvas id="menucv" aria-hidden="true"></canvas>
+
+<div class="readout" aria-hidden="true"><i></i><span id="rdclock">06:00</span><em id="rdlabel">dawn</em></div>
+
+<main id="top">
+  <section class="hero" data-sky="6.5,0,0" data-at=".35">
+    <div class="wrap">
+      <h1 class="sr">Meridian</h1>
+      <button class="logo-btn" id="logobtn" type="button" aria-label="Meridian. Press to watch the wordmark form again.">
+        <canvas id="logo-big" aria-hidden="true"></canvas>
+      </button>
+      <p class="lede">A shared calendar that follows the light. Find the hour when everyone on your team is awake, fed and at their best.</p>
+      <div class="cta">
+        <button class="btn btn-primary" type="button" data-fx="cloud" id="cta1">Start a clear day</button>
+        <button class="btn btn-second" type="button" data-fx="mist" id="cta2">See today's sky</button>
+        <a class="btn btn-ghost" href="#storm" data-fx="breeze">Read the forecast</a>
+      </div>
+      <div class="hint"><b>Try it:</b> move through the sky, scroll to watch the day pass, then hold the button in the storm.</div>
+    </div>
+  </section>
+
+  <section id="buttons" data-sky="11.6,0.05,0">
+    <div class="wrap">
+      <span class="eyebrow">01 / Buttons</span>
+      <h2>Buttons are weather</h2>
+      <p class="lede">Hover changes the air. Press makes it rain. Keyboard focus lights a ring of stars. Every control is a small piece of sky.</p>
+      <div class="grid6">
+        <div class="panel cell"><span class="tag">Primary</span><div class="stage"><button class="btn btn-primary" type="button" data-fx="cloud" id="b1">Gather clouds</button></div><p><b>Hover:</b> clouds gather around it. <b>Press:</b> they darken and it rains.</p></div>
+        <div class="panel cell"><span class="tag">Secondary</span><div class="stage"><button class="btn btn-second" type="button" data-fx="mist" id="b2">Cool the air</button></div><p><b>Hover:</b> cold mist falls. <b>Press:</b> a breath of fog.</p></div>
+        <div class="panel cell"><span class="tag">Ghost</span><div class="stage"><button class="btn btn-ghost" type="button" data-fx="breeze" id="b3">Catch the breeze</button></div><p><b>Hover:</b> wind lines cross it. <b>Press:</b> a gust.</p></div>
+        <div class="panel cell"><span class="tag">Icon</span><div class="stage"><button class="btn btn-icon" type="button" data-fx="ray" id="tl" aria-label="Play one full day in seven seconds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg></button></div><p><b>Press:</b> one full day passes in seven seconds. Worth pressing twice.</p></div>
+        <div class="panel cell"><span class="tag">Toggle</span><div class="stage"><button class="tog js-live" type="button" aria-pressed="false" data-fx="toggle"><span class="knob" aria-hidden="true"></span><span>Live sky <span class="st"></span></span></button></div><p><b>On:</b> the sky follows your own clock. Scroll still brings the storm and the stars.</p></div>
+        <div class="panel cell"><span class="tag">Destructive</span><div class="stage"><button class="btn btn-danger" type="button" data-fx="bolt" id="b6">Cancel event</button></div><p><b>Press:</b> lightning strikes the button. Nothing is deleted, it only looks like it.</p></div>
+      </div>
+      <p class="status" role="status" id="status"></p>
+    </div>
+  </section>
+
+  <section id="pointer" data-sky="14.2,0.3,0">
+    <div class="wrap">
+      <span class="eyebrow">02 / Pointer and menu</span>
+      <h2>The sky answers you</h2>
+      <p class="lede">There is no cursor. There is wind. The sky opens where you move and leaves a trail of light.</p>
+      <div class="three">
+        <div class="panel"><h3>Mouse is wind</h3><p>Clouds part around the pointer and a wake of light follows it. The faster you move, the wider the clearing.</p></div>
+        <div class="panel"><h3>Touch is a gust</h3><p>Tap anywhere and a ring of wind rolls outward. Drag to carve a path through the clouds.</p></div>
+        <div class="panel"><h3>Menu is a break</h3><p>Open Product in the bar. The overcast tears open from the button and a shaft of light falls through. Press <kbd>Esc</kbd> to close it.</p>
+          <p style="margin-top:12px"><button class="btn btn-second" type="button" data-fx="mist" id="openmenu">Open the menu</button></p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="storm" class="storm" data-sky="15.4,1,0">
+    <div class="wrap">
+      <span class="eyebrow">03 / The share moment</span>
+      <h2>Call the storm</h2>
+      <p class="lede">Hold the button. Clouds gather while you hold, the air crackles, and the sky holds its breath. Let go and it answers.</p>
+      <button class="hold" id="hold" type="button" aria-describedby="holdhelp"><span class="fill" aria-hidden="true"></span><span id="holdtxt">Hold to gather</span></button>
+      <div class="meter" id="holdhelp">Charge <b id="holdpct">0%</b> &middot; mouse, touch, or hold <kbd>Space</kbd></div>
+      <p class="status" role="status" id="holdstatus"></p>
+    </div>
+  </section>
+
+  <section id="notes" data-sky="18.5,0.15,0">
+    <div class="wrap">
+      <span class="eyebrow">04 / Language notes</span>
+      <h2>Five rules of the sky</h2>
+      <div class="notes">
+        <article class="panel note"><span class="n">01</span><h3>The palette is the clock</h3><div class="pal" role="img" aria-label="Color strip from night through dawn, noon, storm, dusk and back to night"></div><p>Every color is sampled from one sky: gold at the horizon, blue overhead, ink at night. Interface elements never bring a color of their own.</p></article>
+        <article class="panel note"><span class="n">02</span><h3>Depth is the ramp</h3><div class="ramp" aria-label="The character ramp from a space to an at sign">&nbsp;.:-=+*#%@</div><p>Thin air is a dot. Thick cloud is an at sign. Density is the only shading, so every picture is made of one alphabet.</p></article>
+        <article class="panel note"><span class="n">03</span><h3>Hover is temperature, press is rain</h3><p>Warm things rise, cool things fall. A press releases precipitation: rain, fog, wind or lightning. Each control owns one kind of weather.</p></article>
+        <article class="panel note"><span class="n">04</span><h3>Weather has inertia</h3><p>Nothing snaps. A sky eases over two seconds, a button over a third. Reduced motion keeps every still frame and still shows the change.</p></article>
+        <article class="panel note"><span class="n">05</span><h3>Focus is starlight</h3><p>Keyboard focus draws a twinkling ring of stars, always paired with a solid outline so it reads on any sky.</p></article>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer id="footer" data-sky="23.9,0,1" data-at=".4">
+  <canvas id="footcv" role="img" aria-label="Earth seen from orbit with a sunrise on the limb, aurora and a small station crossing the sky, drawn in text characters."></canvas>
+  <div class="wrap">
+    <span class="eyebrow">Night shift</span>
+    <h2>Somewhere it is always morning</h2>
+    <p class="lede">Meridian keeps your next handoff on the sunny side of the planet. Click the stars to make a wish.</p>
+    <div class="clocks" id="clocks" aria-label="Local times"></div>
+  </div>
+  <div class="footbar">
+    <div class="fcols">
+      <div><h3>Daily forecast</h3>
+        <form class="sub" id="subform" action="#" novalidate>
+          <label class="sr" for="em">Email</label>
+          <input id="em" type="email" placeholder="you@team.example" autocomplete="off">
+          <button class="btn btn-primary" type="submit" data-fx="cloud">Send me the sky</button>
+        </form>
+        <p class="status" role="status" id="substatus"></p>
+      </div>
+      <div><h3>Product</h3><ul><li><a href="#buttons">Sun calendar</a></li><li><a href="#buttons">Handoff windows</a></li><li><a href="#buttons">Quiet hours</a></li></ul></div>
+      <div><h3>Company</h3><ul><li><a href="#notes">About</a></li><li><a href="#notes">Field notes</a></li><li><a href="#notes">Careers</a></li></ul></div>
+      <div><h3>Help</h3><ul><li><a href="#top">Docs</a></li><li><a href="#top">Status</a></li><li><a href="#top">Contact</a></li></ul></div>
+    </div>
+    <div class="fine"><span>&copy; 2026 Meridian Labs. A fictional product under a real sky.</span><a href="#top" data-fx="breeze" class="btn btn-ghost" style="min-height:0;padding:6px 10px;font-size:11px">Back to dawn</a></div>
+  </div>
+</footer>
+
+<script>
+(() => {
+'use strict';
+const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const rnd = (a, b) => a + Math.random() * (b - a);
+function hash2(x, y) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const fbm = (x, y) => 0.55 * vnoise(x, y) + 0.3 * vnoise(x * 2 + 7.3, y * 2 + 3.1) + 0.15 * vnoise(x * 4 + 1.7, y * 4 + 9.2);
+const FAMILY = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
+const CH = []; for (let i = 0; i < 256; i++) CH[i] = String.fromCharCode(i);
+const RAMP = [32, 46, 58, 45, 61, 43, 42, 35, 37, 64]; // ' .:-=+*#%@'
+const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+const rgb = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
+
+/* ================= shared character-grid layer ================= */
+const FILL = new Array(1 << 18);
+function fillOf(k) {
+  let s = FILL[k];
+  if (!s) { s = FILL[k] = 'rgba(' + (((k >> 13) & 31) << 3) + ',' + (((k >> 8) & 31) << 3) + ',' + (((k >> 3) & 31) << 3) + ',' + ((((k & 7) + 1) / 8).toFixed(3)) + ')'; }
+  return s;
+}
+class Layer {
+  constructor(cv, o) {
+    this.cv = cv; this.o = o; this.ctx = cv.getContext('2d', { alpha: o.alpha !== false });
+    this.bcv = document.createElement('canvas'); this.bctx = this.bcv.getContext('2d');
+    this.bloom = o.bloom == null ? 0.4 : o.bloom; this.visible = true; this.ready = false;
+    this.cols = 1; this.rows = 1; this.cw = 6; this.chh = 12; this.vw = 1; this.vh = 1;
+  }
+  layout() {
+    const cv = this.cv, o = this.o;
+    let r = cv.getBoundingClientRect();
+    if (r.width < 2) { this.ready = false; return; }
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.vw = r.width; const fs = o.fsFn(this.vw, window.innerHeight);
+    this.fs = fs; this.font = '600 ' + fs.toFixed(2) + 'px ' + FAMILY;
+    const ctx = this.ctx; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.font = this.font;
+    this.cw = ctx.measureText('M').width || fs * 0.6; this.chh = fs * 1.2;
+    if (o.heightFn) { const h = o.heightFn(this.vw, this.cw, this.chh); cv.style.height = h + 'px'; r = cv.getBoundingClientRect(); }
+    this.vh = Math.max(1, r.height);
+    cv.width = Math.round(this.vw * dpr); cv.height = Math.round(this.vh * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = this.font; ctx.textBaseline = 'middle';
+    this.cols = Math.ceil(this.vw / this.cw); this.rows = Math.ceil(this.vh / this.chh); this.asp = this.chh / this.cw;
+    const N = this.N = this.cols * this.rows;
+    this.Bc = new Uint8Array(N); this.Br = new Uint8ClampedArray(N); this.Bg = new Uint8ClampedArray(N); this.Bb = new Uint8ClampedArray(N); this.Ba = new Uint8ClampedArray(N);
+    this.bcv.width = Math.max(1, Math.round(cv.width / 5)); this.bcv.height = Math.max(1, Math.round(cv.height / 5));
+    this.ready = true; this.dpr = dpr;
+    if (o.onLayout) o.onLayout(this);
+  }
+  clearBuf() { this.Bc.fill(0); }
+  put(i, ch, r, g, b, a) { this.Bc[i] = ch; this.Br[i] = r; this.Bg[i] = g; this.Bb[i] = b; this.Ba[i] = a; }
+  paint() {
+    const { ctx, cols, rows, cw, chh, Bc, Br, Bg, Bb, Ba } = this;
+    ctx.font = this.font; ctx.textBaseline = 'middle'; let last = -1;
+    for (let r = 0; r < rows; r++) {
+      const y = r * chh + chh * 0.5 + 0.5;
+      for (let c = 0, i = r * cols; c < cols; c++, i++) {
+        const ch = Bc[i]; if (!ch) continue;
+        const k = ((Br[i] >> 3) << 13) | ((Bg[i] >> 3) << 8) | ((Bb[i] >> 3) << 3) | (Ba[i] >> 5);
+        if (k !== last) { ctx.fillStyle = fillOf(k); last = k; }
+        ctx.fillText(CH[ch], c * cw, y);
+      }
+    }
+  }
+  bloomPass() {
+    if (!this.bloom) return;
+    const { ctx, bctx, bcv, cv } = this;
+    bctx.globalCompositeOperation = 'copy'; bctx.drawImage(cv, 0, 0, bcv.width, bcv.height);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = this.bloom;
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(bcv, 0, 0, cv.width, cv.height); ctx.restore();
+  }
+}
+
+/* ================= global state ================= */
+let T = 0, scY = window.scrollY || 0, VW = innerWidth, VH = innerHeight;
+const S = { clock: 4.6, storm: 0, space: 0, flash: 0, kick: 0, rain: 0, rbStart: -1, rainbow: 0, charge: 0 };
+let live = false, override = null, tl = null, clockT = 6.5, stormT = 0, spaceT = 0;
+const P = { x: -999, y: -999, act: 0, wake: 0, sp: 0, lx: 0, ly: 0, touch: false };
+const SK = { zen: [0, 0, 0], hor: [0, 0, 0], sunX: 0, sunY: 0, sunC: [255, 240, 200], alt: 1, moonX: 0, moonY: 0, nf: 0, cloud: [240, 244, 252], label: 'dawn' };
+
+/* ----- sky palettes by hour ----- */
+const PAL = [
+  [0, [3, 5, 20], [10, 12, 38]], [4.8, [8, 12, 40], [34, 30, 70]], [5.8, [36, 50, 116], [250, 132, 104]],
+  [7, [56, 108, 188], [255, 192, 146]], [10, [26, 90, 186], [118, 184, 238]], [13, [18, 72, 172], [92, 164, 230]],
+  [16, [32, 88, 178], [168, 198, 228]], [18, [46, 50, 120], [255, 128, 72]], [19.2, [22, 24, 72], [196, 80, 104]],
+  [20.6, [8, 10, 36], [40, 36, 84]], [24, [3, 5, 20], [10, 12, 38]]
+];
+const STORM_Z = [34, 40, 56], STORM_H = [88, 98, 114], SPACE_Z = [1, 2, 8], SPACE_H = [6, 5, 22];
+function skyColors() {
+  const h = ((S.clock % 24) + 24) % 24;
+  let i = 0; while (i < PAL.length - 2 && PAL[i + 1][0] <= h) i++;
+  const a = PAL[i], b = PAL[i + 1], t = (h - a[0]) / (b[0] - a[0]);
+  let zen = mix3(a[1], b[1], t), hor = mix3(a[2], b[2], t);
+  const st = S.storm * 0.86, sp = S.space;
+  const dayness = smooth(-0.1, 0.3, Math.sin(Math.PI * (h - 6) / 12));
+  zen = mix3(zen, [STORM_Z[0] * (0.4 + 0.6 * dayness), STORM_Z[1] * (0.4 + 0.6 * dayness), STORM_Z[2] * (0.4 + 0.6 * dayness)], st);
+  hor = mix3(hor, [STORM_H[0] * (0.35 + 0.65 * dayness), STORM_H[1] * (0.35 + 0.65 * dayness), STORM_H[2] * (0.35 + 0.65 * dayness)], st);
+  zen = mix3(zen, SPACE_Z, sp); hor = mix3(hor, SPACE_H, sp);
+  const f = S.flash; if (f > 0.01) { zen = mix3(zen, [190, 205, 255], f * 0.6); hor = mix3(hor, [210, 220, 255], f * 0.6); }
+  SK.zen = zen; SK.hor = hor;
+  const alt = Math.sin(Math.PI * (h - 6) / 12); SK.alt = alt;
+  SK.sunX = 0.1 + 0.8 * ((h - 6) / 12); SK.sunY = 0.93 - 0.78 * alt;
+  const hm = (h + 12) % 24, am = Math.sin(Math.PI * (hm - 6) / 12);
+  SK.moonX = 0.1 + 0.8 * ((hm - 6) / 12); SK.moonY = 0.93 - 0.78 * am; SK.moonAlt = am;
+  SK.sunC = mix3([255, 250, 220], [255, 132, 66], smooth(0.6, 0.02, alt));
+  SK.nf = smooth(0.1, -0.3, alt);
+  let cb = mix3([240, 244, 252], [92, 106, 150], SK.nf);
+  cb = mix3(cb, [92, 100, 118], S.storm * 0.8);
+  cb = mix3(cb, [236, 242, 255], clamp(f * 1.2, 0, 1));
+  SK.cloud = cb;
+  SK.label = S.space > 0.5 ? 'orbit' : S.storm > 0.55 ? 'storm' : h < 5 ? 'night' : h < 6.6 ? 'dawn' : h < 11 ? 'morning' : h < 15.5 ? 'afternoon' : h < 17.8 ? 'evening' : h < 19.6 ? 'dusk' : 'night';
+}
+
+/* ================= SKY layer ================= */
+const sky = new Layer($('#sky'), { alpha: false, bloom: 0.26, fsFn: (w) => clamp(w / 92, 12, 15) });
+const BIRDS = 8;
+const RB = [[255, 80, 80], [255, 150, 70], [255, 220, 90], [110, 220, 120], [90, 180, 255], [120, 120, 255], [190, 110, 240]];
+function renderSky() {
+  const L = sky; if (!L.ready) return;
+  skyColors();
+  const { ctx, cols, rows, cw, chh, asp, vw, vh } = L;
+  const g = ctx.createLinearGradient(0, 0, 0, vh);
+  g.addColorStop(0, rgb(SK.zen)); g.addColorStop(1, rgb(SK.hor));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, vw, vh);
+  const stormK = S.storm, spaceK = S.space, nf = SK.nf;
+  // sun / moon glows
+  const sxp = SK.sunX * vw, syp = SK.sunY * vh;
+  const ga = 0.5 * smooth(-0.4, 0.12, SK.alt) * (1 - 0.6 * stormK) * (1 - spaceK);
+  if (ga > 0.01) {
+    const rg = ctx.createRadialGradient(sxp, syp, 0, sxp, syp, vh * 0.85);
+    const sc = SK.sunC; rg.addColorStop(0, 'rgba(' + (sc[0] | 0) + ',' + (sc[1] | 0) + ',' + (sc[2] | 0) + ',' + ga.toFixed(3) + ')'); rg.addColorStop(1, 'rgba(' + (sc[0] | 0) + ',' + (sc[1] | 0) + ',' + (sc[2] | 0) + ',0)');
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, vw, vh);
+  }
+  const ma = 0.2 * nf * (1 - stormK) * (1 - spaceK) * smooth(-0.1, 0.2, SK.moonAlt);
+  if (ma > 0.01) {
+    const mx = SK.moonX * vw, my = SK.moonY * vh, rg = ctx.createRadialGradient(mx, my, 0, mx, my, vh * 0.5);
+    rg.addColorStop(0, 'rgba(170,200,255,' + ma.toFixed(3) + ')'); rg.addColorStop(1, 'rgba(170,200,255,0)');
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, vw, vh);
+  }
+  L.clearBuf();
+  const Hc = rows * asp, Wc = cols, minD = Math.min(Wc, Hc);
+  // sun disc
+  const sunR = minD * 0.075, scx = SK.sunX * Wc, scy = SK.sunY * Hc;
+  const sunVis = (1 - stormK * 0.75) * (1 - spaceK);
+  if (sunVis > 0.05 && scy < Hc + sunR * 3) {
+    const sc = SK.sunC, R3 = sunR * 3.2;
+    const c0 = Math.max(0, Math.floor(scx - R3)), c1 = Math.min(cols - 1, Math.ceil(scx + R3));
+    const r0 = Math.max(0, Math.floor((scy - R3) / asp)), r1 = Math.min(rows - 1, Math.ceil((scy + R3) / asp));
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const d = Math.hypot(c + 0.5 - scx, (r + 0.5) * asp - scy), i = r * cols + c;
+      if (d < sunR) { const q = d / sunR; L.put(i, q < 0.55 ? 64 : q < 0.82 ? 37 : 35, sc[0], sc[1], sc[2], 255 * sunVis); }
+      else if (d < R3) { const f = 1 - (d - sunR) / (R3 - sunR); if (hash2(c, r) < f * f * 0.7) L.put(i, hash2(r, c) < 0.4 ? 58 : 46, sc[0], Math.min(255, sc[1] + 20), sc[2] + 10 > 255 ? 255 : sc[2] + 10, 190 * f * sunVis); }
+    }
+  }
+  // moon
+  const moonVis = nf * (1 - stormK * 0.8) * smooth(-0.15, 0.15, SK.moonAlt) * (1 - spaceK * 0.5);
+  if (moonVis > 0.05) {
+    const mR = minD * 0.05, mcx = SK.moonX * Wc, mcy = SK.moonY * Hc;
+    const c0 = Math.max(0, Math.floor(mcx - mR * 2)), c1 = Math.min(cols - 1, Math.ceil(mcx + mR * 2));
+    const r0 = Math.max(0, Math.floor((mcy - mR * 2) / asp)), r1 = Math.min(rows - 1, Math.ceil((mcy + mR * 2) / asp));
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const x = c + 0.5 - mcx, y = (r + 0.5) * asp - mcy, d = Math.hypot(x, y), i = r * cols + c;
+      if (d < mR) { if (Math.hypot(x - mR * 0.5, y + mR * 0.12) < mR * 0.92) continue; const cr = vnoise(c * 0.5, r * 0.8); L.put(i, cr > 0.62 ? 37 : 64, 214, 226, 255, 255 * moonVis); }
+      else if (d < mR * 1.9 && hash2(c, r) < (1 - (d - mR) / (mR * 0.9)) * 0.35) L.put(i, 46, 170, 195, 245, 120 * moonVis);
+    }
+  }
+  // clouds, stars, nebula
+  const cov = lerp(0.26, 0.96, stormK) * (1 - spaceK) * (1 - 0.25 * nf), th = 0.76 - 0.44 * cov;
+  const starOff = Math.floor(scY * 0.1 / chh), starA = Math.max(nf, spaceK) * (1 - stormK * 0.85);
+  const sd = 0.011 + 0.03 * spaceK, par = scY * 0.22 / cw;
+  const cc = SK.cloud, flash = S.flash, pr = P.act * (0.55 + 0.45 * P.wake), PR = 130 * (0.7 + 0.6 * P.wake), PR2 = PR * PR;
+  const sxA = scx, syA = scy, sl = SK.alt, rimStr = smooth(-0.25, 0.4, sl) * (1 - stormK * 0.6);
+  const sc2 = SK.sunC, dawnTint = smooth(0.55, 0.05, sl) * smooth(-0.45, -0.05, sl) * 0 + smooth(0.6, 0.02, sl) * smooth(-0.5, 0.0, sl);
+  for (let r = 0; r < rows; r++) {
+    const y = r * asp, yn = r / rows, py = (r + 0.5) * chh;
+    for (let c = 0, i = r * cols; c < cols; c++, i++) {
+      let v = 0;
+      if (cov > 0.02) {
+        const d0 = fbm(c * 0.02 + T * 0.02, (y + par) * 0.07 + 3.3) + 0.14 * (yn - 0.5) * (1 - stormK);
+        v = clamp((d0 - th) / 0.22, 0, 1);
+        if (v > 0 && pr > 0.02) { const dx = (c + 0.5) * cw - P.x, dy = py - P.y, d2 = dx * dx + dy * dy; if (d2 < PR2 * 4) v *= 1 - 0.92 * pr * Math.exp(-d2 / PR2); }
+      }
+      if (v > 0.16) {
+        const idx = Math.min(9, 1 + ((v * 9) | 0)); const dsx = c + 0.5 - sxA, dsy = y - syA;
+        const prox = Math.exp(-(dsx * dsx + dsy * dsy) / (Wc * Wc * 0.12)) * rimStr;
+        const shade = 0.78 + 0.22 * (1 - v) - 0.26 * v * stormK;
+        let R = cc[0] * shade, G = cc[1] * shade, B = cc[2] * shade;
+        const tn = prox * (0.35 + 0.65 * dawnTint) * (1 - flash);
+        R = lerp(R, sc2[0], tn * 0.75); G = lerp(G, sc2[1], tn * 0.6); B = lerp(B, sc2[2], tn * 0.5);
+        L.put(i, RAMP[idx], R, G, B, 110 + 145 * v);
+      } else if (L.Bc[i] === 0) {
+        const hv = hash2(c, r + starOff);
+        if (hv < sd && starA > 0.04) {
+          const tw = 0.55 + 0.45 * Math.sin(T * (1.1 + (hv * 997 % 3)) + hv * 6000);
+          let a = starA * tw * (1 - 0.5 * yn * (1 - spaceK)); if (pr > 0.02) { const dx = (c + 0.5) * cw - P.x, dy = py - P.y; a += pr * 0.6 * Math.exp(-(dx * dx + dy * dy) / (PR2 * 1.6)); }
+          if (a > 0.08) { const h2 = hash2(c + 99, r); L.put(i, hv < sd * 0.55 ? 46 : hv < sd * 0.85 ? 43 : 42, 205 + 50 * h2, 215 + 40 * h2, 255 - 60 * h2 * h2, clamp(a, 0, 1) * 255); }
+        } else if (spaceK > 0.05) {
+          const nb = fbm(c * 0.02 + 3.1, (y + par * 0.4) * 0.028 + 8.2 + T * 0.002), nv = (nb - 0.5) * spaceK * 3.4;
+          if (nv > 0.12) { const t2 = vnoise(c * 0.04, y * 0.05); L.put(i, RAMP[Math.min(4, 1 + ((nv * 4) | 0))], lerp(190, 70, t2), lerp(70, 190, t2), lerp(230, 250, t2), clamp(nv, 0, 1) * 150); }
+        }
+      }
+    }
+  }
+  // rainbow
+  if (S.rainbow > 0.02) {
+    const Cx = Wc * 0.52, Cy = Hc * 1.18, R0 = Math.min(Wc * 0.58, Hc * 1.1), bw = R0 * 0.045, ra = S.rainbow * (0.35 + 0.65 * (1 - nf * 0.7));
+    const lo = Cy - R0 - bw * 8, rlo = Math.max(0, Math.floor(lo / asp));
+    for (let r = rlo; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const d = Math.hypot(c + 0.5 - Cx, (r + 0.5) * asp - Cy) - R0; if (d < 0 || d > bw * 7) continue;
+      const bi = Math.min(6, (d / bw) | 0), col = RB[bi], i = r * cols + c;
+      L.put(i, hash2(c, r) < 0.3 ? 61 : 35, col[0], col[1], col[2], 230 * ra);
+    }
+  }
+  // rain streaks (column procedural)
+  const ri = clamp(stormK * 1.15 - 0.4, 0, 1) + S.rain + S.charge * 0.35;
+  if (ri > 0.03) {
+    const rc = mix3([150, 185, 235], [210, 225, 255], flash);
+    for (let k = 0; k < 2; k++) for (let c = 0; c < cols; c++) {
+      const h = hash2(c, k * 77 + 5); if (h > ri * 0.55) continue;
+      const sp = 24 + 22 * hash2(c, k + 9), len = 3 + ((h * 9) | 0), span = rows * 1.6;
+      const pos = (T * sp + hash2(c + 5, k) * span) % span, head = Math.floor(pos) - rows * 0.3;
+      for (let j = 0; j < len; j++) { const r = Math.floor(head) - j, c2 = c - Math.round(j * 0.25); if (r < 0 || r >= rows || c2 < 0 || c2 >= cols) continue; L.put(r * cols + c2, j === 0 ? 124 : 58, rc[0], rc[1], rc[2], 200 * (1 - j / len)); }
+    }
+  }
+  // birds
+  const bv = (1 - nf) * (1 - stormK) * (1 - spaceK) * smooth(0.0, 0.25, SK.alt);
+  if (bv > 0.3) for (let b = 0; b < BIRDS; b++) {
+    const bx = ((T * 3.2 + b * 7.3 + scY * 0.01) % (cols + 30)) - 15, row = rows * 0.18 + Math.sin(T * 0.5 + b) * 2 + (b % 4) * 1.6 + Math.abs(b - 3.5) * 0.9;
+    const c = Math.round(bx), r = Math.round(row); if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+    L.put(r * cols + c, Math.sin(T * 5 + b * 1.3) > 0 ? 118 : 94, 30, 34, 60, 210 * bv);
+  }
+  L.paint(); L.bloomPass();
+}
+
+/* ================= FX layer: particles, halos, bolts ================= */
+const fx = new Layer($('#fx'), { alpha: true, bloom: 0.6, fsFn: () => 12 });
+const MP = 900;
+const pX = new Float32Array(MP), pY = new Float32Array(MP), pVX = new Float32Array(MP), pVY = new Float32Array(MP), pG = new Float32Array(MP), pD = new Float32Array(MP), pL = new Float32Array(MP), pM = new Float32Array(MP);
+const pC = new Uint8Array(MP), pR = new Uint8Array(MP), pGc = new Uint8Array(MP), pB = new Uint8Array(MP);
+let pn = 0;
+function spawn(x, y, vx, vy, life, ch, col, g, drag) {
+  if (pn >= MP) return; const i = pn++;
+  pX[i] = x; pY[i] = y; pVX[i] = vx; pVY[i] = vy; pL[i] = pM[i] = life; pC[i] = ch.charCodeAt(0); pR[i] = col[0]; pGc[i] = col[1]; pB[i] = col[2]; pG[i] = g || 0; pD[i] = drag || 0;
+}
+function stepParticles(dt) {
+  for (let i = pn - 1; i >= 0; i--) {
+    pL[i] -= dt;
+    if (pL[i] <= 0) { const j = --pn; if (i !== j) { pX[i] = pX[j]; pY[i] = pY[j]; pVX[i] = pVX[j]; pVY[i] = pVY[j]; pL[i] = pL[j]; pM[i] = pM[j]; pC[i] = pC[j]; pR[i] = pR[j]; pGc[i] = pGc[j]; pB[i] = pB[j]; pG[i] = pG[j]; pD[i] = pD[j]; } continue; }
+    const k = 1 - pD[i] * dt; pVX[i] *= k; pVY[i] = pVY[i] * k + pG[i] * dt; pX[i] += pVX[i] * dt; pY[i] += pVY[i] * dt;
+  }
+}
+function wakeCol() { return SK.nf > 0.5 ? [200, 222, 255] : S.storm > 0.55 ? [150, 195, 245] : SK.alt < 0.35 ? [255, 190, 130] : [255, 244, 214]; }
+// bolts
+const bolts = []; for (let k = 0; k < 3; k++) bolts.push({ n: 0, c: new Int16Array(520), r: new Int16Array(520), ch: new Uint8Array(520), br: new Uint8Array(520), t0: -99, life: 1 });
+let boltI = 0;
+function makeBolt(x, y) {
+  const b = bolts[boltI++ % bolts.length]; if (!fx.ready) return;
+  const tc = Math.floor(x / fx.cw), tr = Math.floor(y / fx.chh); let c = tc + ((Math.random() * 30 - 15) | 0), n = 0;
+  const add = (cc, rr, ch, br) => { if (n < 520) { b.c[n] = cc; b.r[n] = rr; b.ch[n] = ch; b.br[n] = br; n++; } };
+  for (let r = 0; r <= tr; r++) {
+    const dc = clamp(Math.round((tc - c) / (tr - r + 1) + (Math.random() - 0.5) * 2.6), -2, 2);
+    add(c, r, dc === 0 ? 124 : dc > 0 ? 92 : 47, 0); if (dc !== 0) add(c + (dc > 0 ? 1 : -1), r, 95, 0);
+    c += dc;
+    if (Math.random() < 0.08 && n < 440) { const dir = Math.random() < 0.5 ? -1 : 1, len = 4 + ((Math.random() * 8) | 0); let bc = c; for (let q = 1; q <= len; q++) { bc += Math.random() < 0.65 ? dir : 0; add(bc, r + q, dir > 0 ? 92 : 47, 1); } }
+  }
+  b.n = n; b.t0 = T; b.life = 1.1;
+}
+const BT = [];
+function nearV(b) { return b.rect && b.rect.bottom > -120 && b.rect.top < VH + 120; }
+function drawBolts() {
+  for (const b of bolts) {
+    const age = T - b.t0; if (age < 0 || age > b.life) continue;
+    const prog = clamp(age / 0.16, 0, 1), show = Math.floor(prog * b.n);
+    const fl = age > 0.3 && age < 0.42 ? 0.9 : 0, a = Math.max(fl, 1 - smooth(0.15, b.life, age));
+    for (let k = 0; k < show; k++) {
+      const c = b.c[k], r = b.r[k]; if (c < 0 || c >= fx.cols || r < 0 || r >= fx.rows) continue;
+      const br = b.br[k]; fx.put(r * fx.cols + c, b.ch[k], br ? 150 : 240, br ? 190 : 245, 255, 255 * a * (br ? 0.7 : 1));
+    }
+  }
+}
+function drawHalo(b) {
+  const R = b.rect; if (!R || !nearV(b)) return;
+  const k = b.kind, am = b.amt; if (am < 0.02 || k === 'link') return;
+  const m = (k === 'hold' ? 120 : k === 'cloud' ? 34 : 36);
+  const { cw, chh, cols, rows } = fx;
+  const c0 = Math.max(0, Math.floor((R.left - m) / cw)), c1 = Math.min(cols - 1, Math.ceil((R.right + m) / cw));
+  const r0 = Math.max(0, Math.floor((R.top - m) / chh)), r1 = Math.min(rows - 1, Math.ceil((R.bottom + m) / chh));
+  const mm = m * (0.4 + 0.6 * am), ccx = (R.left + R.right) / 2, ccy = (R.top + R.bottom) / 2, cl = SK.cloud;
+  const dark = k === 'hold' ? 0.3 + 0.7 * b.press : b.press * 0.8;
+  const wc = wakeCol();
+  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+    const cx = (c + 0.5) * cw, cy = (r + 0.5) * chh;
+    const dx = Math.max(R.left - cx, 0, cx - R.right), dy = Math.max(R.top - cy, 0, cy - R.bottom), d = Math.hypot(dx, dy);
+    if (d < 1) continue;
+    const i = r * cols + c, fall = 1 - d / mm; if (fall <= 0) continue;
+    if (k === 'cloud' || k === 'hold') {
+      const dn = fbm(c * 0.3 + T * 0.25, r * 0.5 - T * 0.12 + (k === 'hold' ? 5 : 0));
+      const v = dn * fall * (0.55 + 1.5 * am); const idx = (v * 9) | 0; if (idx < 1) continue;
+      const col = mix3(cl, [58, 66, 92], dark), a = 235 * Math.min(1, v * 1.4);
+      fx.put(i, RAMP[Math.min(9, idx)], col[0], col[1], col[2], a);
+    } else if (k === 'mist') {
+      const dn = fbm(c * 0.35, r * 0.5 - T * 0.7); const v = dn * fall * (0.4 + 1.3 * am); const idx = (v * 9) | 0; if (idx < 1) continue;
+      fx.put(i, hash2(c, r + ((T * 6) | 0)) < 0.07 ? 42 : RAMP[Math.min(7, idx)], 190, 228, 255, 220 * Math.min(1, v * 1.5));
+    } else if (k === 'breeze') {
+      const w = vnoise(c * 0.16 - T * 3.2, r * 1.9); if (w < 0.6 || hash2(c, r) > 0.8) continue;
+      fx.put(i, w > 0.74 ? 126 : 45, 245, 242, 255, 230 * fall * am);
+    } else if (k === 'ray') {
+      const a = Math.atan2(cy - ccy, cx - ccx), s = ((a / 6.2832 * 10 + T * 0.35) % 1 + 1) % 1; if (s > 0.14) continue;
+      if (d > m * (0.35 + 0.65 * am)) continue; fx.put(i, d < m * 0.55 ? 43 : 46, 255, 214, 130, 235 * fall);
+    } else if (k === 'bolt') {
+      if (hash2(c + ((T * 16) | 0), r) < 0.1 * am * fall + 0.01) fx.put(i, hash2(r, c) < 0.5 ? 58 : 59, 205, 228, 255, 250);
+    } else if (k === 'toggle' || k === 'icon') {
+      if (hash2(c, r) < 0.18) { const tw = Math.sin(T * 4 + hash2(r, c) * 40); if (tw > 0.2) fx.put(i, tw > 0.8 ? 42 : 46, 255, 236, 190, 255 * fall * tw); }
+    }
+  }
+  // focus ring: twinkling stars just outside the rect
+  if (b.foc > 0.02) {
+    const f = b.foc, cx0 = Math.floor((R.left - 9) / cw), cx1 = Math.ceil((R.right + 9) / cw), cy0 = Math.floor((R.top - 9) / chh), cy1 = Math.ceil((R.bottom + 9) / chh);
+    for (let r = Math.max(0, cy0); r <= Math.min(rows - 1, cy1); r++) for (let c = Math.max(0, cx0); c <= Math.min(cols - 1, cx1); c++) {
+      const cx = (c + 0.5) * cw, cy = (r + 0.5) * chh, dx = Math.max(R.left - cx, 0, cx - R.right), dy = Math.max(R.top - cy, 0, cy - R.bottom), d = Math.hypot(dx, dy);
+      if (d < 4 || d > 15) continue; const h = hash2(c, r); if (h > 0.55) continue;
+      const tw = 0.5 + 0.5 * Math.sin(T * 3 + h * 90); fx.put(r * cols + c, tw > 0.8 ? 42 : tw > 0.45 ? 43 : 46, 255, 238, 190, 255 * f * (0.45 + 0.55 * tw));
+    }
+  }
+}
+function renderFx() {
+  const L = fx; if (!L.ready) return;
+  L.ctx.clearRect(0, 0, L.vw, L.vh); L.clearBuf();
+  for (const b of BT) { if (b.el.offsetParent !== null || b.el.id === 'burger') b.rect = b.el.getBoundingClientRect(); else b.rect = null; drawHalo(b); }
+  drawBolts();
+  const cw = L.cw, chh = L.chh, cols = L.cols, rows = L.rows;
+  for (let i = 0; i < pn; i++) {
+    const c = (pX[i] / cw) | 0, r = (pY[i] / chh) | 0; if (pX[i] < 0 || pY[i] < 0 || c >= cols || r >= rows) continue;
+    const a = Math.min(1, pL[i] / pM[i] * 1.8); L.put(r * cols + c, pC[i], pR[i], pGc[i], pB[i], 255 * a);
+  }
+  L.paint(); L.bloomPass();
+}
+
+/* ================= buttons registry ================= */
+function addBtn(el) {
+  const b = { el, kind: el.dataset.fx, hov: 0, hovT: 0, press: 0, pressT: 0, foc: 0, focT: 0, idle: el.dataset.fx === 'cloud' ? 0.2 : 0, rect: null, amt: 0, rainN: 0 };
+  BT.push(b);
+  el.addEventListener('pointerenter', (e) => { b.hovT = 1; settle(); });
+  el.addEventListener('pointerleave', () => { b.hovT = 0; b.pressT = 0; settle(); });
+  el.addEventListener('pointerdown', () => { if (b.kind !== 'hold') { b.pressT = 1; settle(); } });
+  const up = () => { b.pressT = 0; settle(); };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  el.addEventListener('focus', () => { b.focT = el.matches(':focus-visible') ? 1 : 0; settle(); });
+  el.addEventListener('blur', () => { b.focT = 0; settle(); });
+  el.addEventListener('click', () => activate(b));
+  return b;
+}
+function stepButtons() {
+  for (const b of BT) {
+    b.hov += (b.hovT - b.hov) * 0.14; b.press += (b.pressT - b.press) * 0.3; b.foc += (b.focT - b.foc) * 0.2;
+    b.amt = Math.max(b.hov, b.press, b.foc * 0.55, b.idle);
+    if (b.kind === 'hold') b.amt = Math.max(S.charge, 0);
+    const R = b.rect; if (!R || !nearV(b)) continue;
+    const w = R.width, h = R.height;
+    if (b.rainN > 0) { b.rainN--; for (let q = 0; q < 2; q++) spawn(rnd(R.left, R.right), R.bottom - 4, rnd(-10, 10), rnd(220, 300), rnd(0.8, 1.3), Math.random() < 0.8 ? '|' : ':', [150, 200, 255], 520, 0); }
+    if (b.hov > 0.3 && b.hovT) {
+      const k = b.kind, r = Math.random();
+      if (k === 'cloud' && r < 0.25) spawn(rnd(R.left, R.right), R.top - 2, rnd(-8, 8), rnd(-34, -16), 1.1, '~', [255, 214, 160], 0, 0.3);
+      else if (k === 'mist' && r < 0.5) spawn(rnd(R.left, R.right), R.top + 2, rnd(-6, 6), rnd(18, 40), 1.2, r < 0.2 ? '.' : ':', [200, 232, 255], 20, 0);
+      else if (k === 'breeze' && r < 0.4) spawn(R.left - 6, rnd(R.top, R.bottom), rnd(80, 150), 0, 0.9, r < 0.2 ? '~' : '-', [244, 240, 255], 0, 0);
+      else if (k === 'ray' && r < 0.5) { const a = T * 4, cx = (R.left + R.right) / 2, cy = (R.top + R.bottom) / 2; spawn(cx + Math.cos(a) * 34, cy + Math.sin(a) * 34, -Math.sin(a) * 60, Math.cos(a) * 60, 0.7, r < 0.25 ? '*' : '+', [255, 214, 130], 0, 0.5); }
+      else if (k === 'bolt' && r < 0.3) spawn(rnd(R.left - 8, R.right + 8), rnd(R.top - 8, R.bottom + 8), 0, 0, 0.1, r < 0.15 ? ';' : ':', [205, 228, 255], 0, 0);
+      else if (k === 'toggle' && r < 0.3) spawn(rnd(R.left, R.left + 34), rnd(R.top, R.bottom), rnd(-10, 10), rnd(-30, -10), 0.9, '*', SK.nf > 0.5 ? [190, 210, 255] : [255, 220, 150], 0, 0);
+      else if (k === 'link' && r < 0.22) spawn(rnd(R.left, R.right), R.bottom - 4, rnd(30, 70), rnd(-8, 8), 0.7, r < 0.1 ? '~' : '-', [255, 224, 170], 0, 0.3);
+    }
+    if (b.kind === 'hold' && S.charge > 0.04) {
+      const q = S.charge, cx = (R.left + R.right) / 2;
+      if (Math.random() < q * q * 0.9) spawn(cx + rnd(-w * 0.6, w * 0.6), R.top - rnd(10, 90), rnd(-30, 30), rnd(-20, 60), 0.15, Math.random() < 0.5 ? ';' : '+', [205, 232, 255], 0, 0);
+      if (q > 0.45 && Math.random() < q) spawn(cx + rnd(-w * 0.55, w * 0.55), R.top - 40, rnd(-6, 6), rnd(200, 280), 0.7, '|', [150, 200, 255], 400, 0);
+    }
+  }
+}
+function burst(x, y, n, sp0, sp1, chars, col, life, drag, g) {
+  for (let i = 0; i < n; i++) { const a = Math.random() * 6.2832, s = rnd(sp0, sp1); spawn(x, y, Math.cos(a) * s, Math.sin(a) * s * 0.8, rnd(life * 0.6, life), chars[(Math.random() * chars.length) | 0], col, g || 0, drag); }
+}
+const statusEl = $('#status');
+function say(t) { statusEl.textContent = t; }
+function activate(b) {
+  const R = b.el.getBoundingClientRect(), cx = (R.left + R.right) / 2, cy = (R.top + R.bottom) / 2, k = b.kind;
+  if (reduce) { if (k === 'cloud') say('Rain shower released.'); }
+  if (k === 'cloud') { b.rainN = 40; if (b.el.id === 'cta1') S.rain = Math.max(S.rain, 0.35); S.rain = Math.max(S.rain, 0.25); }
+  else if (k === 'mist') burst(cx, cy, 40, 40, 120, 'oO.:', [214, 232, 250], 1.1, 1.8, 0);
+  else if (k === 'breeze') { for (let q = 0; q < 34; q++) spawn(R.left + rnd(0, R.width * 0.3), rnd(R.top - 6, R.bottom + 6), rnd(240, 420), rnd(-20, 20), rnd(0.45, 0.7), Math.random() < 0.5 ? '=' : '~', [244, 240, 255], 0, 0.8); }
+  else if (k === 'ray') {
+    for (let q = 0; q < 28; q++) { const a = q / 28 * 6.2832; const ch = ['-', '\\', '|', '/'][Math.round(((a / Math.PI) % 1) * 4) % 4]; spawn(cx, cy, Math.cos(a) * rnd(150, 260), Math.sin(a) * rnd(150, 260) * 0.8, 0.65, ch, [255, 210, 120], 0, 2); }
+    startTimelapse();
+  } else if (k === 'bolt') {
+    makeBolt(cx, cy); S.flash = Math.max(S.flash, 0.85); S.kick = Math.max(S.kick, 0.3);
+    burst(cx, cy, 34, 80, 260, '*+:', [255, 170, 160], 0.9, 1.2, 420);
+    b.el.classList.remove('shake'); void b.el.offsetWidth; if (!reduce) b.el.classList.add('shake');
+    const old = b.el.textContent; b.el.textContent = 'Event cancelled'; say('Event cancelled. Lightning struck the button.');
+    setTimeout(() => { b.el.textContent = old; }, 2200);
+  } else if (k === 'toggle') { setLive(!live); burst(cx, cy, 22, 40, 120, '*.+', live ? [255, 214, 140] : [190, 210, 255], 0.9, 1.4, 0); }
+  settle();
+}
+
+/* ================= live sky, timelapse ================= */
+const liveBtns = $$('.js-live');
+function setLive(v) { live = v; liveBtns.forEach(el => el.setAttribute('aria-pressed', String(v))); if (v) override = null; say(v ? 'Live sky on. The sky follows your clock.' : 'Live sky off. The sky follows your scroll.'); }
+liveBtns.forEach(el => el.addEventListener('click', () => { }));
+function startTimelapse() {
+  if (reduce) { const seq = [6.2, 12.5, 18.4, 23, null]; const i = seq.indexOf(override); override = seq[(i + 1) % seq.length]; if (i === -1) override = seq[0]; return; }
+  tl = { t0: T, dur: 7.5, from: S.clock % 24 }; override = null;
+}
+
+/* ================= keyframes from sections ================= */
+const KF = [];
+function measureKF() {
+  KF.length = 0;
+  $$('[data-sky]').forEach(el => {
+    const r = el.getBoundingClientRect(), a = (el.dataset.sky || '').split(',').map(Number), at = el.dataset.at ? Number(el.dataset.at) : 0.5;
+    KF.push({ y: r.top + window.scrollY + r.height * at, c: a[0], s: a[1], sp: a[2] });
+  });
+  KF.sort((p, q) => p.y - q.y);
+}
+function scrollTarget() {
+  if (!KF.length) return;
+  const y = scY + VH * 0.5; let i = 0;
+  if (y <= KF[0].y) { clockT = KF[0].c; stormT = KF[0].s; spaceT = KF[0].sp; return; }
+  const last = KF[KF.length - 1]; if (y >= last.y) { clockT = last.c; stormT = last.s; spaceT = last.sp; return; }
+  while (i < KF.length - 2 && KF[i + 1].y < y) i++;
+  const a = KF[i], b = KF[i + 1], t = smooth(0, 1, (y - a.y) / (b.y - a.y));
+  clockT = lerp(a.c, b.c, t); stormT = lerp(a.s, b.s, t); spaceT = lerp(a.sp, b.sp, t);
+}
+function localHour() { const d = new Date(); return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600; }
+
+/* ================= LOGO: hero wordmark ================= */
+const WORD = 'MERIDIAN';
+const logo = { form: null, delay: null, mask: null, halo: null, t0: 0, gx: -9, gy: -9, hov: 0, fontOK: false, ls: 0 };
+const bigL = new Layer($('#logo-big'), {
+  alpha: true, bloom: 0.5, fsFn: (w) => clamp(w / 92, 6.4, 12.5),
+  heightFn: (vw, cw, chh) => { const f = textFit(vw / cw); return Math.min(Math.ceil((f.cap / (chh / cw) + 9)) * chh, 360); },
+  onLayout: (L) => buildLogo(L)
+});
+const scratch = document.createElement('canvas').getContext('2d');
+const WF = '"Bebas Neue", Impact, "Arial Narrow", sans-serif';
+function textFit(cols) {
+  scratch.font = '400 100px ' + WF; try { scratch.letterSpacing = '4px'; } catch (e) { }
+  const w100 = scratch.measureText(WORD).width || 360; try { scratch.letterSpacing = '0px'; } catch (e) { }
+  const Fz = 0.9 * cols / (w100 / 100); return { Fz, cap: Fz * 0.7 };
+}
+function buildLogo(L) {
+  const { cols, rows, asp, N } = L; const f = textFit(cols);
+  const mc = document.createElement('canvas'); mc.width = cols; mc.height = rows; const x = mc.getContext('2d', { willReadFrequently: true });
+  x.clearRect(0, 0, cols, rows); x.save(); x.scale(1, 1 / asp);
+  x.font = '400 ' + f.Fz.toFixed(2) + 'px ' + WF; x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.fillStyle = '#fff';
+  try { x.letterSpacing = (f.Fz * 0.04).toFixed(2) + 'px'; } catch (e) { }
+  x.fillText(WORD, cols / 2, (rows / 2) * asp + f.cap / 2); x.restore();
+  const d = x.getImageData(0, 0, cols, rows).data;
+  logo.mask = new Float32Array(N); logo.halo = new Float32Array(N);
+  for (let i = 0; i < N; i++) logo.mask[i] = d[i * 4 + 3] / 255;
+  // soft blur for inner shading and halo
+  const tmp = new Float32Array(N);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { let s = 0, n = 0; for (let k = -3; k <= 3; k++) { const cc = c + k; if (cc >= 0 && cc < cols) { s += logo.mask[r * cols + cc]; n++; } } tmp[r * cols + c] = s / n; }
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { let s = 0, n = 0; for (let k = -2; k <= 2; k++) { const rr = r + k; if (rr >= 0 && rr < rows) { s += tmp[rr * cols + c]; n++; } } logo.halo[r * cols + c] = s / n; }
+  logo.form = new Float32Array(N); logo.delay = new Float32Array(N);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const i = r * cols + c, dx = (c / cols - 0.5), dy = (r / rows - 0.5); logo.delay[i] = hash2(c, r) * 0.7 + Math.hypot(dx, dy * 1.2) * 1.4; logo.form[i] = reduce ? 1 : -logo.delay[i] - 0.5; }
+  logo.t0 = T;
+}
+function reformLogo() { if (!logo.form) return; if (reduce) return; for (let i = 0; i < logo.form.length; i++) logo.form[i] = -logo.delay[i] * 0.8; logo.t0 = T; }
+function stepLogo(dt) {
+  if (!logo.form) return;
+  const f = logo.form, n = f.length; const g = dt * 0.85;
+  for (let i = 0; i < n; i++) { if (f[i] < 1) f[i] += g * (0.8 + 0.5 * logo.delay[i]); }
+  // gust from pointer
+  if (bigL.vis && logo.gx > -5) {
+    const { cols, rows } = bigL, R = Math.max(5, cols * 0.045), c0 = Math.max(0, Math.floor(logo.gx - R)), c1 = Math.min(cols - 1, Math.ceil(logo.gx + R)), r0 = Math.max(0, Math.floor(logo.gy - R / bigL.asp)), r1 = Math.min(rows - 1, Math.ceil(logo.gy + R / bigL.asp));
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) { const d = Math.hypot(c - logo.gx, (r - logo.gy) * bigL.asp); if (d < R) { const lim = 0.88 * d / R - 0.05; const i = r * cols + c; if (f[i] > lim) f[i] = lim; } }
+  }
+  logo.hov += ((logo.gx > -5 ? 1 : 0) - logo.hov) * 0.05;
+}
+function renderLogo() {
+  const L = bigL; if (!L.ready || !logo.form) return;
+  const { ctx, cols, rows, asp } = L; ctx.clearRect(0, 0, L.vw, L.vh); L.clearBuf();
+  const gather = reduce ? 1 : clamp((T - logo.t0 - 0.3) / 3.0, 0, 1), ge = gather * gather * (3 - 2 * gather);
+  const ang = (1 - ge) * (1 - ge) * 3.2, ca = Math.cos(ang), sa = Math.sin(ang), sc = 1 + (1 - ge) * 0.9;
+  const gpos = ((T * 0.075) % 1.6) - 0.3 + (reduce ? 0.5 : 0), hv = logo.hov;
+  const cl = SK.cloud;
+  for (let r = 0; r < rows; r++) {
+    const yn = r / rows;
+    for (let c = 0, i = r * cols; c < cols; c++, i++) {
+      const m = logo.mask[i], h = logo.halo[i], ff = clamp(logo.form[i], 0, 1), fe = ff * ff * (3 - 2 * ff);
+      // cloud field, spiralling in while forming
+      const dx = c - cols / 2, dy = (r - rows / 2) * asp;
+      const nx = (dx * ca - dy * sa) / sc, ny = (dx * sa + dy * ca) / sc;
+      let cn = fbm(nx * 0.07 + 5 + T * 0.03, ny * 0.07 + 2 - T * 0.02);
+      let cv = clamp((cn - 0.36) * 2.2, 0, 1);
+      if (m > 0.5) {
+        const inner = 0.5 + 0.5 * h, shade = 0.62 + 0.38 * inner + 0.05 * Math.sin(T * 0.9 + c * 0.12);
+        const v = lerp(cv * 0.8, shade, fe);
+        const idx = Math.min(9, (v * 10) | 0); if (idx < 1) continue;
+        const tcol = mix3([255, 238, 190], [255, 150, 112], yn);
+        const gb = Math.exp(-Math.pow(c / cols - gpos, 2) / 0.0035) * (0.55 + 0.4 * hv), px = c / cols;
+        let hb = 0; if (hv > 0.05) { const ddx = c - logo.gx, ddy = (r - logo.gy) * asp; hb = Math.exp(-(ddx * ddx + ddy * ddy) / 160) * hv; }
+        const wb = clamp(gb + hb, 0, 1) * fe;
+        let col = mix3(tcol, [255, 255, 255], wb * 0.85); col = mix3(cl, col, fe);
+        L.put(i, RAMP[idx], col[0], col[1], col[2], 255);
+      } else {
+        // wisps: formation cloud outside letters, then drifting haze along the edges
+        const w1 = cv * (1 - ge) * 0.95;
+        const hz = Math.max(0, fbm(c * 0.09 - T * 0.12, r * asp * 0.1 + T * 0.02) - 0.5) * 2.2 * h * ge * (1 - 0.7 * hv);
+        const v = Math.max(w1, hz * 0.8); const idx = (v * 9) | 0; if (idx < 1) continue;
+        L.put(i, RAMP[Math.min(7, idx)], cl[0], cl[1], cl[2], 40 + 200 * v);
+      }
+    }
+  }
+  L.paint(); L.bloomPass();
+}
+{
+  const lb = $('#logobtn'), cvv = $('#logo-big');
+  const track = (e) => { const r = cvv.getBoundingClientRect(); if (!bigL.ready) return; logo.gx = (e.clientX - r.left) / bigL.cw; logo.gy = (e.clientY - r.top) / bigL.chh; if (reduce) { } };
+  lb.addEventListener('pointermove', track); lb.addEventListener('pointerenter', track);
+  lb.addEventListener('pointerleave', () => { logo.gx = -9; });
+  lb.addEventListener('click', () => { reformLogo(); settle(); });
+}
+
+/* ================= LOGO: nav mark ================= */
+const navL = new Layer($('#logo-nav'), { alpha: true, bloom: 0.7, fsFn: () => 5.4 });
+let navHov = 0, navHovT = 0, navT0 = 0;
+function renderNav() {
+  const L = navL; if (!L.ready) return; L.ctx.clearRect(0, 0, L.vw, L.vh); L.clearBuf();
+  const { cols, rows, asp } = L, W = cols, H = rows * asp, g = reduce ? 1 : clamp((T - navT0 - 0.6) / 2.2, 0, 1);
+  const sx = W * 0.4, sy = H * 0.44, sR = H * 0.3, off = (reduce ? 0 : Math.sin(T * 0.6) * 1.5) + navHov * 6;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const x = c + 0.5, y = (r + 0.5) * asp, i = r * cols + c, hh = hash2(c, r);
+    if (hh > g * 1.3) { if (g < 1 && hh < g * 1.3 + 0.12) L.put(i, 46, 240, 244, 252, 150); continue; }
+    const ds = Math.hypot(x - sx, y - sy);
+    // cloud: three overlapping blobs
+    const cxo = x - off;
+    const dcl = Math.min(Math.hypot(cxo - W * 0.42, (y - H * 0.78) * 1.3), Math.hypot(cxo - W * 0.62, (y - H * 0.68) * 1.1) * 0.9, Math.hypot(cxo - W * 0.8, (y - H * 0.8) * 1.3));
+    const cr = W * 0.17;
+    if (dcl < cr) { const q = dcl / cr; L.put(i, q < 0.5 ? 37 : q < 0.8 ? 43 : 58, 244, 246, 255, 255); continue; }
+    if (ds < sR) { const q = ds / sR; L.put(i, q < 0.5 ? 64 : q < 0.8 ? 37 : 35, 255, 190 + 40 * (1 - q), 110 + 60 * (1 - q), 255); continue; }
+    if (ds < sR * (1.8 + navHov * 0.7) && ds > sR * 1.2) { const a = Math.atan2(y - sy, x - sx), s = (((a / 6.2832) * 8 + T * 0.15) % 1 + 1) % 1; if (s < 0.16 + navHov * 0.1) L.put(i, 43, 255, 214, 130, 230); }
+  }
+  L.paint(); L.bloomPass();
+}
+{ const br = $('.brand'); br.addEventListener('pointerenter', () => { navHovT = 1; settle(); }); br.addEventListener('pointerleave', () => { navHovT = 0; settle(); }); br.addEventListener('focus', () => { navHovT = 1; settle(); }); br.addEventListener('blur', () => { navHovT = 0; settle(); }); }
+
+/* ================= MENU: a break in the clouds ================= */
+const menuL = new Layer($('#menucv'), { alpha: true, bloom: 0.45, fsFn: () => 10 });
+const mega = $('#mega'), trig = $('#trig'), burger = $('#burger');
+const M = { open: false, amt: 0, ox: 0, oy: -30, maxR: 800, by: null, r: 0, h: 0 };
+function menuGeom(btn) {
+  const br = btn.getBoundingClientRect(); M.ox = br.left + br.width / 2; M.oy = br.top + br.height / 2 - 60;
+  const pr = mega.getBoundingClientRect(); M.h = pr.height; const w = innerWidth;
+  M.maxR = Math.hypot(Math.max(M.ox, w - M.ox), Math.max(Math.abs(M.oy), M.h - M.oy)) + 20;
+  const cv = $('#menucv'); cv.style.height = M.h + 'px'; menuL.layout();
+}
+function openMenu(btn, byKey) {
+  if (M.open) return; M.open = true; M.by = btn; mega.hidden = false; mega.style.clipPath = 'circle(0px at 50% 0)';
+  [trig, burger].forEach(b => b.setAttribute('aria-expanded', 'true')); burger.setAttribute('aria-label', 'Close menu');
+  menuGeom(btn); menuL.visible = true;
+  if (reduce) { M.amt = 1; applyMenu(); }
+  if (byKey) setTimeout(() => { const a = $('a', mega); if (a) a.focus(); }, reduce ? 0 : 250);
+  settle();
+}
+function closeMenu(refocus) {
+  if (!M.open) return; M.open = false; [trig, burger].forEach(b => b.setAttribute('aria-expanded', 'false')); burger.setAttribute('aria-label', 'Open menu');
+  if (reduce) { M.amt = 0; applyMenu(); }
+  if (refocus && M.by) M.by.focus(); settle();
+}
+function applyMenu() {
+  const e = smooth(0, 1, M.amt); M.r = e * M.maxR * 1.02;
+  if (M.amt >= 1) mega.style.clipPath = 'none'; else mega.style.clipPath = 'circle(' + M.r.toFixed(1) + 'px at ' + M.ox.toFixed(1) + 'px ' + M.oy.toFixed(1) + 'px)';
+  if (M.amt <= 0 && !M.open) { mega.hidden = true; menuL.visible = false; $('#menucv').style.height = '0px'; }
+}
+function stepMenu(dt) {
+  const tgt = M.open ? 1 : 0; if (M.amt === tgt && (M.open || mega.hidden)) return;
+  M.amt = clamp(M.amt + (tgt ? dt / 1.1 : -dt / 0.6), 0, 1); applyMenu();
+}
+function renderMenu() {
+  const L = menuL; if (!L.ready || mega.hidden) return; L.ctx.clearRect(0, 0, L.vw, L.vh); L.clearBuf();
+  const { cols, rows, cw, chh } = L, e = smooth(0, 1, M.amt), r0 = M.r, band = cw * 8, cl = SK.cloud, sc = SK.sunC;
+  const open = M.amt >= 1 || (reduce && M.open);
+  if (!open || reduce) {
+    if (!(reduce && M.amt >= 1)) for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const dx = (c + 0.5) * cw - M.ox, dy = (r + 0.5) * chh - M.oy, d = Math.hypot(dx, dy), u = (d - r0) / band;
+      if (u < -0.9 || u > 1.3) continue;
+      const dn = fbm(c * 0.2 + T * 0.3, r * 0.34 - T * 0.2), fall = 1 - Math.abs(u - 0.15) * 0.95, v = fall * (0.4 + 1.1 * dn); const idx = (v * 9) | 0; if (idx < 1) continue;
+      const rim = smooth(0.35, -0.5, u); L.put(r * cols + c, RAMP[Math.min(9, idx)], lerp(cl[0], sc[0], rim * 0.8), lerp(cl[1], sc[1], rim * 0.7), lerp(cl[2], sc[2], rim * 0.6), 235 * Math.min(1, v * 1.5));
+    }
+  }
+  if (e > 0.5) {
+    const ra = smooth(0.5, 1, e) * 0.2;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const k = ((c * 1.0 + r * 0.9) * 0.11 + 100) % 1; if (k > 0.1) continue; if (hash2(c, r) > 0.55) continue;
+      const tw = 0.6 + 0.4 * Math.sin(T * 0.6 + c * 0.07); L.put(r * cols + c, 47, sc[0], sc[1], Math.min(255, sc[2] + 30), 255 * ra * tw);
+    }
+  }
+  L.paint(); L.bloomPass();
+}
+trig.addEventListener('click', (e) => { if (M.open) closeMenu(false); else openMenu(trig, e.detail === 0); });
+burger.addEventListener('click', (e) => { if (M.open) closeMenu(false); else openMenu(burger, e.detail === 0); });
+$('#openmenu').addEventListener('click', () => { if (innerWidth > 900) { openMenu(trig, false); } else openMenu(burger, false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && M.open) { closeMenu(true); } });
+document.addEventListener('pointerdown', (e) => { if (M.open && !e.target.closest('#mega, #trig, #burger, #openmenu')) closeMenu(false); });
+mega.addEventListener('click', (e) => { if (e.target.closest('a')) closeMenu(false); });
+
+/* ================= STORM: hold to charge ================= */
+const hold = $('#hold'), holdTxt = $('#holdtxt'), holdPct = $('#holdpct'), holdStatus = $('#holdstatus');
+let holding = false, struck = false, lastPct = -1;
+const holdB = addBtn(hold); holdB.kind = 'hold';
+function holdStart() { if (holding) return; holding = true; struck = false; hold.classList.add('on'); holdTxt.textContent = 'Gathering...'; holdStatus.textContent = 'Clouds are gathering.'; if (reduce) { S.charge = 0.7; } }
+function holdEnd() {
+  if (!holding) return; holding = false; hold.classList.remove('on');
+  if (reduce) { strike(1); S.charge = 0; return; }
+  if (!struck && S.charge > 0.3) strike(S.charge); else if (!struck) { holdTxt.textContent = 'Hold to gather'; holdStatus.textContent = 'The clouds drift apart.'; }
+}
+function strike(level) {
+  if (struck && !reduce) return; struck = true;
+  const R = hold.getBoundingClientRect(); makeBolt(R.left + R.width / 2, R.top + R.height / 2);
+  if (level > 0.7) setTimeout(() => makeBolt(R.left + R.width * 0.2, R.top + R.height / 2), 180);
+  S.flash = 1; S.kick = 1; S.rain = 1; S.rbStart = reduce ? T - 3 : T + 2.6;
+  burst(R.left + R.width / 2, R.top + R.height / 2, 60, 80, 340, '*+:;', [215, 232, 255], 1.1, 1.3, 380);
+  holdTxt.textContent = 'Storm called'; holdStatus.textContent = 'Storm called. A rainbow is coming.';
+  if (!reduce) { document.body.animate([{ transform: 'translate(0,0)' }, { transform: 'translate(-4px,2px)' }, { transform: 'translate(3px,-2px)' }, { transform: 'translate(0,0)' }], { duration: 380 }); }
+  setTimeout(() => { if (!holding) holdTxt.textContent = 'Hold to gather'; }, 6000);
+}
+hold.addEventListener('pointerdown', (e) => { e.preventDefault(); try { hold.setPointerCapture(e.pointerId); } catch (_) { } holdStart(); settle(); });
+hold.addEventListener('pointerup', () => { holdEnd(); settle(); }); hold.addEventListener('pointercancel', () => { holdEnd(); settle(); });
+hold.addEventListener('contextmenu', (e) => e.preventDefault());
+hold.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) holdStart(); } });
+hold.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); holdEnd(); } });
+hold.addEventListener('blur', () => { if (holding) holdEnd(); });
+hold.addEventListener('click', (e) => e.preventDefault());
+
+/* ================= FOOTER: orbit ================= */
+const foot = new Layer($('#footcv'), { alpha: true, bloom: 0.55, fsFn: (w) => clamp(w / 85, 10, 15) });
+const meteors = []; let nextMeteor = 3;
+function addMeteor(x, y) { meteors.push({ x, y, vx: rnd(-26, -14), vy: rnd(9, 16), t0: T, life: 1.4 }); if (meteors.length > 8) meteors.shift(); }
+function renderFoot() {
+  const L = foot; if (!L.ready) return; L.ctx.clearRect(0, 0, L.vw, L.vh); L.clearBuf();
+  const { cols, rows, asp } = L, Wc = cols, Hc = rows * asp, R = Wc * (cols < 90 ? 1.25 : 0.95), cx = Wc / 2, limb = Hc * 0.5, cy = limb + R;
+  const frac = reduce ? 0.42 : (T / 60) % 1, al = lerp(-1.2, 1.2, frac);
+  const sdx = Math.sin(al), sdy = Math.cos(al) * 0.75 + 0.18, sn = Math.hypot(sdx, sdy), ux = sdx / sn, uy = sdy / sn;
+  const sz = 0.12 + 0.55 * Math.sin(Math.PI * frac);
+  const rowTop = Math.max(0, Math.floor((cy - R - 9 * 1) / asp - 14));
+  for (let r = rowTop; r < rows; r++) {
+    const y = (r + 0.5) * asp;
+    for (let c = 0; c < cols; c++) {
+      const x = c + 0.5 - cx, yy = y - cy, d = Math.hypot(x, yy), i = r * cols + c;
+      if (d < R) {
+        const nx = x / R, ny = -yy / R, nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+        const lit = (nx * ux + ny * uy) * 0.85 + nz * sz, day = smooth(-0.05, 0.25, lit);
+        const rim = Math.pow(1 - nz, 2.2), hh = hash2(c, r);
+        const land = fbm(nx * 6 + 2.5, ny * 6 + 5.5), cld = fbm(nx * 9 + T * 0.006 + 11, ny * 9 + 3);
+        if (day > 0.03) {
+          let col = land > 0.52 ? [78, 126, 82] : [26, 74, 150], chv = land > 0.52 ? (hh < 0.5 ? 58 : 37) : (hh < 0.5 ? 126 : 46);
+          if (cld > 0.68) { col = [236, 242, 252]; chv = cld > 0.7 ? 64 : 37; }
+          col = mix3(col, [140, 196, 255], rim * 0.8);
+          const k = 0.16 + 0.84 * day; L.put(i, chv, col[0] * k, col[1] * k, col[2] * k, 255);
+        } else {
+          if (land > 0.5 && hh < (land - 0.46) * 1.9) { const fl = 0.6 + 0.4 * Math.sin(T * 2 + hh * 90); L.put(i, hh < 0.05 ? 58 : 46, 255, 196, 110, 255 * fl); }
+          else if (hh < 0.22) L.put(i, 46, 18, 30, 62, 220);
+        }
+      } else if (d < R + 8) {
+        const s = (d - R) / 8, dot = (x / d) * ux + (-yy / d) * uy;
+        const gl = Math.pow(1 - s, 2) * (0.3 + 0.9 * Math.max(0, dot)); if (gl < 0.07) continue;
+        const col = mix3([100, 170, 255], [255, 170, 100], smooth(0.75, 1, dot));
+        L.put(i, gl > 0.7 ? 61 : gl > 0.4 ? 45 : gl > 0.2 ? 58 : 46, col[0], col[1], col[2], clamp(gl, 0, 1) * 255);
+      }
+    }
+  }
+  // aurora curtains over the limb
+  for (let c = 0; c < cols; c++) {
+    const x = c + 0.5 - cx; if (Math.abs(x) >= R) continue;
+    const dot = (x / R) * ux; const str = (0.45 + 0.35 * Math.sin(T * 0.25 + c * 0.03)) * smooth(0.6, -0.2, dot); if (str < 0.08) continue;
+    const yl = cy - Math.sqrt(R * R - x * x), rl = Math.floor(yl / asp) - 1, h = 3 + 3.2 * (0.5 + 0.5 * Math.sin(c * 0.09 + T * 0.45)) + 2.4 * (0.5 + 0.5 * Math.sin(c * 0.23 - T * 0.8));
+    for (let k = 0; k < h; k++) { const r = rl - k; if (r < 0 || r >= rows) continue; const q = k / h; L.put(r * cols + c, q < 0.3 ? 124 : q < 0.65 ? 58 : 46, lerp(70, 190, q), lerp(255, 90, q), lerp(170, 255, q), 200 * str * (1 - q * 0.8)); }
+  }
+  // sunrise flare on the rim
+  const fl = smooth(0.5, 0.05, sz) * 0.95 + 0.05;
+  const fxc = cx + (R + 1) * ux, fyc = cy - (R + 1) * uy;
+  if (fxc > -20 && fxc < cols + 20) {
+    const fr = fyc / asp, intensity = fl;
+    for (let k = -14; k <= 14; k++) { const c = Math.round(fxc + k); if (c < 0 || c >= cols) continue; const r = Math.round(fr); if (r < 0 || r >= rows) continue; const q = 1 - Math.abs(k) / 15; L.put(r * cols + c, Math.abs(k) < 2 ? 64 : Math.abs(k) < 6 ? 61 : 45, 255, 232, 180, 255 * q * q * intensity); }
+    for (let k = -5; k <= 5; k++) { const r = Math.round(fr) + k, c = Math.round(fxc); if (r < 0 || r >= rows || c < 0 || c >= cols) continue; const q = 1 - Math.abs(k) / 6; L.put(r * cols + c, 124, 255, 236, 200, 255 * q * intensity); }
+  }
+  // station
+  const u = reduce ? 0.3 : (T / 30) % 1, sx = lerp(-0.1, 1.1, u) * Wc, srow = Math.round((limb - 12 - 14 * Math.sin(Math.PI * u) - R * 0.0) / asp - 3);
+  const spr = '|=[o]=|', c0 = Math.round(sx);
+  for (let k = 0; k < spr.length; k++) { const c = c0 + k; if (c < 0 || c >= cols || srow < 0 || srow >= rows) continue; const blink = k === 3 ? (Math.sin(T * 5) > 0 ? 255 : 90) : 255; L.put(srow * cols + c, spr.charCodeAt(k), k === 3 ? 255 : 220, k === 3 ? 90 : 230, k === 3 ? 90 : 245, blink); }
+  const lab = 'MERIDIAN-1'; for (let k = 0; k < lab.length; k++) { const c = c0 - 1 + k, r = srow + 1; if (c < 0 || c >= cols || r >= rows) continue; L.put(r * cols + c, lab.charCodeAt(k), 150, 170, 210, 150); }
+  // meteors
+  if (!reduce && T > nextMeteor) { addMeteor(rnd(Wc * 0.3, Wc * 1.0) * L.cw, rnd(0, L.vh * 0.35)); nextMeteor = T + rnd(3, 7); }
+  for (const m of meteors) {
+    const age = T - m.t0; if (age < 0 || age > m.life) continue;
+    for (let k = 0; k < 9; k++) {
+      const a2 = age - k * 0.025; if (a2 < 0) continue; const px = m.x + m.vx * a2 * 10, py = m.y + m.vy * a2 * 10, c = (px / L.cw) | 0, r = (py / L.chh) | 0;
+      if (c < 0 || c >= cols || r < 0 || r >= rows) continue; const q = 1 - k / 9, f = 1 - age / m.life; L.put(r * cols + c, k === 0 ? 42 : k < 3 ? 43 : 46, 255, 240 - k * 8, 210 - k * 14, 255 * q * f);
+    }
+  }
+  L.paint(); L.bloomPass();
+}
+{
+  const ft = $('#footer');
+  ft.addEventListener('click', (e) => { if (e.target.closest('a,button,input,label,form,.clock,.fcols,.fine')) return; const r = $('#footcv').getBoundingClientRect(); addMeteor(e.clientX - r.left, e.clientY - r.top); settle(); });
+  $('#subform').addEventListener('submit', (e) => { e.preventDefault(); $('#substatus').textContent = 'Demo only: nothing was sent. The forecast is clear.'; });
+  const cities = [['Lisbon', 'Europe/Lisbon'], ['Nairobi', 'Africa/Nairobi'], ['Singapore', 'Asia/Singapore'], ['Honolulu', 'Pacific/Honolulu']];
+  const box = $('#clocks'); const els = cities.map(([n]) => { const d = document.createElement('div'); d.className = 'clock'; d.innerHTML = '<b></b><span><i></i><em></em></span>'; box.appendChild(d); return d; });
+  const fmts = cities.map(([n, tz]) => { try { return new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }); } catch (e) { return null; } });
+  function tick() {
+    const now = new Date(); cities.forEach(([n], i) => {
+      const f = fmts[i]; let t = f ? f.format(now) : '--:--'; const h = parseInt(t, 10);
+      const el = els[i], day = h >= 6 && h < 18; el.className = 'clock ' + (day ? 'day' : 'night');
+      el.firstChild.textContent = t; el.lastChild.lastChild.textContent = n + ' ' + (day ? 'day' : 'night');
+    });
+  }
+  tick(); setInterval(tick, 15000);
+}
+
+/* ================= pointer, wake, tap ================= */
+window.addEventListener('pointermove', (e) => {
+  const dx = e.clientX - P.lx, dy = e.clientY - P.ly; P.lx = P.x = e.clientX; P.ly = P.y = e.clientY; P.act = 1;
+  const sp = Math.hypot(dx, dy); P.sp = sp; P.wake = Math.min(1, P.wake + sp * 0.01);
+  if (reduce) return;
+  const n = Math.min(3, (sp / 14) | 0 + (Math.random() < 0.2 ? 1 : 0)); const wc = wakeCol();
+  for (let i = 0; i < n; i++) spawn(e.clientX + rnd(-6, 6), e.clientY + rnd(-6, 6), dx * 2 + rnd(-14, 14), dy * 2 + rnd(-14, 14) - 6, rnd(0.7, 1.3), Math.random() < 0.5 ? '.' : (Math.random() < 0.5 ? ':' : '·'), wc, SK.nf > 0.5 ? -4 : (S.storm > 0.55 ? 60 : -10), 1.2);
+}, { passive: true });
+document.addEventListener('pointerleave', () => { P.act = 0; });
+window.addEventListener('blur', () => { P.act = 0; });
+window.addEventListener('pointerdown', (e) => {
+  P.x = P.lx = e.clientX; P.y = P.ly = e.clientY; P.act = 1; P.wake = 1;
+  if (e.target.closest('a,button,input')) return;
+  if (!reduce) burst(e.clientX, e.clientY, 30, 90, 190, '.o:', wakeCol(), 0.85, 2.2, 0);
+}, { passive: true });
+
+/* ================= layout, loop ================= */
+const layers = [sky, fx, bigL, navL, foot, menuL];
+bigL.vis = true; foot.visible = false; bigL.visible = true; menuL.visible = false;
+function layoutAll() {
+  VW = innerWidth; VH = innerHeight;
+  sky.layout(); fx.layout(); navL.layout(); bigL.layout(); foot.layout();
+  if (M.open) menuGeom(M.by || trig);
+  measureKF(); scrollTarget();
+  invalidateSoon();
+}
+let rzT = 0; const onResize = () => { clearTimeout(rzT); rzT = setTimeout(layoutAll, 120); };
+window.addEventListener('resize', onResize);
+if ('ResizeObserver' in window) { const ro = new ResizeObserver(() => onResize()); ro.observe(document.body); }
+window.addEventListener('scroll', () => { scY = window.scrollY; if (reduce) invalidateSoon(); }, { passive: true });
+if ('IntersectionObserver' in window) {
+  const io = new IntersectionObserver((es) => es.forEach(en => { if (en.target.id === 'logo-big') bigL.visible = en.isIntersecting; if (en.target.id === 'footcv') foot.visible = en.isIntersecting; if (reduce) invalidateSoon(); }), { rootMargin: '80px' });
+  io.observe($('#logo-big')); io.observe($('#footcv'));
+} else { bigL.visible = foot.visible = true; }
+
+function updateSky(dt, snap) {
+  if (tl) {
+    const u = (T - tl.t0) / tl.dur;
+    if (u >= 1) { S.clock = ((S.clock % 24) + 24) % 24; tl = null; } else { const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2; S.clock = tl.from + 24 * e; }
+  }
+  scrollTarget();
+  let cT = override != null ? override : (live ? localHour() : clockT);
+  let sT = Math.max(stormT, S.charge * 0.95, S.kick), spT = spaceT;
+  const k = snap ? 1 : 1 - Math.exp(-dt * 2.0);
+  if (!tl) S.clock += (cT - S.clock) * k;
+  S.storm += (sT - S.storm) * (snap ? 1 : 1 - Math.exp(-dt * 2.6)); S.space += (spT - S.space) * k;
+  S.flash = snap ? 0 : S.flash * Math.exp(-dt * 4.5);
+  S.kick = snap ? (S.kick > 0 ? Math.max(0, S.kick - 0.001) : 0) : Math.max(0, S.kick - dt * 0.1);
+  S.rain = snap ? S.rain : Math.max(0, S.rain - dt * 0.12);
+  if (S.rbStart > -1) { const u = T - S.rbStart; S.rainbow = reduce ? 1 : smooth(0, 2.2, u) * (1 - smooth(9, 14, u)); if (!reduce && u > 15) S.rbStart = -1; } else S.rainbow = 0;
+}
+let rdT = 0;
+function updateReadout() {
+  const h = ((S.clock % 24) + 24) % 24, hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+  const t = (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+  document.querySelector('.readout').style.opacity = S.space > 0.8 ? '0' : '1'; const rc = $('#rdclock'), rl = $('#rdlabel'); if (rc.textContent !== t) rc.textContent = t; if (rl.textContent !== SK.label) rl.textContent = SK.label;
+  const nc = $('#nowclock'); if (!mega.hidden) { if (nc.textContent !== t) { nc.textContent = t; } }
+}
+function stepHold(dt) {
+  if (holding) { S.charge = Math.min(1, S.charge + dt * 0.4); if (S.charge >= 1 && !struck) { strike(1); } }
+  else S.charge = Math.max(0, S.charge - dt * (struck ? 0.9 : 1.1));
+  const p = Math.round(S.charge * 100);
+  if (p !== lastPct) { lastPct = p; holdPct.textContent = p + '%'; hold.style.setProperty('--c', S.charge.toFixed(3)); if (holding && p % 25 === 0 && p > 0) holdStatus.textContent = 'Charge ' + p + ' percent.'; }
+}
+const STEP = 1 / 60; let last = 0, acc = 0, rAcc = 0;
+function simStep(dt) {
+  updateSky(dt, false); stepParticles(dt); stepButtons(); stepMenu(dt); stepLogo(dt); stepHold(dt);
+  navHov += (navHovT - navHov) * 0.1; P.act = P.act > 0 && P.act < 1 ? P.act : P.act; P.wake *= 0.985; if (P.sp > 0) P.sp *= 0.9;
+  if (S.rain > 0.02 && Math.random() < 0.0) { }
+}
+let skyT = -1, footT = -1;
+function renderAll() {
+  if (reduce || T - skyT > 0.038) { skyT = T; renderSky(); } renderFx();
+  if (bigL.visible) renderLogo();
+  renderNav();
+  if (foot.visible && (reduce || T - footT > 0.04)) { footT = T; renderFoot(); }
+  if (!mega.hidden) renderMenu();
+  if (T - rdT > 0.2) { rdT = T; updateReadout(); }
+}
+function frame(ts) {
+  requestAnimationFrame(frame);
+  if (document.hidden) { last = 0; return; }
+  if (!last) last = ts; const dt = Math.min(0.1, (ts - last) / 1000); last = ts;
+  T += dt; acc += dt; let n = 0;
+  while (acc >= STEP && n < 4) { simStep(STEP); acc -= STEP; n++; } if (n === 4) acc = 0;
+  rAcc += dt; if (rAcc >= 1 / 30 - 0.003) { rAcc = 0; renderAll(); }
+}
+let invQ = false;
+function invalidateSoon() { if (!reduce || invQ) return; invQ = true; requestAnimationFrame(() => { invQ = false; settleNow(); }); }
+function settleNow() {
+  for (const b of BT) { b.hov = b.hovT; b.press = b.pressT; b.foc = b.focT; b.amt = b.kind === 'hold' ? S.charge : Math.max(b.hov, b.press, b.foc * 0.55, b.idle); }
+  navHov = navHovT; if (M.open) M.amt = 1; else M.amt = 0; applyMenu();
+  updateSky(0.016, true); renderAll(); updateReadout();
+}
+function settle() { if (reduce) invalidateSoon(); }
+
+/* ----- init ----- */
+BT.length = 0; BT.push(holdB);
+$$('[data-fx]').forEach(el => { if (el !== hold) addBtn(el); });
+const heroHint = $('.hint');
+layoutAll();
+setLive(false); statusEl.textContent = '';
+if (reduce) { override = null; S.clock = clockT; S.storm = stormT; S.space = spaceT; settleNow(); }
+else requestAnimationFrame(frame);
+// fonts: relayout when ready, then run the form moment
+const fontsReady = (document.fonts && document.fonts.load) ? Promise.race([Promise.all([document.fonts.load('600 12px "JetBrains Mono"'), document.fonts.load('400 40px "Bebas Neue"')]), new Promise(r => setTimeout(r, 2500))]) : Promise.resolve();
+fontsReady.then(() => { layoutAll(); logo.t0 = T; navT0 = T; if (reduce) settleNow(); }).catch(() => { });
+window.addEventListener('load', () => { measureKF(); if (reduce) settleNow(); });
+document.addEventListener('visibilitychange', () => { last = 0; });
+})();
+</script>
+</body>
+</html>

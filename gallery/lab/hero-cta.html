@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hero and CTA blocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Major+Mono+Display&display=swap" rel="stylesheet">
+<style>
+:root{
+  --page:#05070f;
+  --panel:#080c1a;
+  --ink:#e6eef5;
+  --muted:#93a4b8;
+  --faint:#5b6b82;
+  --aurora:#7dffc0;
+  --violet:#a98bff;
+  --amber:#ffb15c;
+  --pink:#ff6fa8;
+  --ice:#bfe3ff;
+  --edge:rgba(140,170,200,.25);
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display:"Major Mono Display", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html{background:#05070f}
+body{margin:0;background:#05070f;color:#e6eef5;font-family:var(--mono);font-size:14px;line-height:1.5;
+  overflow-x:hidden;-webkit-text-size-adjust:100%}
+a{color:inherit}
+
+.sheet-head{max-width:1120px;margin:0 auto;padding:32px 16px 8px}
+.sheet-head h1{margin:0 0 6px;font:500 13px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:#e6eef5}
+.sheet-head p{margin:0;color:#93a4b8;font-size:12px}
+
+.label{max-width:1120px;margin:36px auto 12px;padding:0 16px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#93a4b8;display:flex;gap:10px;align-items:baseline}
+.label b{color:#7dffc0;font-weight:700}
+.label span{color:#5b6b82;text-transform:none;letter-spacing:.02em}
+.frame{max-width:1120px;margin:0 auto;padding:0 16px}
+
+/* shared canvas layer */
+.cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* buttons */
+.btn{appearance:none;font:700 14px/1 var(--mono);letter-spacing:.02em;min-height:48px;padding:0 22px;border-radius:8px;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;cursor:pointer;
+  border:1px solid transparent;transition:transform .15s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease}
+.btn:focus-visible{outline:2px solid #ffffff;outline-offset:3px;box-shadow:0 0 0 5px rgba(125,255,192,.35)}
+.btn:active{transform:translateY(1px) scale(.985)}
+.btn-aurora{background:#7dffc0;color:#04110c;box-shadow:0 0 28px rgba(125,255,192,.32)}
+.btn-aurora:hover{background:#a2ffd3;box-shadow:0 0 38px rgba(125,255,192,.5)}
+.btn-ghost{background:rgba(8,12,26,.55);color:#e6eef5;border-color:rgba(190,215,240,.4)}
+.btn-ghost:hover{border-color:#bfe3ff;background:rgba(20,30,56,.7)}
+.btn-ember{background:#ffb15c;color:#1a0d02;box-shadow:0 0 26px rgba(255,150,80,.35);font-size:15px;min-height:54px;padding:0 28px}
+.btn-ember:hover{background:#ffc47f;box-shadow:0 0 40px rgba(255,150,80,.55)}
+
+/* ---------- 01 hero / aurora ---------- */
+.hero{position:relative;width:100%;min-height:clamp(560px,80vh,700px);background:#050814;overflow:hidden;
+  border-top:1px solid var(--edge);border-bottom:1px solid var(--edge);isolation:isolate}
+.hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(90deg, rgba(5,8,20,.8) 0%, rgba(5,8,20,.5) 36%, rgba(5,8,20,0) 70%),
+             linear-gradient(0deg, rgba(5,8,20,.0) 70%, rgba(5,8,20,.5) 100%)}
+.hero-in{position:relative;z-index:2;max-width:1120px;margin:0 auto;padding:28px 16px 190px;display:flex;flex-direction:column;gap:0}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:clamp(44px,9vh,92px)}
+.mark{font:400 18px/1 var(--display);letter-spacing:.04em;color:#e6eef5;text-decoration:none}
+.nav ul{display:flex;gap:6px;list-style:none;margin:0;padding:0}
+.nav a.nl{display:inline-block;padding:10px 10px;font-size:12px;color:#b5c4d6;text-decoration:none;border-radius:6px}
+.nav a.nl:hover{color:#ffffff}
+.nav a.nl:focus-visible,.mark:focus-visible{outline:2px solid #ffffff;outline-offset:2px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;width:fit-content;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7dffc0;
+  padding:6px 10px;border:1px solid rgba(125,255,192,.35);border-radius:999px;background:rgba(8,20,24,.55)}
+.eyebrow i{width:6px;height:6px;border-radius:50%;background:#7dffc0;box-shadow:0 0 8px #7dffc0;display:block}
+.hero h2{margin:18px 0 0;max-width:15em;font:400 clamp(30px,5.6vw,62px)/1.08 var(--display);letter-spacing:.01em;color:#f2f7fb;
+  text-shadow:0 0 28px rgba(125,255,192,.28);text-wrap:balance;overflow-wrap:anywhere}
+.hero p.sub{margin:20px 0 0;max-width:34em;font-size:clamp(14px,1.6vw,16px);line-height:1.65;color:#c3d0de}
+.actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.hero .fine{margin:16px 0 0;font-size:11px;letter-spacing:.04em;color:#93a4b8}
+
+/* ---------- 02 cta banner / burst ---------- */
+.cta{position:relative;border-radius:18px;overflow:hidden;background:#0a0a18;border:1px solid var(--edge);
+  box-shadow:0 30px 80px -30px rgba(0,0,0,.9), 0 0 60px -20px rgba(255,140,90,.18);isolation:isolate}
+.cta::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(90deg, rgba(10,10,24,.9) 0%, rgba(10,10,24,.7) 42%, rgba(10,10,24,0) 75%)}
+.cta-in{position:relative;z-index:2;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:28px;padding:clamp(28px,5vw,52px) clamp(20px,4vw,48px)}
+.cta-copy{flex:1 1 320px;max-width:520px}
+.cta-copy h3{margin:0;font:700 clamp(22px,3.4vw,32px)/1.2 var(--mono);letter-spacing:-.01em;color:#f4f1ec;text-wrap:balance}
+.cta-copy p{margin:12px 0 0;font-size:14px;line-height:1.65;color:#b6b0c4}
+.cta-act{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:6px 8px}
+.cta-act .fine{font-size:11px;color:#a49eb4;letter-spacing:.03em;min-height:1.5em}
+.hint{max-width:1120px;margin:12px auto 0;padding:0 16px;font-size:11px;color:#5b6b82;letter-spacing:.04em}
+
+/* ---------- 03 announcement strip / comet ---------- */
+.strip{position:relative;border-radius:12px;overflow:hidden;background:#060a18;border:1px solid var(--edge);isolation:isolate;min-height:112px;display:flex;align-items:center}
+.strip::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(90deg, rgba(6,10,24,.82) 0%, rgba(6,10,24,.55) 50%, rgba(6,10,24,.05) 100%)}
+.strip-in{position:relative;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:22px clamp(16px,3vw,32px);width:100%}
+.strip-in p{margin:0;font-size:14px;line-height:1.55;color:#dbe6f2;flex:1 1 260px}
+.tag{display:inline-block;margin-right:10px;padding:3px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:#05101c;background:#bfe3ff}
+.strip a.go{font-weight:700;font-size:13px;color:#bfe3ff;text-decoration:underline;text-underline-offset:4px;padding:10px 4px}
+.strip a.go:hover{color:#ffffff}
+.strip a.go:focus-visible{outline:2px solid #ffffff;outline-offset:3px;border-radius:4px}
+
+.foot{max-width:1120px;margin:40px auto 0;padding:0 16px 48px;font-size:11px;color:#5b6b82}
+
+@media (max-width:520px){
+  .nav ul li:nth-child(n+2){display:none}
+  .actions .btn{flex:1 1 100%}
+  .hero-in{padding-bottom:170px}
+}
+@media (prefers-reduced-motion: reduce){
+  .btn{transition:none}
+  .btn:active{transform:none}
+}
+</style>
+</head>
+<body>
+
+<header class="sheet-head">
+  <h1>Hero and CTA blocks</h1>
+  <p>Three drop-in components. Text-character scenes on canvas, one cheap bloom, paused when offscreen.</p>
+</header>
+
+<!-- ============ 01 HERO ============ -->
+<p class="label"><b>01</b> Hero / aurora <span>full-bleed scene, headline, two buttons</span></p>
+<section class="hero" id="hero" aria-labelledby="hero-title">
+  <canvas class="cv" id="cvHero" aria-hidden="true"></canvas>
+  <div class="hero-in">
+    <nav class="nav" aria-label="Example site">
+      <a class="mark" href="#hero">northlight</a>
+      <ul>
+        <li><a class="nl" href="#hero">Product</a></li>
+        <li><a class="nl" href="#hero">Pricing</a></li>
+        <li><a class="nl" href="#hero">Docs</a></li>
+      </ul>
+    </nav>
+    <span class="eyebrow"><i aria-hidden="true"></i>Release planning for small teams</span>
+    <h2 id="hero-title">ship every release from one calm place</h2>
+    <p class="sub">Northlight keeps your roadmap, changelog and launch checklist in a single timeline, so the whole team knows what is going out and when.</p>
+    <div class="actions">
+      <a class="btn btn-aurora" href="#cta">Start free</a>
+      <a class="btn btn-ghost" href="#hero">Watch the 2 minute tour</a>
+    </div>
+    <p class="fine">Free for teams up to 5. No credit card needed.</p>
+  </div>
+</section>
+
+<!-- ============ 02 CTA ============ -->
+<p class="label" id="cta-label"><b>02</b> CTA banner / burst <span>hover sparks, press implodes, release bursts</span></p>
+<div class="frame">
+  <section class="cta" id="cta" aria-labelledby="cta-title">
+    <canvas class="cv" id="cvCta" aria-hidden="true"></canvas>
+    <div class="cta-in">
+      <div class="cta-copy">
+        <h3 id="cta-title">Launch your first page before lunch.</h3>
+        <p>Pick a layout, paste your copy and publish. Most teams are live in under an hour, and you can change anything later.</p>
+      </div>
+      <div class="cta-act">
+        <button class="btn btn-ember" id="ctaBtn" type="button">Start building</button>
+        <span class="fine" id="ctaFine" aria-live="polite">Free for 14 days. No card needed.</span>
+      </div>
+    </div>
+  </section>
+</div>
+<p class="hint">Try it: hover the button, press and hold, then release. Keyboard Enter works too.</p>
+
+<!-- ============ 03 STRIP ============ -->
+<p class="label"><b>03</b> Announcement strip / comet <span>hover or focus warps the starfield, a comet streaks across</span></p>
+<div class="frame">
+  <aside class="strip" id="strip" aria-label="Announcement">
+    <canvas class="cv" id="cvStrip" aria-hidden="true"></canvas>
+    <div class="strip-in">
+      <p><span class="tag">New</span>Northlight 2.0 adds release timelines and a calmer inbox.</p>
+      <a class="go" id="stripLink" href="#strip">See what is new</a>
+    </div>
+  </aside>
+</div>
+
+<p class="foot">Canvas scenes: 60Hz sim step, 30fps render, devicePixelRatio capped at 2, paused offscreen and in background tabs. Reduced motion shows one still frame.</p>
+
+<script>
+(() => {
+'use strict';
+
+const FAMILY = '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace';
+const RAMP = ' .:-=+*#%@';
+const STEP = 1 / 60;
+const reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+// ---------- helpers ----------
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const rnd = (a, b) => a + Math.random() * (b - a);
+function hash2(x, y) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const fbm = x => vnoise(x, 1.7) * 0.6 + vnoise(x * 2.1 + 7, 4.3) * 0.28 + vnoise(x * 4.3 + 3, 9.1) * 0.12;
+const cssCache = new Map();
+function css(k) {
+  let s = cssCache.get(k);
+  if (!s) { s = 'rgb(' + ((k >> 16) & 255) + ',' + ((k >> 8) & 255) + ',' + (k & 255) + ')'; if (cssCache.size > 8000) cssCache.clear(); cssCache.set(k, s); }
+  return s;
+}
+
+// ---------- shared grid engine ----------
+const grids = [];
+function createGrid(host, cv, scene, o) {
+  const ctx = cv.getContext('2d', { alpha: false });
+  const bcv = document.createElement('canvas');
+  const bctx = bcv.getContext('2d');
+  const g = {
+    host, time: 0, dpr: 1, vw: 1, vh: 1, fs: 10, cw: 6, chh: 12, cols: 0, rows: 0, asp: 2, W: 0, H: 0, N: 0,
+    ch: [], r: null, g: null, b: null, visible: false, ready: false
+  };
+  let FONT = '', running = false, raf = 0, last = 0, acc = 0, rAcc = 1, dirty = true, rzTimer = 0;
+
+  g.put = (i, ch, r, gg, b) => { g.ch[i] = ch; g.r[i] = r; g.g[i] = gg; g.b[i] = b; };
+  g.at = (c, r, ch, R, G, B) => { if (c < 0 || c >= g.cols || r < 0 || r >= g.rows) return; const i = r * g.cols + c; g.ch[i] = ch; g.r[i] = R; g.g[i] = G; g.b[i] = B; };
+
+  function layout() {
+    const rect = host.getBoundingClientRect();
+    g.vw = Math.max(1, rect.width); g.vh = Math.max(1, rect.height);
+    g.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(g.vw * g.dpr); cv.height = Math.round(g.vh * g.dpr);
+    g.fs = clamp(g.vw / o.fsDiv, o.fsMin, o.fsMax);
+    FONT = '500 ' + g.fs.toFixed(2) + 'px ' + FAMILY;
+    ctx.setTransform(g.dpr, 0, 0, g.dpr, 0, 0);
+    ctx.font = FONT;
+    g.cw = ctx.measureText('M').width || g.fs * 0.6;
+    g.chh = g.fs * 1.25;
+    g.cols = Math.ceil(g.vw / g.cw); g.rows = Math.ceil(g.vh / g.chh);
+    g.asp = g.chh / g.cw; g.W = g.cols; g.H = g.rows * g.asp;
+    g.N = g.cols * g.rows;
+    g.ch = new Array(g.N).fill(' ');
+    g.r = new Uint8ClampedArray(g.N); g.g = new Uint8ClampedArray(g.N); g.b = new Uint8ClampedArray(g.N);
+    bcv.width = Math.max(1, Math.round(cv.width / 5)); bcv.height = Math.max(1, Math.round(cv.height / 5));
+    scene.layout(g);
+  }
+
+  function render() {
+    g.ch.fill(' ');
+    scene.draw(g);
+    ctx.setTransform(g.dpr, 0, 0, g.dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    ctx.fillStyle = o.bg; ctx.fillRect(0, 0, g.vw, g.vh);
+    ctx.font = FONT; ctx.textBaseline = 'top';
+    let lastK = -1;
+    for (let r = 0; r < g.rows; r++) {
+      const y = r * g.chh, base = r * g.cols;
+      for (let c = 0; c < g.cols; c++) {
+        const i = base + c, ch = g.ch[i];
+        if (ch === ' ') continue;
+        const k = ((g.r[i] & 0xfc) << 16) | ((g.g[i] & 0xfc) << 8) | (g.b[i] & 0xfc);
+        if (k !== lastK) { ctx.fillStyle = css(k); lastK = k; }
+        ctx.fillText(ch, c * g.cw, y);
+      }
+    }
+    // cheap bloom: shrink to 1/5, add back stretched
+    bctx.globalCompositeOperation = 'copy';
+    bctx.drawImage(cv, 0, 0, bcv.width, bcv.height);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(bcv, 0, 0, cv.width, cv.height);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function frame(now) {
+    raf = 0;
+    if (!running) return;
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    acc += dt;
+    while (acc >= STEP) { g.time += STEP; scene.step(g, STEP); acc -= STEP; }
+    rAcc += dt;
+    if (rAcc >= 1 / 30 || dirty) { rAcc = 0; dirty = false; render(); }
+    raf = requestAnimationFrame(frame);
+  }
+
+  g.sync = () => {
+    const want = g.ready && g.visible && !document.hidden && !reduce;
+    if (want && !running) { running = true; last = performance.now(); acc = 0; raf = requestAnimationFrame(frame); }
+    else if (!want && running) { running = false; if (raf) cancelAnimationFrame(raf); raf = 0; }
+  };
+  g.still = () => { g.time = 0; scene.still(g); render(); };
+  g.redraw = () => { dirty = true; if (!running) render(); };
+
+  function relayout() {
+    layout();
+    if (reduce) g.still(); else render();
+  }
+  g.start = () => {
+    layout();
+    g.ready = true;
+    if (reduce) g.still(); else { scene.warm && scene.warm(g); render(); }
+    g.sync();
+  };
+
+  new ResizeObserver(() => { if (!g.ready) return; clearTimeout(rzTimer); rzTimer = setTimeout(relayout, 120); }).observe(host);
+  new IntersectionObserver(es => { g.visible = es[es.length - 1].isIntersecting; g.sync(); }, { rootMargin: '80px' }).observe(host);
+  grids.push(g);
+  return g;
+}
+document.addEventListener('visibilitychange', () => grids.forEach(g => g.sync()));
+
+// =====================================================================
+// 01  AURORA OVER MOUNTAINS
+// =====================================================================
+function auroraScene() {
+  let rf, rn, glow;
+  let shoot = null, nextShoot = 5;
+  const AO = { I: 0, r: 0, g: 0, b: 0, ray: 0 };
+  const LOW = [90, 255, 170], MID = [60, 215, 225], TOP = [178, 108, 255];
+
+  function aur(g, c, r) {
+    const t = g.time, f = r / g.rows;
+    let sum = 0, R = 0, G = 0, B = 0, ray = 0;
+    for (let k = 0; k < 2; k++) {
+      const ph = k * 7.3;
+      const yb = 0.44 - k * 0.07 + 0.07 * Math.sin(c * 0.045 + t * 0.25 + ph) + 0.05 * Math.sin(c * 0.11 - t * 0.4 + ph * 2);
+      const h = 0.34 + 0.12 * vnoise(c * 0.02 + ph, t * 0.15);
+      const d = (yb - f) / h;
+      if (d < -0.05 || d > 1) continue;
+      const body = d < 0 ? smooth(-0.05, 0, d) * 0.9 : Math.pow(1 - d, 1.5) * (0.55 + 0.45 * smooth(0, 0.12, d));
+      const rr = vnoise(c * 0.5 + ph * 5 + Math.sin(t * 0.2 + ph) * 3, t * 0.35 + ph);
+      const sh = vnoise(c * 0.2 - t * 0.6, f * 4 + ph);
+      const v = body * (0.2 + 0.8 * rr) * (0.65 + 0.35 * sh) * (k ? 0.75 : 1);
+      if (v <= 0.01) continue;
+      const cd = clamp(d, 0, 1), t1 = smooth(0, 0.55, cd), t2 = smooth(0.45, 1, cd);
+      const cr = lerp(lerp(LOW[0], MID[0], t1), TOP[0], t2), cg = lerp(lerp(LOW[1], MID[1], t1), TOP[1], t2), cb = lerp(lerp(LOW[2], MID[2], t1), TOP[2], t2);
+      sum += v; R += cr * v; G += cg * v; B += cb * v; ray = Math.max(ray, rr);
+    }
+    if (sum <= 0) { AO.I = 0; return AO; }
+    AO.I = Math.min(1, sum); AO.r = R / sum; AO.g = G / sum; AO.b = B / sum; AO.ray = ray;
+    return AO;
+  }
+
+  return {
+    layout(g) {
+      rf = new Float32Array(g.cols); rn = new Float32Array(g.cols); glow = new Float32Array(g.cols);
+      for (let c = 0; c < g.cols; c++) {
+        const m1 = 1 - Math.abs(2 * fbm(c * 0.028 + 5) - 1);
+        const m2 = 1 - Math.abs(2 * fbm(c * 0.05 + 21) - 1);
+        rf[c] = g.rows * (0.82 - 0.36 * m1);
+        rn[c] = g.rows * (0.95 - 0.24 * m2);
+      }
+    },
+    step(g, dt) {
+      if (shoot) { shoot.x += shoot.vx * dt; shoot.y += shoot.vy * dt; shoot.life -= dt; if (shoot.life <= 0) shoot = null; }
+      else if (g.time > nextShoot) {
+        const sp = g.W * 0.55;
+        shoot = { x: rnd(0.45, 1.0) * g.W, y: rnd(0.03, 0.22) * g.H, vx: -sp, vy: sp * 0.22 * g.asp / g.asp, life: 0.9 };
+        nextShoot = g.time + rnd(6, 11);
+      }
+    },
+    still(g) { g.time = 12.4; shoot = { x: g.W * 0.7, y: g.H * 0.12, vx: -g.W * 0.55, vy: g.W * 0.12, life: 0.5 }; },
+    draw(g) {
+      const { cols, rows, asp, time: t } = g;
+      for (let c = 0; c < cols; c++) glow[c] = aur(g, c, Math.max(0, rf[c] - 3)).I;
+      const moonX = g.W * 0.86, moonY = g.H * 0.17, moonR = Math.min(g.H * 0.075, g.W * 0.05);
+      for (let r = 0; r < rows; r++) {
+        const Y = (r + 0.5) * asp;
+        for (let c = 0; c < cols; c++) {
+          const i = r * cols + c;
+          if (r >= rn[c]) {                       // near ridge
+            const dep = r - rn[c], gl = glow[c] * 0.22;
+            if (dep < 1) g.put(i, '^', 120 + 20 * gl, 150 + 90 * gl, 180 + 30 * gl);
+            else { const h = hash2(c, r); g.put(i, h > 0.55 ? '%' : '#', 26 + 8 * gl, 38 + 26 * gl, 64 + 6 * gl); }
+            continue;
+          }
+          if (r >= rf[c]) {                       // far ridge
+            const dep = r - rf[c], gl = glow[c], peak = rf[c] < rows * 0.55;
+            const fall = 1 - clamp(dep / (rows * 0.4), 0, 1) * 0.55;
+            if (peak && dep < 2.4 + 2 * vnoise(c * 0.3, r * 0.4)) {
+              const sn = 0.75 + 0.25 * Math.sin(c * 0.9 + r);
+              g.put(i, dep < 1 ? '^' : (hash2(c, r) > 0.4 ? '*' : ':'), (205 + 20 * gl) * sn, (225 + 30 * gl) * sn, 245 * sn);
+            } else {
+              g.put(i, hash2(c * 3, r) > 0.5 ? ':' : '.', (70 + 30 * gl) * fall, (96 + 110 * gl) * fall, 150 * fall);
+            }
+            continue;
+          }
+          // sky
+          const hs = hash2(c, r * 7 + 3);
+          const a = aur(g, c, r);
+          if (a.I > 0.07) {
+            let idx = Math.floor(a.I * 9.4 + (hash2(c + 11, r * 5) - 0.5) * 0.9);
+            idx = clamp(idx, 1, 9);
+            let ch = RAMP[idx];
+            if (a.ray > 0.72 && a.I > 0.28 && idx < 8) ch = (idx & 1) ? '|' : '!';
+            const k = 0.75 + 0.6 * a.I;
+            g.put(i, ch, a.r * k, a.g * k, a.b * k);
+            continue;
+          }
+          if (hs > 0.987) {
+            const tw = 0.5 + 0.5 * Math.sin(t * (1.2 + hs * 3) + hs * 90);
+            const b = (1 - r / rows * 0.6) * (0.35 + 0.65 * tw);
+            g.put(i, hs > 0.9965 ? '+' : '.', 80 + 160 * b, 90 + 160 * b, 120 + 135 * b);
+            continue;
+          }
+          const dx = c + 0.5 - moonX, dy = Y - moonY, dm = Math.sqrt(dx * dx + dy * dy);
+          if (dm < moonR) {
+            const q = dm / moonR;
+            g.put(i, q < 0.5 ? '@' : q < 0.8 ? 'O' : 'o', 236, 240, 228 - 40 * q);
+          } else if (dm < moonR * 2.6 && hash2(c, r + 99) > 0.55) {
+            const q = 1 - (dm - moonR) / (moonR * 1.6);
+            g.put(i, '.', 60 + 90 * q, 70 + 100 * q, 100 + 110 * q);
+          }
+        }
+      }
+      if (shoot) {
+        const len = 12, dxn = shoot.vx, dyn = shoot.vy, m = Math.hypot(dxn, dyn) || 1;
+        for (let k = 0; k < len; k++) {
+          const x = shoot.x - dxn / m * k * 0.9, y = shoot.y - dyn / m * k * 0.9;
+          const c = Math.floor(x), r = Math.floor(y / asp);
+          if (c < 0 || c >= cols || r < 0 || r >= rows || r >= rf[c]) continue;
+          const b = 1 - k / len, f = clamp(shoot.life / 0.6, 0, 1);
+          g.put(r * cols + c, k === 0 ? '*' : k < 3 ? '+' : k < 7 ? '-' : '.', 255 * b * f + 20, 255 * b * f + 20, 255 * b * f + 40);
+        }
+      }
+    }
+  };
+}
+
+// =====================================================================
+// 02  CTA BURST
+// =====================================================================
+function ctaScene(btn, host) {
+  const parts = [], rings = [];
+  let hover = 0, hoverTarget = 0, amb = 0, spark = 0, trail = 0, gridRef = null, mouse = null;
+  const MAXP = 360;
+
+  function btnRect() {
+    const g = gridRef, hr = host.getBoundingClientRect(), br = btn.getBoundingClientRect();
+    return { x: (br.left - hr.left) / g.cw, y: (br.top - hr.top) / g.cw, w: br.width / g.cw, h: br.height / g.cw };
+  }
+  function add(p) { if (parts.length < MAXP) parts.push(p); }
+  function burst(x, y, n, speed, big) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * 6.2832, s = speed * (0.25 + Math.random() * 0.9);
+      const life = rnd(0.7, big ? 1.7 : 1.1);
+      add({ k: 'b', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.55, life, max: life, seed: Math.random() * 6.28 });
+    }
+  }
+  const S = {
+    attach(g) { gridRef = g; },
+    hover(on) { hoverTarget = on ? 1 : 0; },
+    pointer(clientX, clientY) {
+      const g = gridRef; if (!g) return;
+      const hr = host.getBoundingClientRect();
+      mouse = { x: (clientX - hr.left) / g.cw, y: (clientY - hr.top) / g.cw };
+      trail += 1;
+      if (trail % 3 === 0) {
+        const a = Math.random() * 6.28;
+        add({ k: 's', x: mouse.x, y: mouse.y, vx: Math.cos(a) * 5, vy: Math.sin(a) * 3 - 3, life: 0.6, max: 0.6, seed: 0 });
+      }
+    },
+    leave() { mouse = null; },
+    press() {
+      const b = btnRect(), cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      rings.push({ x: cx, y: cy, t: 0, dir: -1, R0: Math.max(b.w, 24) * 0.95 });
+    },
+    release() {
+      const b = btnRect(), cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      rings.push({ x: cx, y: cy, t: 0, dir: 1, R0: 0 });
+      rings.push({ x: cx, y: cy, t: -0.12, dir: 1, R0: 0 });
+      burst(cx, cy, 90, 46, true);
+    },
+    layout(g) { gridRef = g; },
+    warm(g) { gridRef = g; for (let i = 0; i < 90; i++) { g.time += STEP; this.step(g, STEP); } },
+    still(g) {
+      gridRef = g; parts.length = 0; rings.length = 0; hover = 0.7;
+      const b = btnRect(), cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      burst(cx, cy, 80, 46, true);
+      rings.push({ x: cx, y: cy, t: 0, dir: 1, R0: 0 });
+      for (let i = 0; i < 26; i++) this.step(g, STEP);
+      for (let i = 0; i < 16; i++) { g.time += STEP; }
+    },
+    step(g, dt) {
+      hover += (hoverTarget - hover) * Math.min(1, dt * 6);
+      // ambient embers
+      amb += dt * (5 + hover * 8);
+      while (amb >= 1) {
+        amb -= 1;
+        add({ k: 'a', x: rnd(0, g.W), y: g.H + 1, vx: rnd(-1, 1), vy: -rnd(3, 8), life: rnd(2.5, 5), max: 5, seed: Math.random() * 6.28 });
+      }
+      // hover sparks off the button edge
+      if (hover > 0.25) {
+        spark += dt * 26 * hover;
+        while (spark >= 1) {
+          spark -= 1;
+          const b = btnRect(), side = Math.random();
+          let x, y, nx, ny;
+          if (side < 0.5) { x = b.x + Math.random() * b.w; y = Math.random() < 0.5 ? b.y : b.y + b.h; nx = 0; ny = y === b.y ? -1 : 1; }
+          else { y = b.y + Math.random() * b.h; x = Math.random() < 0.5 ? b.x : b.x + b.w; ny = 0; nx = x === b.x ? -1 : 1; }
+          const s = rnd(5, 14);
+          add({ k: 's', x, y, vx: nx * s + rnd(-2, 2), vy: ny * s * 0.5 + rnd(-1.5, 1.5), life: rnd(0.45, 0.95), max: 0.95, seed: 0 });
+        }
+      }
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const p = parts[i];
+        p.life -= dt;
+        if (p.life <= 0) { parts[i] = parts[parts.length - 1]; parts.pop(); continue; }
+        if (p.k === 'a') { p.x += (p.vx + Math.sin(g.time * 1.8 + p.seed) * 1.6) * dt; p.y += p.vy * dt; }
+        else { const dr = Math.exp(-1.7 * dt); p.vx *= dr; p.vy = p.vy * dr + (p.k === 'b' ? 10 : 3) * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+      }
+      for (let i = rings.length - 1; i >= 0; i--) { rings[i].t += dt; if (rings[i].t > 1.3) rings.splice(i, 1); }
+    },
+    draw(g) {
+      const { cols, rows, asp, time: t } = g;
+      const b = btnRect(), bx = b.x + b.w / 2, by = b.y + b.h / 2;
+      // quiet dot texture
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const h = hash2(c, r * 3 + 1);
+        if (h > 0.962) {
+          const tw = 0.55 + 0.45 * Math.sin(t * (0.6 + h * 2) + h * 60);
+          g.put(r * cols + c, h > 0.992 ? '+' : '.', 50 * tw + 14, 44 * tw + 14, 80 * tw + 20);
+        }
+      }
+      // warm glow behind button
+      const rx = b.w * 0.9 + 10, ry = b.h * 1.1 + 6, pulse = 0.88 + 0.12 * Math.sin(t * 2.2);
+      const c0 = Math.max(0, Math.floor(bx - rx * 1.6)), c1 = Math.min(cols - 1, Math.ceil(bx + rx * 1.6));
+      const r0 = Math.max(0, Math.floor((by - ry * 1.6) / asp)), r1 = Math.min(rows - 1, Math.ceil((by + ry * 1.6) / asp));
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+        const dx = (c + 0.5 - bx) / rx, dy = ((r + 0.5) * asp - by) / ry;
+        const I = Math.exp(-(dx * dx + dy * dy) * 2.2) * (0.3 + 0.7 * hover) * pulse;
+        if (I > 0.1 && hash2(c + 5, r) > 0.3) {
+          g.put(r * cols + c, I > 0.5 ? '-' : I > 0.28 ? ':' : '.', 255 * I + 20, 150 * I + 10, 80 * I + 20);
+        }
+      }
+      // rings
+      for (const rg of rings) {
+        if (rg.t < 0) continue;
+        const life = rg.dir > 0 ? rg.t / 1.3 : rg.t / 0.45;
+        if (life >= 1) continue;
+        const R = rg.dir > 0 ? rg.t * 46 : Math.max(0, rg.R0 * (1 - smooth(0, 0.45, rg.t)));
+        const a = rg.dir > 0 ? Math.pow(1 - life, 1.6) : 0.4 + 0.6 * life;
+        const ext = R + 3, rr0 = Math.max(0, Math.floor((rg.y - ext) / asp)), rr1 = Math.min(rows - 1, Math.ceil((rg.y + ext) / asp));
+        const cc0 = Math.max(0, Math.floor(rg.x - ext)), cc1 = Math.min(cols - 1, Math.ceil(rg.x + ext));
+        for (let r = rr0; r <= rr1; r++) for (let c = cc0; c <= cc1; c++) {
+          const dx = c + 0.5 - rg.x, dy = (r + 0.5) * asp - rg.y, d = Math.hypot(dx, dy), diff = Math.abs(d - R);
+          if (diff > 1.7) continue;
+          const q = (1 - diff / 1.7) * a;
+          if (q < 0.1) continue;
+          const idx = clamp(Math.floor(q * 9.4), 1, 9), mix = clamp(life, 0, 1);
+          g.put(r * cols + c, RAMP[idx], lerp(255, 255, mix) * (0.5 + 0.5 * q), lerp(190, 100, mix) * (0.5 + 0.5 * q), lerp(100, 175, mix) * (0.5 + 0.5 * q));
+        }
+      }
+      // particles
+      for (let j = 0; j < parts.length; j++) {
+        const p = parts[j], c = Math.floor(p.x), r = Math.floor(p.y / asp);
+        if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+        const lf = p.life / p.max, i = r * cols + c;
+        if (p.k === 'a') {
+          const f = Math.min(1, lf * 3) * Math.min(1, (p.max - p.life) * 2 + 0.2);
+          g.put(i, lf > 0.5 ? ':' : '.', 190 * f, 105 * f, 80 * f);
+        } else {
+          const ch = lf > 0.78 ? '@' : lf > 0.55 ? '*' : lf > 0.35 ? '+' : lf > 0.18 ? ':' : '.';
+          const hot = smooth(0.35, 0.9, lf);
+          const R = lerp(230, 255, hot), G = lerp(80, 235, hot * hot), B = lerp(130, 190, hot * hot);
+          const k = p.k === 's' ? 0.8 : 1;
+          g.put(i, ch, R * k, G * k, B * k);
+        }
+      }
+    }
+  };
+  return S;
+}
+
+// =====================================================================
+// 03  STARFIELD + COMET STRIP
+// =====================================================================
+function cometScene() {
+  const stars = [];
+  for (let i = 0; i < 110; i++) {
+    const layer = i % 3;
+    stars.push({ x: Math.random(), y: Math.random(), l: layer, ph: Math.random() * 6.28 });
+  }
+  const sparks = [];
+  let warp = 0, warpT = 0, comet = null, nextComet = 1.2, cooldown = 0;
+  const SPEED = [0.006, 0.014, 0.03];
+
+  function spawn(g) {
+    comet = { x: g.W + 4, y: rnd(0.08, 0.4) * g.H, vx: -g.W / 3.4, vy: g.H * 0.16, age: 0, shed: 0 };
+    cooldown = 2.5;
+  }
+  return {
+    layout() {},
+    warm(g) { for (let i = 0; i < 20; i++) this.step(g, STEP); },
+    setWarp(on, g) { warpT = on ? 1 : 0; if (on && !comet && cooldown <= 0 && g) spawn(g); },
+    still(g) {
+      comet = { x: g.W * 0.58, y: g.H * 0.3, vx: -g.W / 3.4, vy: g.H * 0.16, age: 1, shed: 0 };
+      sparks.length = 0;
+      for (let i = 0; i < 12; i++) sparks.push({ x: comet.x + (i + 1) * 1.8, y: comet.y - (i + 1) * 0.6 + rnd(-1, 1), vx: 0, vy: 0, life: 0.5, max: 1 });
+      g.time = 3;
+    },
+    step(g, dt) {
+      warp += (warpT - warp) * Math.min(1, dt * 4);
+      cooldown -= dt;
+      for (const s of stars) { s.x -= dt * SPEED[s.l] * (1 + warp * 16); if (s.x < -0.1) { s.x += 1.2; s.y = Math.random(); } }
+      if (!comet && g.time > nextComet && cooldown <= 0) { spawn(g); nextComet = g.time + rnd(5, 8); }
+      if (comet) {
+        comet.x += comet.vx * dt; comet.y += comet.vy * dt; comet.age += dt;
+        comet.shed += dt * 30;
+        while (comet.shed >= 1) { comet.shed -= 1; if (sparks.length < 90) sparks.push({ x: comet.x + rnd(0, 3), y: comet.y + rnd(-1.5, 1.5), vx: rnd(-2, 6), vy: rnd(-2, 2), life: rnd(0.5, 1.1), max: 1.1 }); }
+        if (comet.x < -40) comet = null;
+      }
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const s = sparks[i]; s.life -= dt;
+        if (s.life <= 0) { sparks[i] = sparks[sparks.length - 1]; sparks.pop(); continue; }
+        s.x += s.vx * dt; s.y += s.vy * dt;
+      }
+    },
+    draw(g) {
+      const { cols, rows, asp } = g, t = g.time;
+      for (const s of stars) {
+        const c = Math.floor(s.x * cols), r = Math.floor(s.y * rows);
+        if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+        const tw = 0.6 + 0.4 * Math.sin(t * (1 + s.l) + s.ph);
+        const base = [90, 150, 215][s.l] * tw;
+        const ch = s.l === 0 ? '.' : s.l === 1 ? '+' : '*';
+        const streak = Math.floor(warp * (2 + s.l * 6));
+        for (let k = streak; k >= 1; k--) {
+          const f = 1 - k / (streak + 1);
+          g.at(c + k, r, '-', base * f * 0.8 + 10, base * f * 0.95 + 14, base * f * 1.2 + 30);
+        }
+        g.at(c, r, ch, base + 30, base + 50, base * 1.05 + 90);
+      }
+      for (const s of sparks) {
+        const c = Math.floor(s.x), r = Math.floor(s.y / asp), lf = s.life / s.max;
+        g.at(c, r, lf > 0.55 ? '+' : lf > 0.25 ? ':' : '.', 120 + 100 * lf, 170 + 70 * lf, 255);
+      }
+      if (comet) {
+        const m = Math.hypot(comet.vx, comet.vy), ux = comet.vx / m, uy = comet.vy / m, L = 30;
+        const TC = ['@', '#', '*', '=', '+', '-', ':', '.'];
+        for (let k = L; k >= 0; k--) {
+          const x = comet.x - ux * k * 0.8, y = comet.y - uy * k * 0.8;
+          const c = Math.floor(x), r = Math.floor(y / asp);
+          const q = 1 - k / L;
+          const ch = k === 0 ? '@' : TC[Math.min(7, 1 + Math.floor(k / L * 7))];
+          g.at(c, r, ch, lerp(70, 235, q * q), lerp(110, 245, q * q), lerp(235, 255, q));
+          if (k > 2 && k < L * 0.7) g.at(c, r + 1, '.', 50 * q + 20, 80 * q + 30, 170 * q + 40);
+        }
+        g.at(Math.floor(comet.x), Math.floor(comet.y / asp), '@', 255, 255, 255);
+      }
+    }
+  };
+}
+
+// ---------- wire up ----------
+const hero = createGrid(document.getElementById('hero'), document.getElementById('cvHero'), auroraScene(),
+  { bg: '#050814', fsDiv: 95, fsMin: 8, fsMax: 12.5 });
+
+const ctaHost = document.getElementById('cta'), ctaBtn = document.getElementById('ctaBtn'), ctaFine = document.getElementById('ctaFine');
+const ctaS = ctaScene(ctaBtn, ctaHost);
+const ctaG = createGrid(ctaHost, document.getElementById('cvCta'), ctaS,
+  { bg: '#0a0a18', fsDiv: 80, fsMin: 8, fsMax: 12 });
+ctaS.attach(ctaG);
+
+const stripHost = document.getElementById('strip'), stripLink = document.getElementById('stripLink');
+const cometS = cometScene();
+const stripG = createGrid(stripHost, document.getElementById('cvStrip'), cometS,
+  { bg: '#060a18', fsDiv: 80, fsMin: 8, fsMax: 12 });
+
+// CTA interaction. In reduced motion the still frame stays; only the label changes.
+const FINE_DEFAULT = 'Free for 14 days. No card needed.';
+let fineTimer = 0;
+if (!reduce) {
+  ctaBtn.addEventListener('pointerenter', () => ctaS.hover(true));
+  ctaBtn.addEventListener('pointerleave', () => ctaS.hover(false));
+  ctaBtn.addEventListener('focus', () => ctaS.hover(true));
+  ctaBtn.addEventListener('blur', () => ctaS.hover(false));
+  ctaBtn.addEventListener('pointerdown', () => ctaS.press());
+  ctaHost.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') ctaS.pointer(e.clientX, e.clientY); });
+  ctaHost.addEventListener('pointerleave', () => ctaS.leave());
+  ctaBtn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') ctaS.press(); });
+}
+ctaBtn.addEventListener('click', () => {
+  if (!reduce) ctaS.release();
+  ctaFine.textContent = 'Nice. Your workspace is ready.';
+  clearTimeout(fineTimer);
+  fineTimer = setTimeout(() => { ctaFine.textContent = FINE_DEFAULT; }, 2200);
+});
+
+// strip interaction
+if (!reduce) {
+  const on = () => cometS.setWarp(true, stripG), off = () => cometS.setWarp(false, stripG);
+  stripHost.addEventListener('pointerenter', on); stripHost.addEventListener('pointerleave', off);
+  stripLink.addEventListener('focus', on); stripLink.addEventListener('blur', off);
+}
+document.querySelectorAll('a[href="#hero"],a[href="#strip"]').forEach(a => a.addEventListener('click', e => e.preventDefault()));
+
+const fontsReady = (document.fonts && document.fonts.load)
+  ? Promise.race([document.fonts.load('500 14px "JetBrains Mono"'), new Promise(r => setTimeout(r, 1500))])
+  : Promise.resolve();
+const go = () => { hero.start(); ctaG.start(); stripG.start(); };
+fontsReady.then(go, go);
+})();
+</script>
+</body>
+</html>

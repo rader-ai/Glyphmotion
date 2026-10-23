@@ -1,0 +1,1325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nib, the SHOAL mascot</title>
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --abyss:#040a14; --deep:#07121f; --lagoon:#0a2b3d; --ink:#e6f3f5; --muted:#9cb4c0; --edge:rgba(140,200,215,.2);
+  --foam:#7fe8e0; --lamp:#ffd27a; --coral:#ff6f61; --jelly:#c58bff; --kelp:#5fd18a;
+  --sans:"DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --display:"Unbounded","Arial Black",system-ui,sans-serif;
+  --gut:16px; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:70px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--abyss);color:var(--ink);font:400 16px/1.6 var(--sans);overflow-x:hidden;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+canvas{display:block}
+:focus-visible{outline:2px solid var(--lamp);outline-offset:3px;border-radius:6px}
+.wrap{width:min(1120px,100% - 2*var(--gut));margin-inline:auto}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+h1,h2,h3{font-family:var(--display);font-weight:700;line-height:1.1;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1{font-size:clamp(44px,9vw,104px)}
+h2{font-size:clamp(24px,4vw,40px)}
+h3{font-size:17px}
+p{margin:0}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--foam);margin:0 0 16px}
+.lede{color:var(--muted);font-size:clamp(16px,2vw,19px);max-width:58ch;margin-top:16px}
+.sec{padding:clamp(56px,9vw,104px) 0;position:relative}
+.sec.alt{background:linear-gradient(180deg,#05101b,#071826 50%,#05101b)}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:60;background:rgba(4,10,20,.86);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--edge)}
+.top-in{display:flex;align-items:center;gap:16px;height:56px}
+.logo{font:700 15px/1 var(--display);letter-spacing:.04em;text-decoration:none;white-space:nowrap}
+.logo b{color:var(--lamp)}
+.tlinks{display:flex;gap:2px;margin-left:auto;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tlinks::-webkit-scrollbar{display:none}
+.tlinks a{font:500 13px/1 var(--sans);color:#cfe3ea;text-decoration:none;padding:12px 10px;border-radius:8px;white-space:nowrap}
+.tlinks a:hover{color:var(--lamp)}
+@media (max-width:560px){.logo span{display:none}}
+
+/* hero */
+.hero{padding:clamp(36px,6vw,72px) 0 24px}
+.hero h1 span{color:var(--lamp)}
+.stage-wrap{margin-top:28px;border:1px solid var(--edge);border-radius:18px;overflow:hidden;background:#05111c;position:relative}
+#stage{width:100%;height:clamp(400px,62vw,600px);touch-action:pan-y;cursor:crosshair}
+.moodbar{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;padding:14px 18px;border-top:1px solid var(--edge);background:rgba(7,18,31,.9)}
+.moodbar .k{font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+#moodName{font:700 20px/1 var(--display);color:var(--lamp);min-width:7ch}
+#moodWhy{color:#cfe3ea;font-size:15px;flex:1 1 260px}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.btn{font:600 14px/1 var(--sans);color:var(--ink);background:rgba(10,43,61,.6);border:1px solid var(--edge);border-radius:999px;padding:13px 20px;cursor:pointer;min-height:44px;transition:border-color .2s,background .2s,transform .1s}
+.btn:hover{border-color:rgba(127,232,224,.8);background:rgba(14,60,84,.7)}
+.btn:active{transform:scale(.96)}
+.btn[aria-pressed=true]{background:rgba(60,40,110,.6);border-color:rgba(197,139,255,.8)}
+.btn.pri{background:var(--coral);color:#2b0904;border-color:transparent}
+.btn.pri:hover{background:#ff8678}
+.hint{margin-top:16px;color:var(--muted);font-size:14px;max-width:80ch}
+.hint b{color:var(--ink);font-weight:600}
+.secret{display:inline-block;margin-top:10px;font:500 12px/1.5 var(--mono);color:var(--lamp);border:1px dashed rgba(255,210,122,.45);border-radius:8px;padding:8px 12px}
+
+/* why */
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:36px}
+.card{border:1px solid var(--edge);border-radius:16px;padding:22px;background:rgba(7,18,31,.7)}
+.card h3{margin-bottom:10px;color:var(--lamp)}
+.card p{color:#c6d9e0;font-size:15px}
+.big{font-size:clamp(18px,2.4vw,24px);line-height:1.45;max-width:46ch;margin-top:20px;color:var(--ink)}
+
+.why-h{max-width:20ch}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:28px}
+.chips span{background:var(--c);color:#04121c;font:700 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:10px 14px;border-radius:999px}
+.reasons{display:grid;gap:0;margin-top:40px;border-top:1px solid var(--edge)}
+.reason{display:grid;grid-template-columns:90px 1fr;gap:18px;padding:28px 0;border-bottom:1px solid var(--edge)}
+.reason .num{font:700 clamp(36px,6vw,56px)/1 var(--display);color:var(--lamp);opacity:.9}
+.reason h3{font-size:clamp(18px,2.4vw,24px);margin-bottom:10px;line-height:1.25}
+.reason p{color:#c6d9e0;max-width:62ch}
+@media (max-width:560px){.reason{grid-template-columns:1fr;gap:8px}}
+.pull{font:700 clamp(20px,3vw,32px)/1.3 var(--display);color:var(--foam);max-width:28ch;margin-top:48px}
+/* emotion sheet */
+.sheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:32px}
+.ecard{display:flex;flex-direction:column;text-align:left;font:inherit;color:inherit;background:rgba(6,17,30,.9);border:1px solid var(--edge);border-radius:16px;padding:0;cursor:pointer;overflow:hidden;transition:border-color .2s,transform .15s}
+.ecard canvas{width:100%;height:230px;background:#05111c}
+.ecard:hover{border-color:rgba(127,232,224,.7)}
+.ecard:active{transform:scale(.985)}
+.ecard.on{border-color:var(--lamp);box-shadow:0 0 0 1px var(--lamp) inset}
+.ecard .en{font:700 18px/1 var(--display);padding:16px 16px 0}
+.ecard .es{color:#c6d9e0;font-size:14px;padding:10px 16px 0}
+.ecard .et{color:var(--muted);font-size:13px;padding:8px 16px 0}
+.ecard .et b{color:var(--foam);font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:3px}
+.ecard .ego{font:600 12px/1 var(--mono);color:var(--lamp);padding:14px 16px 16px;margin-top:auto}
+
+/* playground */
+.play{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:32px}
+@media (max-width:820px){.play{grid-template-columns:1fr}}
+.pbox{border:1px solid var(--edge);border-radius:16px;padding:22px;background:rgba(7,18,31,.7)}
+.pbox h3{margin-bottom:6px}
+.pbox .sub{color:var(--muted);font-size:14px;margin-bottom:16px}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+label{display:block;font:600 12px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+input[type=email],textarea{width:100%;font:400 16px/1.4 var(--sans);color:var(--ink);background:#06131f;border:1px solid var(--edge);border-radius:12px;padding:13px 14px}
+input[aria-invalid=true]{border-color:var(--coral)}
+textarea{min-height:84px;resize:vertical}
+.fmsg{min-height:24px;margin-top:10px;font-size:14px;color:var(--muted)}
+.fmsg.bad{color:#ff9a8f}.fmsg.ok{color:var(--kelp)}
+.tip{margin-top:16px;font-size:14px;color:var(--muted)}
+
+/* wild */
+.wild{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-top:32px}
+.wcard{margin:0;border:1px solid var(--edge);border-radius:16px;overflow:hidden;background:#06121e;display:flex;flex-direction:column}
+.wcard figcaption{padding:14px 18px 18px;font-size:14px;color:var(--muted);border-top:1px solid var(--edge)}
+.wcard figcaption b{color:var(--ink);display:block;font:700 14px/1.2 var(--display);margin-bottom:6px}
+.mock{padding:16px;display:flex;align-items:center;gap:14px;min-height:190px}
+.mock canvas{flex:none}
+.mnav{display:flex;align-items:center;gap:14px;background:#0a1a2a;border-bottom:1px solid var(--edge);padding:8px 14px;flex-wrap:wrap}
+.mnav .mlogo{font:700 14px/1 var(--display);margin-right:auto}
+.mnav a{font-size:13px;color:#cfe3ea;text-decoration:none;padding:8px 6px;border-radius:6px}
+.mnav a:hover,.mnav a:focus-visible{color:var(--lamp)}
+.mnav canvas{width:170px;height:92px}
+.fake{padding:18px 18px 22px;color:var(--muted);font-size:14px}
+.fake i{display:block;height:9px;border-radius:5px;background:rgba(140,200,215,.13);margin:10px 0}
+.fake i:nth-child(2){width:80%}.fake i:nth-child(3){width:62%}
+.m404{display:grid;grid-template-columns:minmax(0,1fr) 150px;align-items:center;gap:6px}
+.m404 .t{font:700 clamp(40px,9vw,56px)/1 var(--display);color:rgba(127,232,224,.9);padding-left:6px}
+.m404 p{font-size:14px;color:var(--muted);padding-left:6px;max-width:26ch}
+#w404{width:150px;height:150px}
+.loadbox{padding:16px 18px 20px;width:100%}
+.lbar{height:10px;border-radius:6px;background:rgba(140,200,215,.14);overflow:hidden;margin-top:12px}
+.lbar i{display:block;height:100%;width:38%;background:linear-gradient(90deg,var(--foam),var(--lamp));border-radius:6px;animation:ld 3.4s ease-in-out infinite alternate}
+@keyframes ld{from{width:14%}to{width:88%}}
+@media (prefers-reduced-motion:reduce){.lbar i{animation:none}}
+#wLoad{width:100%;height:170px}
+.signrow{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:0 18px 14px}
+#wSign{width:100%;height:190px}
+#signMsg{color:var(--kelp);font-size:14px;min-height:22px;padding:0 18px}
+.mfoot{background:#030912;border-top:1px solid var(--edge);padding:6px 0 0}
+#wSleep{width:100%;height:150px}
+.mfoot .fl{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 18px 14px;font-size:13px;color:var(--muted);align-items:center}
+
+/* rules */
+.rules{counter-reset:r;list-style:none;margin:32px 0 0;padding:0;display:grid;gap:14px}
+.rules li{counter-increment:r;border:1px solid var(--edge);border-radius:16px;padding:20px 22px 20px 72px;position:relative;background:rgba(7,18,31,.7)}
+.rules li::before{content:counter(r);position:absolute;left:20px;top:18px;font:700 28px/1 var(--display);color:var(--lamp)}
+.rules b{display:block;font:700 16px/1.3 var(--display);margin-bottom:6px}
+.rules span{color:#c6d9e0;font-size:15px}
+.say{font:500 13px/1.4 var(--mono);color:var(--foam)}
+
+/* sketches */
+.sk{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:32px}
+.sk figure{margin:0;border:1px solid var(--edge);border-radius:16px;overflow:hidden;background:#06121e}
+.sk canvas{width:100%;height:170px}
+.sk figcaption{padding:14px 16px 18px;font-size:14px;color:var(--muted);border-top:1px solid var(--edge)}
+.sk figcaption b{color:var(--ink);display:block;font:700 15px/1.2 var(--display);margin-bottom:6px}
+
+footer{border-top:1px solid var(--edge);padding:40px 0 120px;color:var(--muted);font-size:14px}
+
+/* dock */
+.dock{position:fixed;right:16px;bottom:16px;width:min(250px,46vw);z-index:70;border:1px solid var(--edge);border-radius:16px;background:#05111c;box-shadow:0 18px 50px -10px #000;overflow:hidden;display:none}
+.dock.show{display:block}.dock.left{right:auto;left:16px}.dock.compact{width:min(168px,34vw)}.dock.compact canvas{height:96px}.dock.compact .dbar{padding:4px}.dock.compact button{padding:6px 9px;min-height:32px;font-size:11px}
+.dock canvas{width:100%;height:150px;touch-action:pan-y}
+.dock .dbar{display:flex;gap:6px;padding:6px;border-top:1px solid var(--edge);background:#071522;justify-content:space-between}
+.dock button,.dopen{font:600 12px/1 var(--sans);color:var(--ink);background:rgba(10,43,61,.7);border:1px solid var(--edge);border-radius:999px;padding:10px 12px;min-height:40px;cursor:pointer}
+.dock button:hover,.dopen:hover{border-color:rgba(127,232,224,.8)}
+.dopen{position:fixed;right:16px;bottom:16px;z-index:70;display:none;background:#071522}
+.dopen.show{display:block}.dopen.left{right:auto;left:16px}
+</style>
+</head>
+<body>
+<p id="live" class="sr" aria-live="polite" role="status"></p>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="logo" href="#meet">SHOAL <span>/ <b>Nib</b></span></a>
+    <nav class="tlinks" aria-label="Sections">
+      <a href="#meet">Meet</a><a href="#why">Why Nib</a><a href="#emotions">Emotions</a><a href="#play">Playground</a><a href="#wild">In the wild</a><a href="#rules">Rules</a><a href="#sketches">Sketches</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="hero" id="meet">
+  <div class="wrap">
+    <p class="eyebrow">SHOAL mascot, round 2</p>
+    <h1>Meet <span>Nib.</span></h1>
+    <p class="lede">A small cuttlefish who lives in the corner of your site and wears every feeling on its skin. Curious first, shy second, proud about once a day. It carries a tiny lantern on its forehead.</p>
+    <div class="stage-wrap">
+      <canvas id="stage" role="img" aria-label="Nib, a small cuttlefish drawn in colored text characters. It follows your pointer, reacts to touch and changes color with its mood."></canvas>
+      <div class="moodbar"><span class="k">Nib feels</span><span id="moodName">Content</span><span id="moodWhy"></span></div>
+    </div>
+    <div class="toolbar" role="group" aria-label="Play with Nib">
+      <button class="btn" id="btnPet" type="button">Pet Nib</button>
+      <button class="btn" id="btnPoke" type="button">Poke</button>
+      <button class="btn" id="btnFeed" type="button">Drop a snack</button>
+      <button class="btn" id="btnSleep" type="button" aria-pressed="false">Send to sleep</button>
+    </div>
+    <p class="hint"><b>Play directly:</b> click the water to drop a snack, click Nib to poke it, drag it around, or stroke the pointer slowly across its body to pet it. On touch, tap and drag work the same way. Leave it alone and it gets bored, then sleepy, then falls asleep. After 9pm on your clock it gets sleepy faster.</p>
+    <p class="secret">Secret 1: hold your pointer still on its face for three seconds. Secret 2: double-click empty water.</p>
+  </div>
+</section>
+
+<section class="sec alt" id="why">
+  <div class="wrap">
+    <p class="eyebrow">Why this character</p>
+    <h2 class="why-h">A mascot made of the same stuff as the brand.</h2>
+    <p class="big">Most mascots are a face pasted on a logo. Nib is a cuttlefish, the one animal that talks in color. SHOAL talks in colored text on a dark grid. So when Nib changes its mind, the whole body changes: color, pattern, posture, eyes. You can read the mood from across the room.</p>
+
+    <div class="chips" role="list" aria-label="Skin color of each mood">
+      <span role="listitem" style="--c:#46c8b9">Content</span><span role="listitem" style="--c:#50d7e8">Curious</span><span role="listitem" style="--c:#ff9687">Delighted</span><span role="listitem" style="--c:#e8f6ff;color:#0a2b3d">Surprised</span><span role="listitem" style="--c:#28707c">Shy</span><span role="listitem" style="--c:#7080da">Concerned</span><span role="listitem" style="--c:#ffce70;color:#2b1a00">Proud</span><span role="listitem" style="--c:#60ce8e">Focused</span><span role="listitem" style="--c:#4c68b0">Sleepy</span><span role="listitem" style="--c:#3e589c">Asleep</span>
+    </div>
+
+    <div class="reasons">
+      <article class="reason"><span class="num">01</span><div><h3>It speaks in color, so it speaks in our medium.</h3><p>Every mood has its own skin. Teal and a slow gold ripple for calm. Coral and gold shimmer for delight. Near white for a shock. Water-colored camouflage when shy. Nothing is bolted on: the color text grid that builds the page also builds the feeling.</p></div></article>
+      <article class="reason"><span class="num">02</span><div><h3>It has eyes, hands and attention.</h3><p>Big eyes with real W-shaped pupils look at your cursor, your form field, the snack you just dropped. Eight short arms and two long feeding tentacles let it wave, tap, scratch its head and snatch food. A blob cannot do that, and a jellyfish has no face to do it with.</p></div></article>
+      <article class="reason"><span class="num">03</span><div><h3>It lives in the reef we already built.</h3><p>Round 1 gave SHOAL a whale, jellies and a lantern. Nib is the resident. Its skin uses only the SHOAL palette (foam, lamp, coral, jelly, kelp) and the little lantern on its forehead is the same lamp color that glows in our logo.</p></div></article>
+      <article class="reason"><span class="num">04</span><div><h3>It is nobody else's.</h3><p>Not a blob with eyes, not a robot helper, not a copy of a famous character. A frilled cuttlefish with a forehead lantern that blushes, inks and does a stare contest is specific enough to be ours alone.</p></div></article>
+    </div>
+
+    <div class="cols">
+      <div class="card"><h3>Easy to love</h3><p>People will pet it, feed it, win the stare contest and post the screen recording. Ten clean mood portraits double as a sticker set.</p></div>
+      <div class="card"><h3>Useful, not cute for its own sake</h3><p>The same ten moods cover errors, loading, success, empty states and quiet corners. One character, a whole feedback system.</p></div>
+      <div class="card"><h3>Built to behave</h3><p>It never covers text, hides on request, sleeps on request, tells screen readers its mood politely and holds calm still poses when motion is off.</p></div>
+    </div>
+    <p class="pull">A brand that can show a mood is a brand people remember being kind to them.</p>
+  </div>
+</section>
+
+<section class="sec" id="emotions">
+  <div class="wrap">
+    <p class="eyebrow">Emotion sheet</p>
+    <h2>Ten moods, all live.</h2>
+    <p class="lede">Each card is a living Nib stuck in that mood. Press a card to make the main Nib feel it too. If the main stage has scrolled away, Nib moves to the corner dock so you can watch it react.</p>
+    <div class="sheet" id="sheet"></div>
+  </div>
+</section>
+
+<section class="sec alt" id="play">
+  <div class="wrap">
+    <p class="eyebrow">Playground</p>
+    <h2>Make things happen on the page.</h2>
+    <p class="lede">Nib listens to the page, not only to the pointer. Try the buttons and the form. Scroll while you do it: Nib follows you to the corner and keeps reacting.</p>
+    <div class="play">
+      <div class="pbox">
+        <h3>Page events</h3>
+        <p class="sub">Simulate what your product does.</p>
+        <div class="row">
+          <button class="btn" type="button" data-ev="error">Form error</button>
+          <button class="btn pri" type="button" data-ev="success">Success</button>
+          <button class="btn" type="button" data-ev="loading">Loading</button>
+          <button class="btn" type="button" data-ev="night">Nighttime</button>
+          <button class="btn" type="button" data-ev="idle">Go idle</button>
+          <button class="btn" type="button" data-ev="wake">Wake and reset</button>
+        </div>
+        <p class="tip">Go idle once for sleepy, twice for asleep. Nighttime makes it drowsy fast. Wake and reset brings back daytime.</p>
+        <label for="note">Type here, Nib watches</label>
+        <textarea id="note" placeholder="Type anything. Nib turns to look at this box and taps along."></textarea>
+      </div>
+      <div class="pbox">
+        <h3>A real form</h3>
+        <p class="sub">Try a bad email first, then a good one.</p>
+        <form id="joinForm" novalidate>
+          <label for="email">Email</label>
+          <input id="email" type="email" autocomplete="email" placeholder="name@example.com" aria-describedby="formMsg">
+          <div class="row" style="margin-top:16px"><button class="btn pri" type="submit">Join the shoal</button></div>
+          <p class="fmsg" id="formMsg" role="status"></p>
+        </form>
+        <p class="tip">A bad address makes Nib concerned. A good one gives it a quick loading focus, then a proud celebration.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="wild">
+  <div class="wrap">
+    <p class="eyebrow">In the wild</p>
+    <h2>Where Nib lives on a real site.</h2>
+    <p class="lede">Five everyday moments, each with a live Nib. They react to your pointer too.</p>
+    <div class="wild">
+      <figure class="wcard"><div class="mnav" id="navMock"><span class="mlogo">shoal.app</span><a href="#wild">Product</a><a href="#wild">Pricing</a><a href="#wild">Docs</a><canvas id="wNav" aria-hidden="true"></canvas></div><div class="fake"><i></i><i></i><i></i>Hover a link and Nib looks at it.</div><figcaption><b>Tucked in the nav bar</b>A tiny Nib rides the corner of the header. It follows the pointer and looks at whichever link you hover. No dropdown ever covers it.</figcaption></figure>
+      <figure class="wcard"><div class="mock m404"><div><div class="t">404</div><p>This page drifted away. Let us find you another one.</p></div><canvas id="w404" aria-hidden="true"></canvas></div><figcaption><b>On a 404 page</b>Concerned, not dramatic. It scratches its head and blinks. The words stay in plain HTML beside it, never under it.</figcaption></figure>
+      <figure class="wcard"><div class="loadbox"><canvas id="wLoad" aria-hidden="true"></canvas><div class="lbar" role="progressbar" aria-label="Example loading bar" aria-valuemin="0" aria-valuemax="100"><i id="loadBar"></i></div></div><figcaption><b>During loading</b>Focused, brows down, arms tapping on a tiny keyboard it does not have. It makes waiting feel like somebody is on it.</figcaption></figure>
+      <figure class="wcard"><canvas id="wSign" aria-hidden="true"></canvas><p id="signMsg" aria-live="off"></p><div class="signrow"><button class="btn pri" id="signBtn" type="button">Replay the celebration</button></div><figcaption><b>Celebrating a signup</b>Proud puff, gold and coral waves, a burst of sparks. It plays once when the card scrolls into view, and again on request.</figcaption></figure>
+      <figure class="wcard"><div class="mfoot"><canvas id="wSleep" aria-hidden="true"></canvas><div class="fl"><span>2026 shoal.app. Quiet hours, soft lights.</span><button class="btn" id="wakeBtn" type="button">Wake Nib</button></div></div><figcaption><b>Asleep in the footer</b>The footer is its bed. Wake it and it startles, grumbles, and goes back to sleep in a few seconds.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="sec alt" id="rules">
+  <div class="wrap">
+    <p class="eyebrow">Character rules</p>
+    <h2>How the brand uses Nib.</h2>
+    <ol class="rules">
+      <li><b>Show up where something is happening.</b><span>Forms, loading, empty states, success, errors, quiet corners. Not as decoration on dense content, and never more than one Nib on screen at a time.</span></li>
+      <li><b>Never block anything.</b><span>It lives in the corner dock, never over a button, field or paragraph. A hide button is always one click away and a sleep button is right beside it.</span></li>
+      <li><b>React, never interrupt.</b><span>No popups, no sound, no chat bubbles that open by themselves. It notices, it does not nag. When it does speak, it is one short plain line, like: <span class="say">Hm. That email looks off.</span></span></li>
+      <li><b>The mood must match the event.</b><span>Errors are concerned, not tragic. Successes are proud, not wild. It never celebrates a failure and never sulks over a normal click.</span></li>
+      <li><b>Keep the skin in the palette.</b><span>Colors come from SHOAL: foam, lamp, coral, jelly, kelp and the dark water. Seasonal hats are fine. Logos, ads and sponsor colors on its skin are not.</span></li>
+      <li><b>Respect motion settings.</b><span>When a visitor asks for less motion, Nib holds calm still poses that still change with its mood. No loops, no sparks, same warmth.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="sec" id="sketches">
+  <div class="wrap">
+    <p class="eyebrow">The sketches</p>
+    <h2>Three characters that did not make it.</h2>
+    <p class="lede">We explored these first, live, then judged them against the brand and the bar. They still react to your pointer.</p>
+    <div class="sk">
+      <figure><canvas id="sk1" role="img" aria-label="Sketch of Wisp, a jellyfish that follows the pointer"></canvas><figcaption><b>Wisp, the lantern jelly</b>Beautiful drift, but no face and no hands. It can pulse for every mood, so the moods look the same. Also already in our reef.</figcaption></figure>
+      <figure><canvas id="sk2" role="img" aria-label="Sketch of Clack, a hermit crab that hides when the pointer is fast"></canvas><figcaption><b>Clack, the hermit crab</b>Wonderful hiding reaction, but it walks sideways along the floor, so it cannot follow a page. The shell also covers half of any expression.</figcaption></figure>
+      <figure><canvas id="sk3" role="img" aria-label="Sketch of Puff, a pufferfish that inflates when the pointer is near"></canvas><figcaption><b>Puff, the pufferfish</b>The puff-up is a great single trick. After that it has two moods, calm and spiky, and everything else looks like a ball.</figcaption></figure>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap"><p>SHOAL mascot pitch. Nib is drawn entirely in colored text characters on canvas and simulated live. Nothing here loads from the network except fonts.</p></div>
+</footer>
+
+<aside class="dock" id="dock" aria-label="Nib, your page companion">
+  <canvas id="dockCv" aria-hidden="true"></canvas>
+  <div class="dbar"><button type="button" id="dockSleep" aria-pressed="false">Sleep</button><button type="button" id="dockHide" aria-label="Hide Nib">Hide</button></div>
+</aside>
+<button type="button" class="dopen" id="dockOpen">Show Nib</button>
+
+<script>
+(() => {
+'use strict';
+const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const STEP = 1 / 60;
+const FAM = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const rnd = (a, b) => a + Math.random() * (b - a);
+function hash2(x, y) { let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const GLYPH = Array.from({ length: 256 }, (_, i) => String.fromCharCode(i));
+const cc = s => s.charCodeAt(0);
+const cssCache = new Map();
+function css(k) { let s = cssCache.get(k); if (!s) { s = 'rgb(' + ((k >> 16) & 255) + ',' + ((k >> 8) & 255) + ',' + (k & 255) + ')'; if (cssCache.size > 9000) cssCache.clear(); cssCache.set(k, s); } return s; }
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+// ---------- pointer ----------
+const PT = { x: -9999, y: -9999, in: false, down: false, speed: 0, lt: 0, touch: false, moved: 0 };
+addEventListener('pointermove', e => {
+  const dt = Math.max(1, e.timeStamp - PT.lt), d = Math.hypot(e.clientX - PT.x, e.clientY - PT.y);
+  if (PT.lt && PT.in) PT.speed = PT.speed * 0.55 + (d / dt * 1000) * 0.45;
+  PT.x = e.clientX; PT.y = e.clientY; PT.lt = e.timeStamp; PT.in = true; PT.touch = e.pointerType === 'touch'; PT.moved = e.timeStamp;
+}, { passive: true });
+document.documentElement.addEventListener('mouseleave', () => { PT.in = false; });
+
+// ---------- View: a canvas grid of characters with bloom ----------
+class View {
+  constructor(cv, o = {}) {
+    this.cv = cv; this.o = o;
+    this.ctx = cv.getContext('2d', { alpha: false });
+    this.bcv = document.createElement('canvas'); this.bctx = this.bcv.getContext('2d');
+    this.bloom = o.bloom == null ? 0.45 : o.bloom; this.bdiv = 5; this.bg = o.bg || '#06131f';
+    this.paintBg = null; this.cols = 1; this.rows = 1; this.rect = null; this.cw = 6; this.asp = 2;
+  }
+  layout() {
+    const r = this.cv.getBoundingClientRect();
+    this.vw = Math.max(1, r.width); this.vh = Math.max(1, r.height);
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.cv.width = Math.round(this.vw * this.dpr); this.cv.height = Math.round(this.vh * this.dpr);
+    const o = this.o;
+    this.fs = o.fs || clamp(this.vw / (o.fsDiv || 44), o.fsMin || 6, o.fsMax || 10);
+    this.font = '600 ' + this.fs.toFixed(2) + 'px ' + FAM;
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); this.ctx.font = this.font;
+    this.cw = this.ctx.measureText('M').width || this.fs * 0.6; this.chh = this.fs * 1.2;
+    this.cols = Math.ceil(this.vw / this.cw); this.rows = Math.ceil(this.vh / this.chh);
+    this.asp = this.chh / this.cw; this.W = this.cols; this.H = this.rows * this.asp;
+    const N = this.cols * this.rows;
+    this.code = new Uint8Array(N); this.R = new Uint8ClampedArray(N); this.G = new Uint8ClampedArray(N); this.B = new Uint8ClampedArray(N);
+    this.bcv.width = Math.max(1, Math.round(this.cv.width / this.bdiv)); this.bcv.height = Math.max(1, Math.round(this.cv.height / this.bdiv));
+    this.size = Math.round(this.vw) + 'x' + Math.round(this.vh);
+  }
+  updateRect() { this.rect = this.cv.getBoundingClientRect(); }
+  clear() { this.code.fill(0); }
+  put(c, r, ch, R, G, B) {
+    if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return;
+    const i = r * this.cols + c; this.code[i] = ch; this.R[i] = R; this.G[i] = G; this.B[i] = B;
+  }
+  render() {
+    const { ctx, cols, rows, code, R, G, B, vw, vh, dpr } = this;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    if (this.paintBg) this.paintBg(ctx, vw, vh); else { ctx.fillStyle = this.bg; ctx.fillRect(0, 0, vw, vh); }
+    ctx.font = this.font; ctx.textBaseline = 'top';
+    let lastK = -1;
+    for (let r = 0; r < rows; r++) {
+      const y = r * this.chh, base = r * cols;
+      for (let c = 0; c < cols; c++) {
+        const ch = code[base + c]; if (!ch) continue;
+        const i = base + c, k = ((R[i] & 0xf8) << 16) | ((G[i] & 0xf8) << 8) | (B[i] & 0xf8);
+        if (k !== lastK) { ctx.fillStyle = css(k); lastK = k; }
+        ctx.fillText(GLYPH[ch], c * this.cw, y);
+      }
+    }
+    if (this.bloom > 0) {
+      this.bctx.globalCompositeOperation = 'copy'; this.bctx.drawImage(this.cv, 0, 0, this.bcv.width, this.bcv.height);
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = this.bloom;
+      ctx.imageSmoothingEnabled = true; ctx.drawImage(this.bcv, 0, 0, this.cv.width, this.cv.height);
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+}
+
+// ---------- one shared loop ----------
+const scenes = [];
+const IO = new IntersectionObserver(es => es.forEach(e => { const s = e.target.__s; if (s) { s.vis = e.isIntersecting; if (s.vis) { s.dirty = true; kick(); } if (s.onVis) s.onVis(s.vis); } }), { rootMargin: '40px' });
+const rzT = new Map();
+const RO = new ResizeObserver(es => es.forEach(e => {
+  const s = e.target.__s; if (!s) return; clearTimeout(rzT.get(s));
+  rzT.set(s, setTimeout(() => { if (s.ready) s.relayout(); }, 120));
+}));
+class Scene {
+  constructor(cv, o = {}) {
+    this.cv = cv; this.v = new View(cv, o); this.vis = false; this.ready = false; this.acc = 0; this.rAcc = 1; this.dirty = true; this.pend = 0;
+    cv.__s = this; scenes.push(this); IO.observe(cv); RO.observe(cv);
+  }
+  start() { this.v.layout(); this.onLayout(); this.ready = true; this.dirty = true; if (reduce) this.settle(); kick(); }
+  relayout() { this.v.layout(); this.onLayout(); this.dirty = true; if (reduce) this.settle(); kick(); }
+  settle() { this.v.updateRect(); const n = Math.round((this.still || 2.2) * 60); for (let i = 0; i < n; i++) this.sim(STEP); this.draw(); this.v.render(); }
+  onLayout() {} sim() {} draw() {}
+}
+let last = performance.now(), raf = 0;
+function kick() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } }
+function anyVisible() { for (const s of scenes) if (s.vis && s.ready) return true; return false; }
+function frame(now) {
+  raf = 0;
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (document.hidden) return;
+  PT.speed *= Math.exp(-dt * 5);
+  for (let k = 0; k < scenes.length; k++) {
+    const s = scenes[k]; if (!s.vis || !s.ready) continue;
+    s.v.updateRect();
+    if (reduce) { if (s.dirty) { s.dirty = false; s.settle(); } continue; }
+    s.acc += dt; let n = 0;
+    while (s.acc >= STEP && n < 4) { s.sim(STEP); s.acc -= STEP; n++; }
+    if (n === 4) s.acc = 0;
+    s.rAcc += dt;
+    if (s.rAcc >= 1 / 30 || s.dirty) { s.rAcc = 0; s.dirty = false; s.draw(); s.v.render(); }
+  }
+  if (!reduce && anyVisible()) raf = requestAnimationFrame(frame);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
+
+// =====================================================================
+//  NIB: the cuttlefish
+// =====================================================================
+const DEF = { lidTop: .1, lidBot: .05, ang: 0, arcMix: 0, arcB: 0, arcC: 0, pupS: 1, round: 0, gaze: .75, browY: 0, browA: .5, blush: 0, puff: 0, sq: 0, rot: 0, bobA: 1.5, bobS: 1.3, fin: 9, finS: 5, spread: .5, curl: .35, droop: .15, wig: .4, wigS: 2.2, lenS: 1, lift: 0, rest: 0,
+  bR: 70, bG: 200, bB: 185, aR: 255, aG: 210, aB: 120, pWave: .5, pSpots: 0, pBand: 0, pSp: 1.4, shim: 0, blanch: 0, dim: 0, glow: 1 };
+const EMO = {
+  content: {},
+  curious: { lidTop: 0, lidBot: 0, ang: -.05, pupS: 1.12, round: .3, gaze: 1, browY: .55, browA: .75, puff: .03, sq: -.05, bobA: 1, bobS: 1.8, fin: 6, finS: 7, spread: .8, curl: .1, droop: 0, wig: .5, wigS: 3, lenS: 1.05, lift: -3, bR: 80, bG: 215, bB: 232, aR: 255, aG: 232, aB: 140, pWave: .2, pSpots: .85, glow: 1.15 },
+  delighted: { lidTop: .12, lidBot: .3, arcMix: 1, arcB: .85, arcC: -.32, ang: -.12, round: .5, gaze: .5, browY: .45, browA: .6, blush: .85, puff: .08, sq: -.06, bobA: 3.2, bobS: 3.2, fin: 8, finS: 11, spread: 1, curl: -.25, droop: 0, wig: .9, wigS: 5, lenS: 1.12, lift: -5, bR: 255, bG: 150, bB: 135, aR: 255, aG: 222, aB: 120, pWave: .6, pSpots: .4, pSp: 3, shim: .7, glow: 1.3 },
+  surprised: { lidTop: 0, lidBot: 0, pupS: .5, round: 1, gaze: .8, browY: 1, browA: .85, puff: .13, sq: -.13, bobA: .4, fin: 3, finS: 3, spread: 1.15, curl: -.45, droop: 0, wig: .15, wigS: 8, lenS: 1.1, lift: -6, bR: 232, bG: 246, bB: 255, aR: 255, aG: 255, aB: 255, pWave: 0, pSpots: .3, blanch: .8, glow: 1.5 },
+  sleepy: { lidTop: .7, lidBot: .18, ang: .22, pupS: .9, gaze: .2, browY: -.5, browA: .3, puff: -.02, sq: .05, rot: .07, bobA: 2.2, bobS: .6, fin: 2.5, finS: 2.2, spread: .3, curl: .35, droop: .9, wig: .12, wigS: 1, lenS: .95, lift: 5, rest: .35, bR: 76, bG: 104, bB: 176, aR: 120, aG: 140, aB: 210, pWave: .3, pSp: .6, dim: .28, glow: .6 },
+  asleep: { lidTop: .5, lidBot: 0, arcMix: 1, arcB: -.7, arcC: .25, ang: .1, pupS: .8, gaze: 0, browY: -.7, browA: .25, puff: -.03, sq: .08, rot: .1, bobA: 1.6, bobS: .5, fin: 1.8, finS: 1.6, spread: .1, curl: .7, droop: 1, wig: .05, wigS: .8, lenS: .9, lift: 8, rest: 1, bR: 62, bG: 88, bB: 156, aR: 98, aG: 118, aB: 190, pWave: .25, pSp: .4, dim: .45, glow: .35 },
+  shy: { lidTop: .16, lidBot: .3, ang: .5, pupS: .8, round: .4, gaze: .25, browY: -.2, browA: .6, blush: .95, puff: -.12, sq: .1, rot: -.1, bobA: 1, fin: 6, finS: 8, spread: -.05, curl: 1.5, droop: 0, wig: .1, lenS: .62, lift: 4, bR: 40, bG: 112, bB: 124, aR: 70, aG: 140, aB: 150, pWave: .2, pSpots: .6, dim: .22, glow: .8 },
+  concerned: { lidTop: .22, lidBot: .08, ang: .75, pupS: 1.1, round: .35, gaze: .5, browY: .1, browA: .95, puff: -.04, sq: .05, rot: .09, bobA: .9, bobS: .9, fin: 3, finS: 3, spread: .4, curl: .9, droop: .85, wig: .1, lenS: .95, lift: 4, bR: 112, bG: 128, bB: 218, aR: 165, aG: 152, aB: 238, pWave: .4, pSp: .8, dim: .1, glow: .9 },
+  proud: { lidTop: .2, lidBot: .1, ang: -.25, gaze: .6, browY: .3, browA: .85, blush: .25, puff: .16, sq: -.1, rot: -.04, bobA: 1.2, bobS: 1.4, fin: 7, finS: 8, spread: .95, curl: -.1, droop: 0, wig: .5, wigS: 3, lenS: 1.15, lift: -6, bR: 255, bG: 206, bB: 112, aR: 255, aG: 112, aB: 96, pWave: 1, pBand: .4, pSp: 2.6, shim: .25, glow: 1.3 },
+  focused: { lidTop: .3, lidBot: .15, ang: -.5, pupS: .8, gaze: .9, browY: -.2, browA: 1, sq: .03, bobA: .6, fin: 4, finS: 6, spread: .6, curl: .2, droop: 0, wig: .7, wigS: 6, bR: 96, bG: 206, bB: 142, aR: 205, aG: 255, aB: 205, pWave: .3, pBand: 1, pSp: 2.2, glow: 1.1 }
+};
+const MOODS = Object.keys(EMO);
+const KEYS = Object.keys(DEF);
+const COLK = new Set(['bR', 'bG', 'bB', 'aR', 'aG', 'aB']);
+
+// 5x7 pixel symbols, drawn two columns per pixel
+const BM = {
+  '!': ['.##.', '.##.', '.##.', '.##.', '....', '.##.'],
+  '?': ['.###.', '#...#', '....#', '..##.', '..#..', '.....', '..#..'],
+  'Z': ['#####', '...#.', '..#..', '.#...', '#####'],
+  'heart': ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'],
+  'star': ['...#...', '..###..', '#######', '.#####.', '..#.#..', '.#...#.'],
+  'drop': ['..#..', '.###.', '#####', '#####', '.###.'],
+  'dots': null
+};
+const SYM = { curious: ['?', 255, 232, 140], delighted: ['heart', 255, 120, 130], surprised: ['!', 255, 240, 200], sleepy: ['Z', 180, 190, 255], asleep: ['Z', 160, 175, 240], shy: ['heart', 255, 150, 150], concerned: ['drop', 130, 190, 255], proud: ['star', 255, 214, 120], focused: ['dots', 160, 255, 190] };
+
+const NP = 120;
+let CR = 0, CG = 0, CB = 0;
+class Nib {
+  constructor(o = {}) {
+    this.o = o; this.P = {}; this.V = {}; this.T = {};
+    for (const k of KEYS) { this.P[k] = DEF[k]; this.V[k] = 0; this.T[k] = DEF[k]; }
+    this.mood = 'content'; this.setMood(o.mood || 'content', true);
+    for (const k of KEYS) this.P[k] = this.T[k];
+    this.t = rnd(0, 50); this.pt = this.t; this.px = 0; this.py = 0; this.vx = 0; this.vy = 0; this.rot = 0; this.rv = 0; this.kq = 0; this.kqv = 0;
+    this.home = { x: 0, y: 0 }; this.lean = { x: 0, y: 0 }; this.floor = 56; this.bounds = { x: 40, y: 30 };
+    this.look = { x: 0, y: 0, w: 0 }; this.gx = 0; this.gy = 0; this.sacx = 0; this.sacy = 0; this.sacT = 1; this.blinkT = rnd(1.5, 4); this.bl = 0; this.blDur = 0;
+    this.grab = null; this.cur = null; this.symAge = 0; this.symOn = !o.noSym; this.shown = true;
+    this.arms = []; this.AN = 8; this.AS = 8;
+    for (let k = 0; k < 8; k++) this.arms.push({ x: new Float32Array(9), y: new Float32Array(9), vx: new Float32Array(9), vy: new Float32Array(9), lx: new Float32Array(9), ly: new Float32Array(9), init: false });
+    this.tents = []; for (let k = 0; k < 2; k++) this.tents.push({ x: new Float32Array(15), y: new Float32Array(15), vx: new Float32Array(15), vy: new Float32Array(15), mode: 'rest', tx: 0, ty: 0, amt: 0, ph: k * 1.7, until: 0, init: false });
+    this.pa = { x: new Float32Array(NP), y: new Float32Array(NP), vx: new Float32Array(NP), vy: new Float32Array(NP), l: new Float32Array(NP), m: new Float32Array(NP), c: new Uint8Array(NP), r: new Uint8Array(NP), g: new Uint8Array(NP), b: new Uint8Array(NP), k: new Uint8Array(NP) };
+    this.pn = 0; this.food = []; this.act = null; this.actT = 0; this.finPh = 0; this.onMood = null; this.EY = 1.5; this.stillSeed = o.seed || 0;
+  }
+  setMood(name, silent) {
+    if (!EMO[name]) return;
+    const prev = this.mood; this.mood = name;
+    Object.assign(this.T, DEF, EMO[name]);
+    this.symAge = 0;
+    if (!silent && prev !== name) {
+      if (name === 'surprised') { this.kqv -= 10; this.tentTuck(); }
+      else if (name === 'delighted') this.kqv += 6;
+      else if (name === 'shy') this.kqv += 9;
+      else if (name === 'proud') this.kqv -= 5;
+      else if (name === 'concerned') this.kqv += 3;
+      if (this.onMood) this.onMood(name, prev);
+    }
+  }
+  tentTuck() { for (const t of this.tents) { t.mode = 'rest'; t.amt = 0; } }
+  // ---- particles
+  spawn(kind, x, y, vx, vy, life, ch, r, g, b) {
+    if (reduce) return;
+    const p = this.pa; const i = this.pn < NP ? this.pn++ : (Math.random() * NP) | 0;
+    p.x[i] = x; p.y[i] = y; p.vx[i] = vx; p.vy[i] = vy; p.l[i] = life; p.m[i] = life; p.k[i] = kind; p.c[i] = ch; p.r[i] = r; p.g[i] = g; p.b[i] = b;
+  }
+  bubbles(n, x, y) { for (let i = 0; i < n; i++) this.spawn(0, x + rnd(-2, 2), y, rnd(-3, 3), rnd(-14, -22), rnd(2, 3.4), i % 3 ? 111 : 79, 150, 220, 235); }
+  sparks(n, x, y, pal) { for (let i = 0; i < n; i++) { const a = rnd(0, 6.283), s = rnd(14, 40), c = pal[i % pal.length]; this.spawn(1, x, y, Math.cos(a) * s, Math.sin(a) * s - 14, rnd(.7, 1.5), i % 2 ? 42 : 43, c[0], c[1], c[2]); } }
+  ink(n, x, y) { for (let i = 0; i < n; i++) { const a = rnd(0, 6.283), s = rnd(6, 26); this.spawn(2, x, y, Math.cos(a) * s, Math.sin(a) * s, rnd(1.4, 2.6), i % 2 ? 35 : 37, 96, 60, 150); } }
+  jet(dx, dy, p) { const n = Math.hypot(dx, dy) || 1; this.vx += dx / n * p; this.vy += dy / n * p; this.kqv += 8; }
+  // ---- limb targets
+  armRest(k, i, tt, o) { /* fills o.x,o.y local */ }
+  sim(dt) {
+    const P = this.P, V = this.V, T = this.T, m = reduce ? 0 : 1;
+    if (!reduce) { this.t += dt; this.pt += dt; } else { this.t = 7 + this.stillSeed; this.pt = 7 + this.stillSeed; }
+    const t = this.t;
+    // emotion springs
+    for (let q = 0; q < KEYS.length; q++) {
+      const k = KEYS[q], col = COLK.has(k), K = col ? 20 : 85, C = col ? 9 : 13.5;
+      V[k] += ((T[k] - P[k]) * K - V[k] * C) * dt; P[k] += V[k] * dt;
+    }
+    // blink
+    if (!reduce) {
+      this.blinkT -= dt;
+      if (this.blinkT <= 0 && this.bl <= 0) { this.bl = 1e-4; this.blDur = P.lidTop > .5 ? .5 : .16; this.blinkT = P.lidTop > .5 ? rnd(3, 6) : (Math.random() < .2 ? .22 : rnd(2, 5.5)); }
+      if (this.bl > 0) { this.bl += dt / this.blDur; if (this.bl >= 1) this.bl = 0; }
+    } else this.bl = 0;
+    const blink = this.bl > 0 ? Math.sin(Math.PI * this.bl) : 0; this.blinkV = blink;
+    // saccades when nothing to look at
+    this.sacT -= dt; if (this.sacT <= 0) { this.sacT = rnd(.9, 3.2); this.sacx = rnd(-.6, .6); this.sacy = rnd(-.35, .35); }
+    // gaze
+    let tgx = 0, tgy = 0;
+    if (this.look.w > 0.01 && P.gaze > 0.05) {
+      const dx = this.look.x - this.px, dy = this.look.y - (this.py + this.EY), d = Math.hypot(dx, dy) || 1, g = Math.min(1, d / 30) * this.look.w * Math.min(1, P.gaze * 1.2);
+      tgx = dx / d * g; tgy = dy / d * g;
+    } else { tgx = this.sacx * P.gaze * .8; tgy = this.sacy * P.gaze * .8; }
+    if (reduce) { tgx = this.look.w > .01 ? tgx : 0; tgy = this.look.w > .01 ? tgy : 0; }
+    const gk = Math.min(1, dt * 16); this.gx += (tgx - this.gx) * gk; this.gy += (tgy - this.gy) * gk;
+    // body
+    const bob = Math.sin(t * P.bobS) * P.bobA * m, sway = Math.sin(t * 0.55 + 1) * 3.5 * m;
+    let tx = this.home.x + this.lean.x + sway, ty = this.home.y + this.lean.y + P.lift + bob;
+    ty = lerp(ty, this.floor - 26, clamp(P.rest, 0, 1));
+    if (this.grab) { tx = this.grab.x; ty = this.grab.y; }
+    const bx = this.bounds.x, by = this.bounds.y; tx = clamp(tx, -bx, bx); ty = clamp(ty, -by, this.floor - 20);
+    const kp = this.grab ? 60 : 16, kd = this.grab ? 12 : 6.2;
+    this.vx += ((tx - this.px) * kp - this.vx * kd) * dt; this.vy += ((ty - this.py) * kp - this.vy * kd) * dt;
+    this.px += this.vx * dt; this.py += this.vy * dt;
+    const rt = P.rot + clamp(this.vx * 0.005, -.1, .1) + Math.sin(t * .8) * .025 * m;
+    this.rv += ((rt - this.rot) * 70 - this.rv * 9) * dt; this.rot += this.rv * dt;
+    this.kqv += (-this.kq * 150 - this.kqv * 9) * dt; this.kq += this.kqv * dt;
+    // fins
+    this.finPh += dt * P.finS * m;
+    const breath = Math.sin(t * 1.7) * .02 * m;
+    this.sx = 1 + P.puff + (P.sq + this.kq * .05) * .6; this.sy = 1 + P.puff - (P.sq + this.kq * .05) * .6 + breath;
+    this.cs = Math.cos(this.rot); this.sn = Math.sin(this.rot);
+    // symbols age
+    this.symAge += dt;
+    // timed act
+    if (this.act) { this.actT -= dt; if (this.actT <= 0) this.act = null; }
+    this.simLimbs(dt, m);
+    this.simParticles(dt);
+  }
+  l2w(lx, ly, out) { const x = lx * this.sx, y = ly * this.sy; out.x = this.px + this.cs * x - this.sn * y; out.y = this.py + this.sn * x + this.cs * y; }
+  simLimbs(dt, m) {
+    const P = this.P, t = this.t, tmp = this._tmp || (this._tmp = { x: 0, y: 0 });
+    const A = 20, B = 15;
+    for (let k = 0; k < 8; k++) {
+      const a = this.arms[k], f = (k - 3.5) / 3.5, dir = f > 0 ? 1 : -1;
+      const ax = f * 11.5, ay = B * Math.sqrt(Math.max(0, 1 - (ax / A) ** 2)) * .9;
+      const L = (12.5 + 4 * Math.abs(f)) * P.lenS / 8;
+      let lx = ax, ly = ay, th0 = Math.PI / 2 - f * P.spread * .95;
+      for (let i = 0; i <= 8; i++) {
+        if (i > 0) {
+          const u = i / 8;
+          let th = th0 + dir * P.curl * Math.pow(u, 2.2) * 2.4;
+          th = lerp(th, Math.PI / 2 + dir * .12, clamp(P.droop, 0, 1) * u * .85);
+          th += P.wig * Math.sin(t * P.wigS - i * .7 + k * 1.1) * u * .8 * (reduce ? 0 : 1);
+          if (this.act === 'stretch') th += -f * .5 * u;
+          lx += Math.cos(th) * L; ly += Math.sin(th) * L;
+        }
+        a.lx[i] = lx; a.ly[i] = ly;
+        this.l2w(lx, ly, tmp);
+        if (!a.init) { a.x[i] = tmp.x; a.y[i] = tmp.y; a.vx[i] = 0; a.vy[i] = 0; }
+        const kk = i < 2 ? 220 : 120 - i * 8, cd = 2 * .6 * Math.sqrt(kk);
+        a.vx[i] += ((tmp.x - a.x[i]) * kk - a.vx[i] * cd) * dt; a.vy[i] += ((tmp.y - a.y[i]) * kk - a.vy[i] * cd) * dt;
+        a.x[i] += a.vx[i] * dt; a.y[i] += a.vy[i] * dt;
+      }
+      a.init = true;
+    }
+    // tentacles: coiled by default, can reach
+    for (let k = 0; k < 2; k++) {
+      const tn = this.tents[k], s = k === 0 ? -1 : 1;
+      if (tn.until > 0) { tn.until -= dt; if (tn.until <= 0) { tn.mode = 'rest'; tn.amt = 0; } }
+      let ex = 0, ey = 0;
+      this.l2w(s * 3.2, B * .8, tmp); const ax = tmp.x, ay = tmp.y;
+      if (tn.mode === 'reach' || tn.mode === 'strike') { ex = tn.tx; ey = tn.ty; }
+      else if (tn.mode === 'wave') { ex = ax + s * (14 + Math.sin(t * 7 + k) * 8); ey = ay - 40 + Math.cos(t * 5 + k) * 4; }
+      else if (tn.mode === 'tap') { ex = ax + s * (10 + Math.sin(t * 16 + k * 2) * 3); ey = ay + 24 + Math.abs(Math.sin(t * 13 + k * 2)) * -7; }
+      else if (tn.mode === 'scratch') { ex = this.px + s * 13 + Math.sin(t * 14) * 3; ey = this.py - 12 + Math.cos(t * 11) * 2; }
+      const dx = ex - ax, dy = ey - ay, dist = Math.hypot(dx, dy) || 1, MAXL = 14 * 3.3 * P.lenS;
+      const reachf = Math.min(1, MAXL / dist), nx = dx / dist, ny = dy / dist, px = -ny, py = nx;
+      for (let i = 0; i <= 14; i++) {
+        const u = i / 14;
+        // coil pose
+        const dir = s;
+        let cx, cy;
+        { // integrate coil
+          let ccx = 0, ccy = 0; const seg = 2.2 * P.lenS;
+          for (let j = 1; j <= i; j++) { const uj = j / 14; const th = Math.PI / 2 + dir * Math.pow(uj, 1.6) * (.9 + P.curl * .3) + Math.sin(t * 1.8 + j * .5 + k) * .12 * (reduce ? 0 : 1); ccx += Math.cos(th) * seg; ccy += Math.sin(th) * seg; }
+          cx = ax + ccx * 1.0 + s * 0; cy = ay + ccy;
+        }
+        const reach = dist * reachf, bend = Math.sin(u * Math.PI) * 5 * (tn.mode === 'strike' ? 0 : 1) * Math.sin(t * 3 + k * 2);
+        const rx = ax + nx * reach * u + px * bend, ry = ay + ny * reach * u + py * bend;
+        const am = clamp(tn.amt * 1.15 - (1 - u) * .15, 0, 1);
+        const gx = lerp(cx, rx, am), gy = lerp(cy, ry, am);
+        if (!tn.init) { tn.x[i] = gx; tn.y[i] = gy; tn.vx[i] = 0; tn.vy[i] = 0; }
+        const kk = tn.mode === 'strike' ? 420 - i * 10 : 140 - i * 5, cd = 2 * .62 * Math.sqrt(kk);
+        tn.vx[i] += ((gx - tn.x[i]) * kk - tn.vx[i] * cd) * dt; tn.vy[i] += ((gy - tn.y[i]) * kk - tn.vy[i] * cd) * dt;
+        tn.x[i] += tn.vx[i] * dt; tn.y[i] += tn.vy[i] * dt;
+      }
+      tn.init = true;
+      const want = tn.mode === 'rest' ? 0 : 1; tn.amt += (want - tn.amt) * Math.min(1, dt * (tn.mode === 'strike' ? 14 : 6));
+    }
+  }
+  // commands
+  reachTo(side, x, y, secs, strike) { const tn = this.tents[side < 0 ? 0 : 1]; tn.mode = strike ? 'strike' : 'reach'; tn.tx = x; tn.ty = y; tn.until = secs; }
+  tentMode(mode, secs, both) { for (let k = 0; k < 2; k++) { if (!both && k === 1 && mode !== 'wave') continue; const tn = this.tents[k]; tn.mode = mode; tn.until = secs; } }
+  simParticles(dt) {
+    const p = this.pa; let w = 0;
+    for (let i = 0; i < this.pn; i++) {
+      let l = p.l[i] - dt; if (l <= 0) continue;
+      const k = p.k[i];
+      if (k === 0) { p.vx[i] += Math.sin(this.t * 3 + i) * 10 * dt; p.vy[i] *= (1 - dt * .2); }
+      else if (k === 1) { p.vy[i] += 30 * dt; p.vx[i] *= (1 - dt * 1.6); p.vy[i] *= (1 - dt * 1.2); }
+      else if (k === 2) { p.vx[i] *= (1 - dt * 1.8); p.vy[i] *= (1 - dt * 1.8); p.vy[i] -= 2 * dt; }
+      else if (k === 3) { p.vx[i] += Math.sin(this.t * 2 + i) * 6 * dt; }
+      p.x[i] += p.vx[i] * dt; p.y[i] += p.vy[i] * dt;
+      if (w !== i) { p.x[w] = p.x[i]; p.y[w] = p.y[i]; p.vx[w] = p.vx[i]; p.vy[w] = p.vy[i]; p.m[w] = p.m[i]; p.k[w] = p.k[i]; p.c[w] = p.c[i]; p.r[w] = p.r[i]; p.g[w] = p.g[i]; p.b[w] = p.b[i]; }
+      p.l[w] = l; w++;
+    }
+    this.pn = w;
+  }
+  // ---- skin color (sets CR,CG,CB)
+  skin(lx, ly, shade) {
+    const P = this.P, t = this.pt;
+    let p = 0;
+    if (P.pWave > .01) p += P.pWave * smooth(.35, .95, .5 + .5 * Math.sin(lx * .16 + ly * .1 - t * P.pSp + vnoise(lx * .07 + t * .12, ly * .09) * 3.2));
+    if (P.pSpots > .01) p += P.pSpots * smooth(.56, .68, vnoise(lx * .2 + t * .1, ly * .28 - t * .07));
+    if (P.pBand > .01) p += P.pBand * smooth(.55, .95, .5 + .5 * Math.sin(ly * .75 - t * 2.2 + lx * .05));
+    if (p > 1) p = 1;
+    p *= .62; let r = P.bR + (P.aR - P.bR) * p, g = P.bG + (P.aG - P.bG) * p, b = P.bB + (P.aB - P.bB) * p;
+    if (P.shim > .01) {
+      const h = (lx * .014 + ly * .01 + t * .35) * 6.283;
+      r += (127 + 127 * Math.sin(h) - r) * P.shim * .5; g += (127 + 127 * Math.sin(h + 2.1) - g) * P.shim * .5; b += (127 + 127 * Math.sin(h + 4.2) - b) * P.shim * .5;
+    }
+    if (P.blanch > .01) { const w = P.blanch * .6; r += (250 - r) * w; g += (252 - g) * w; b += (255 - b) * w; }
+    if (P.dim > .01) { const d = P.dim; r += (14 - r) * d; g += (30 - g) * d; b += (50 - b) * d; }
+    CR = r * shade; CG = g * shade; CB = b * shade;
+  }
+  // ---- painting
+  stamp(v, x, y, rad, ch, r, g, b, o) {
+    const wx = o.ox + x * o.S, wy = o.oy + y * o.S, R = rad * o.S, asp = v.asp;
+    const c0 = Math.floor(wx - R), c1 = Math.floor(wx + R), r0 = Math.floor((wy - R) / asp), r1 = Math.floor((wy + R) / asp);
+    for (let rr = r0; rr <= r1; rr++) { const dy = (rr + .5) * asp - wy; for (let c = c0; c <= c1; c++) { const dx = c + .5 - wx; if (dx * dx + dy * dy <= R * R) v.put(c, rr, ch, r, g, b); } }
+  }
+  paint(v, o) {
+    const S = o.S, ox = o.ox, oy = o.oy, P = this.P, asp = v.asp, t = this.pt;
+    this.cur = { v, S, ox, oy };
+    const A = 20, B = 15, EX = 10.4, EY = this.EY, ER = 6.6;
+    // food
+    for (const f of this.food) {
+      const c = Math.floor(ox + f.x * S), r = Math.floor((oy + f.y * S) / asp);
+      const w = Math.sin(t * 8 + f.ph) > 0;
+      v.put(c - 1, r, 40, 255, 150, 130); v.put(c, r, w ? 61 : 126, 255, 180, 150); v.put(c + 1, r, 60, 255, 120, 110);
+    }
+    // arms (behind the mantle)
+    const lampc = [255, 210, 122];
+    for (let k = 0; k < 8; k++) {
+      const a = this.arms[k];
+      for (let i = 0; i <= 8; i++) {
+        for (let sub = 0; sub < 2; sub++) {
+          if (i === 8 && sub) break;
+          const f = sub ? .5 : 0, x = i < 8 ? lerp(a.x[i], a.x[i + 1], f) : a.x[i], y = i < 8 ? lerp(a.y[i], a.y[i + 1], f) : a.y[i];
+          const u = (i + f) / 8, rad = 1.6 * (1 - u * .62) + .6;
+          this.skin(a.lx[i] * .9, a.ly[i] * .9, .72 + .25 * (1 - u));
+          const ch = rad > 1.2 ? 35 : rad > 0.95 ? 61 : 58;
+          // sucker highlights along the underside
+          if (((i * 2 + sub + k) % 3) === 0 && u > .25 && u < .92) this.stamp(v, x, y, rad * .55, 111, Math.min(255, CR * 1.4 + 30), Math.min(255, CG * 1.4 + 30), Math.min(255, CB * 1.3 + 20), o);
+          else this.stamp(v, x, y, rad, ch, CR, CG, CB, o);
+        }
+      }
+    }
+    // body cell pass
+    const sx = this.sx, sy = this.sy, cs = this.cs, sn = this.sn;
+    const ext = (A + 12) * Math.max(sx, sy) * 1.12, ext2 = (B + 10) * Math.max(sx, sy) * 1.12;
+    const cx0 = Math.max(0, Math.floor(ox + (this.px - ext) * S)), cx1 = Math.min(v.cols - 1, Math.ceil(ox + (this.px + ext) * S));
+    const cy0 = Math.max(0, Math.floor((oy + (this.py - ext) * S) / asp)), cy1 = Math.min(v.rows - 1, Math.ceil((oy + (this.py + ext) * S) / asp));
+    const fph = this.finPh, finA = P.fin, lidT = P.lidTop, lidB = P.lidBot, ang = P.ang;
+    const blink = this.blinkV || 0;
+    const gz = P.gaze;
+    for (let r = cy0; r <= cy1; r++) {
+      const wy = (r + .5) * asp;
+      for (let c = cx0; c <= cx1; c++) {
+        const dx = (c + .5 - ox) / S - this.px, dy = (wy - oy) / S - this.py;
+        const lx = (cs * dx + sn * dy) / sx, ly = (-sn * dx + cs * dy) / sy;
+        const nx = lx / A, ny = ly / B, f = nx * nx + ny * ny;
+        if (f > 1) {
+          // fin skirt
+          const ay = Math.abs(ly); if (ay > B * .92) continue;
+          const ax = Math.abs(lx), hw = A * Math.sqrt(Math.max(0, 1 - (ly / B) ** 2));
+          const side = lx < 0 ? 0 : 1.7;
+          const fw = finA * (.55 + .45 * Math.sin(fph - ly * .42 + side)) * (1 - (ay / (B * .95)) ** 2) + 1.2;
+          const e = ax - hw; if (e > fw) continue;
+          const q = e / fw;
+          this.skin(lx, ly, .8 - q * .3);
+          const ch = q < .35 ? 61 : q < .7 ? 126 : 58;
+          const fa = 1 - q * .55;
+          v.put(c, r, ch, Math.min(255, CR * fa + 30 * (1 - q)), Math.min(255, CG * fa + 30 * (1 - q)), Math.min(255, CB * fa + 30 * (1 - q)));
+          continue;
+        }
+        // mantle shading
+        const nz = Math.sqrt(1 - f);
+        let lam = -nx * .35 - ny * .55 + nz * .76; lam = lam < 0 ? 0 : lam;
+        let shade = .62 + .5 * lam;
+        let rim = f > .8;
+        this.skin(lx, ly, shade);
+        let r0 = CR, g0 = CG, b0 = CB;
+        let idx = clamp(Math.floor((shade - .6) / .5 * 4), 0, 3);
+        let ch = RAMPB[idx];
+        if (rim) { const w = smooth(.8, 1, f); r0 = r0 * (1 + .35 * w) + 25 * w; g0 = g0 * (1 + .35 * w) + 25 * w; b0 = b0 * (1 + .35 * w) + 25 * w; ch = f > .9 ? 37 : ch; }
+        // blush
+        if (P.blush > .02) {
+          for (let s = -1; s <= 1; s += 2) {
+            const bx = (lx - s * (EX + 8)) / 5.2, by = (ly - (EY + ER + .8)) / 2.6, bd = bx * bx + by * by;
+            if (bd < 1) { const w = P.blush * (1 - bd) * .85; r0 += (255 - r0) * w; g0 += (120 - g0) * w; b0 += (130 - b0) * w; ch = bd < .5 ? 37 : ch; }
+          }
+        }
+        // lantern spot
+        const dl = Math.abs(lx) / 4 + Math.abs(ly + 10.4) / 2.7;
+        if (dl < 1) { const gw = clamp(P.glow, .3, 1.4); r0 = 255 * (.5 + .5 * gw); g0 = 214 * (.5 + .5 * gw); b0 = 130 * (.4 + .6 * gw); ch = 64; }
+        else if (dl < 2.6) { const w = (1 - (dl - 1) / 1.6) * .3 * P.glow; r0 += (255 - r0) * w; g0 += (214 - g0) * w; b0 += (130 - b0) * w; }
+        // eyes
+        let drawn = false;
+        for (let s = -1; s <= 1; s += 2) {
+          const ex = lx - s * EX, ey = ly - EY, u = ex / ER, vv = ey / ER, d2 = u * u + vv * vv;
+          if (d2 > 1.32) continue;
+          if (d2 > 1) { if (P.arcMix > .3) continue; // socket ring
+            this.skin(lx, ly, .3); v.put(c, r, 35, CR * .5, CG * .6, CB * .7); drawn = true; break;
+          }
+          if (d2 > .84 && P.arcMix < .3) { v.put(c, r, 35, 238, 240, 226); drawn = true; break; }
+          // eyelid boundaries
+          const w = -s * u;
+          let vU = -1 + 2 * lidT - ang * w * .9, vL = 1 - 2 * lidB;
+          if (blink > 0) { vU = vU + (.15 - vU) * blink * (vU < .15 ? 1 : 0); vL = vL + (.15 - vL) * blink * (vL > .15 ? 1 : 0); }
+          const am = P.arcMix;
+          if (am > .01) { const vc = P.arcC + P.arcB * u * u; vU = vU + (vc - .4 - vU) * am; vL = vL + (vc + .4 - vL) * am; }
+          if (vv < vU || vv > vL) {
+            // lid skin, with a lash line on the lid edge
+            const near = vv < vU ? vU - vv : vv - vL;
+            this.skin(lx, ly, .86);
+            if (near < .26 && am < .3) { v.put(c, r, 35, CR * .3, CG * .3, CB * .36); } else v.put(c, r, ch, CR, CG, CB);
+            drawn = true; break;
+          }
+          // inside the open eye
+          const pu = u - this.gx * .52, pv = vv - this.gy * .52;
+          const hw = lerp(.66, .27, P.round) * P.pupS, th = lerp(.3, .3, P.round) * P.pupS;
+          let pw; if (P.round > .6) pw = (pu / hw) ** 2 + (pv / th) ** 2; else { const q = pu / hw; pw = Math.abs(q) < 1 && Math.abs(pv - .2 * Math.cos(q * 6.283)) < th * (.45 + .45 * (1 - q * q)) * .85 ? 0 : 2; }
+          if (am > .55) { if (P.arcB > 0) v.put(c, r, 35, 255, 244, 214); else v.put(c, r, 35, 150 * (1 - P.dim * .5), 172 * (1 - P.dim * .5), 228 * (1 - P.dim * .4)); drawn = true; break; }
+          if (pw < 1) { v.put(c, r, 35, 12, 10, 24); drawn = true; break; }
+          if ((u + .36) ** 2 + (vv + .4) ** 2 < .05) { v.put(c, r, 35, 255, 255, 250); drawn = true; break; }
+          if ((u - .3) ** 2 + (vv - .42) ** 2 < .016) { v.put(c, r, 35, 255, 250, 235); drawn = true; break; }
+          const gl = clamp(P.glow, .35, 1.5), rr = Math.sqrt(d2);
+          const ir = rr > .8 ? .7 : 1;
+          if (P.blanch > .3) v.put(c, r, 35, 255 * ir, 250 * ir, 225 * ir);
+          else v.put(c, r, 35, Math.min(255, 255 * gl * ir), Math.min(255, 196 * gl * ir), Math.min(255, 96 * gl * ir * (rr > .8 ? .7 : 1)));
+          drawn = true; break;
+        }
+        if (!drawn) v.put(c, r, ch, Math.min(255, r0), Math.min(255, g0), Math.min(255, b0));
+      }
+    }
+    // brows
+    if (P.browA > .05) {
+      const tmp = this._t2 || (this._t2 = { x: 0, y: 0 });
+      for (let s = -1; s <= 1; s += 2) for (let q = 0; q <= 12; q++) {
+        const u = q / 12 * 2 - 1; // -1 inner, 1 outer
+        const lx = s * (EX + u * ER * .95), ly = EY - ER - 2.4 - P.browY * 3 - ang * (-u) * 3.4 + (1 - u * u) * -.6;
+        if ((lx / A) ** 2 + (ly / B) ** 2 > .9) continue;
+        this.l2w(lx, ly, tmp);
+        this.skin(lx, ly, .5); const k = P.browA;
+        this.stamp(v, tmp.x, tmp.y, .8, 35, lerp(CR, 20, k), lerp(CG, 34, k), lerp(CB, 52, k), o);
+      }
+    }
+    // tentacles (in front of the belly)
+    for (let k = 0; k < 2; k++) {
+      const tn = this.tents[k];
+      for (let i = 0; i <= 14; i++) for (let sub = 0; sub < 2; sub++) {
+        if (i === 14 && sub) break;
+        const f = sub ? .5 : 0, x = i < 14 ? lerp(tn.x[i], tn.x[i + 1], f) : tn.x[i], y = i < 14 ? lerp(tn.y[i], tn.y[i + 1], f) : tn.y[i];
+        const u = (i + f) / 14; let rad = 1.1 * (1 - u * .3); if (u > .8) rad = 2.3 * Math.sin((u - .8) / .2 * 2.4 + .2) + .8;
+        this.skin(0, 0, .95); const sh = .8 + .3 * u;
+        if (u > .8) this.stamp(v, x, y, rad, 35, Math.min(255, P.aR * .9 + 20), Math.min(255, P.aG * .9 + 20), Math.min(255, P.aB * .9 + 20), o); else this.stamp(v, x, y, rad, 61, CR * sh + 25, CG * sh + 25, CB * sh + 20, o);
+      }
+    }
+    // particles
+    const p = this.pa;
+    for (let i = 0; i < this.pn; i++) {
+      const a = Math.min(1, p.l[i] / p.m[i] * 1.6);
+      v.put(Math.floor(ox + p.x[i] * S), Math.floor((oy + p.y[i] * S) / asp), p.c[i], p.r[i] * a, p.g[i] * a, p.b[i] * a);
+    }
+    // symbol
+    if (this.symOn && SYM[this.mood] && this.mood !== 'content') this.paintSym(v, o);
+  }
+  paintSym(v, o) {
+    const sy = SYM[this.mood], age = this.symAge;
+    if (this.mood === 'surprised' && age > 2.4) return;
+    const pop = clamp(age / .32, 0, 1), sc = pop < 1 ? 1 + .35 * Math.sin(pop * Math.PI) : 1;
+    const bx = Math.floor(o.ox + (this.px + 25) * o.S), by = Math.floor((o.oy + (this.py - 24 + Math.sin(this.pt * 2) * (reduce ? 0 : 1.5)) * o.S) / v.asp);
+    let a = 1; if (this.mood === 'surprised') a = 1 - smooth(1.6, 2.4, age);
+    if (this.mood === 'delighted' || this.mood === 'proud') a = 1 - smooth(2.2, 3.2, age) * .6;
+    const col = [sy[1] * a, sy[2] * a, sy[3] * a];
+    if (sy[0] === 'dots') {
+      const ph = reduce ? 3 : Math.floor(this.pt * 4) % 4;
+      for (let d = 0; d < 3; d++) if (d < ph) for (let yy = 0; yy < 2; yy++) for (let xx = 0; xx < 3; xx++) v.put(bx + d * 5 + xx, by + 4 + yy, 35, col[0], col[1], col[2]);
+      return;
+    }
+    const bm = BM[sy[0]], w = bm[0].length, hh = bm.length, s2 = pop < .2 ? 0 : 1;
+    if (!s2) return;
+    for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++) if (bm[y][x] === '#') { v.put(bx + x * 2, by + y, 35, col[0], col[1], col[2]); v.put(bx + x * 2 + 1, by + y, 35, col[0], col[1], col[2]); }
+  }
+  hit(dx, dy) { // design coords relative to world
+    const lx = (this.cs * (dx - this.px) + this.sn * (dy - this.py)) / this.sx, ly = (-this.sn * (dx - this.px) + this.cs * (dy - this.py)) / this.sy;
+    return (lx / 23) ** 2 + (ly / 17) ** 2 < 1;
+  }
+  toDesign(cx, cy) { const c = this.cur; if (!c) return null; const r = c.v.rect || c.v.cv.getBoundingClientRect(); return { x: ((cx - r.left) / c.v.cw - c.ox) / c.S, y: ((cy - r.top) / c.v.cw - c.oy) / c.S }; }
+}
+const RAMPB = [35, 35, 37, 37];
+
+window.SHOAL = { reduce, STEP, FAM, clamp, lerp, rnd, smooth, hash2, vnoise, cc, GLYPH, PT, View, Scene, kick, Nib, EMO, MOODS, $, $$, css, scenes };
+})();
+
+(() => {
+'use strict';
+const { reduce, Scene, Nib, PT, kick, clamp, lerp, rnd, smooth, vnoise, hash2, $, $$, MOODS, cc } = window.SHOAL;
+const now = () => performance.now();
+const LABEL = { content: 'Content', curious: 'Curious', delighted: 'Delighted', surprised: 'Surprised', shy: 'Shy', concerned: 'Concerned', proud: 'Proud', focused: 'Focused', sleepy: 'Sleepy', asleep: 'Asleep' };
+const WHY = {
+  content: 'Nothing is wrong. The water is warm.',
+  curious: 'Something new is near, so it leans in to look.',
+  delighted: 'That felt good. Fins fast, skin shimmering.',
+  surprised: 'That was sudden. Skin blanched, pupils tiny.',
+  shy: 'Too much attention. It dims its skin and tucks its arms.',
+  concerned: 'Something went wrong, so it tilts and goes quiet and blue.',
+  proud: 'A win. It puffs up and flashes gold and coral.',
+  focused: 'Working on it. Brows down, arms tapping.',
+  sleepy: 'Quiet for a while. Lids heavy, sinking slowly.',
+  asleep: 'Fast asleep on the sand. Come back when you are ready.'
+};
+
+// ------------------------------------------------------------------
+// helpers
+// ------------------------------------------------------------------
+function gazeAt(nib) {
+  if (reduce || !PT.in || !nib.cur) { nib.look.w = 0; return; }
+  const d = nib.toDesign(PT.x, PT.y); if (!d) { nib.look.w = 0; return; }
+  nib.look.x = d.x; nib.look.y = d.y; nib.look.w = .9;
+}
+function puppet(cv, o) {
+  const sc = new Scene(cv, { fsDiv: o.fsDiv || 58, fsMin: o.fsMin || 5.5, fsMax: o.fsMax || 9, bg: o.bg });
+  const nib = new Nib({ mood: o.mood, seed: o.seed || 0, noSym: o.noSym });
+  sc.nib = nib; sc.still = 2.4;
+  sc.onLayout = function () {
+    const v = this.v; this.S = Math.min(v.W / o.fw, v.H / o.fh); this.ox = v.W / 2 + (o.dx || 0) * this.S; this.oy = v.H * (o.cy || .4);
+    nib.floor = (v.H - this.oy) / this.S - 4; nib.bounds = { x: v.W / 2 / this.S - 18, y: 40 };
+  };
+  sc.sim = function (dt) { if (!o.still) gazeAt(nib); nib.sim(dt); if (o.each) o.each(nib, dt); };
+  sc.draw = function () { const v = this.v; v.clear(); if (o.env) o.env(v, this); nib.paint(v, this); };
+  sc.start();
+  sc.hold = function (mood, secs, next) { nib.setMood(mood); clearTimeout(sc._tm); if (next) sc._tm = setTimeout(() => { nib.setMood(next); sc.dirty = true; kick(); }, secs * 1000); sc.dirty = true; kick(); };
+  return sc;
+}
+function seabed(v, rows, col) {
+  for (let r = v.rows - rows; r < v.rows; r++) for (let c = 0; c < v.cols; c++) {
+    const h = hash2(c, r), k = (r - (v.rows - rows)) / rows;
+    const ch = h > .93 ? 111 : h > .6 ? 46 : h > .3 ? 58 : 39;
+    v.put(c, r, ch, col[0] * (.45 + .4 * k) * (.7 + h * .5), col[1] * (.45 + .4 * k) * (.7 + h * .5), col[2] * (.45 + .4 * k) * (.7 + h * .5));
+  }
+}
+
+// ------------------------------------------------------------------
+// MAIN CHARACTER: stage + dock share one Nib and one brain
+// ------------------------------------------------------------------
+const stageCv = $('#stage'), dockCv = $('#dockCv'), dockEl = $('#dock');
+const nib = new Nib({ mood: 'content' });
+window.__nib = nib;
+const stage = new Scene(stageCv, { fsDiv: 112, fsMin: 6.2, fsMax: 10.4, bloom: .5 });
+const dock = new Scene(dockCv, { fsDiv: 44, fsMin: 5, fsMax: 6.2, bloom: .45 });
+stage.still = dock.still = 2.6;
+const motes = []; for (let i = 0; i < 34; i++) motes.push({ x: Math.random(), y: Math.random(), s: rnd(.4, 1), ph: Math.random() * 9 });
+stage.onLayout = function () {
+  const v = this.v; this.S = Math.min(v.W / 104, v.H / 72); this.ox = v.W / 2; this.oy = v.H * .4;
+  stage.fl = (v.H - this.oy) / this.S - 6;
+};
+dock.onLayout = function () { const v = this.v; this.S = Math.min(v.W / 66, v.H / 52); this.ox = v.W / 2; this.oy = v.H * .42; dock.fl = (v.H - this.oy) / this.S - 4; };
+stage.paintBg = function (ctx, w, h) {
+  ctx.fillStyle = '#05111c'; ctx.fillRect(0, 0, w, h);
+  const g = ctx.createRadialGradient(w / 2, h * .05, 10, w / 2, h * .3, Math.max(w, h) * .75);
+  g.addColorStop(0, 'rgba(60,140,160,.38)'); g.addColorStop(.5, 'rgba(20,70,100,.2)'); g.addColorStop(1, 'rgba(4,10,20,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+};
+function useScene(sc) {
+  nib.floor = sc.fl; const v = sc.v;
+  nib.bounds = { x: Math.max(8, v.W / 2 / sc.S - 30), y: Math.max(8, sc.oy / sc.S - 24) };
+}
+function drawEnv(v, sc, t) {
+  seabed(v, 3, [170, 140, 95]);
+  // kelp
+  for (let k = 0; k < 2; k++) {
+    const bx = k ? v.cols - 6 : 5, h = Math.floor(v.rows * .55);
+    for (let j = 0; j < h; j++) {
+      const r = v.rows - 3 - j, sw = Math.sin(t * .9 + j * .22 + k * 2) * (1 + j * .12);
+      const c = Math.round(bx + (k ? -1 : 1) * j * .12 + sw);
+      const a = .38 + .3 * (j / h);
+      v.put(c, r, (j & 1) ? 41 : 40, 40 * a * 2, 150 * a * 1.3, 90 * a * 1.4); v.put(c + 1, r, (j & 1) ? 40 : 41, 30 * a * 2, 120 * a * 1.3, 80 * a * 1.4);
+      if (j % 5 === 3) v.put(c + 2, r, 111, 70, 190 * a, 120);
+    }
+  }
+  // motes
+  for (const m of motes) {
+    const x = ((m.x + Math.sin(t * .15 + m.ph) * .02) * v.cols) | 0, y = ((m.y + (reduce ? 0 : t * .004 * m.s)) % 1) * v.rows | 0;
+    const b = .3 + .35 * Math.sin(t * .8 + m.ph);
+    v.put(x, y, m.s > .75 ? 111 : 46, 120 * b, 200 * b, 210 * b);
+  }
+}
+function mainSim(dt) { brain.update(dt); nib.sim(dt); }
+function mainDraw(sc) {
+  useScene(sc); const v = sc.v; v.clear();
+  if (sc === stage) drawEnv(v, sc, nib.pt);
+  nib.paint(v, sc);
+}
+stage.sim = function (dt) { mainSim(dt); };
+dock.sim = function (dt) { if (!stage.vis) mainSim(dt); };
+stage.draw = function () { mainDraw(stage); };
+dock.draw = function () { mainDraw(dock); };
+let stageVis = false;
+stage.onVis = function (vis) { stageVis = vis; syncDock(); };
+let dockOff = false;
+let dockPlace = 'r', dockSize = 'n';
+function textHit(x0, y0, x1, y1) {
+  const main = document.querySelector('main'); const tw = document.createTreeWalker(main, NodeFilter.SHOW_TEXT); let n;
+  const rg = document.createRange();
+  while ((n = tw.nextNode())) {
+    if (!n.nodeValue.trim()) continue;
+    const pe = n.parentElement; if (!pe || pe.closest('canvas,.sr,[hidden]')) continue;
+    const pr = pe.getBoundingClientRect(); if (pr.bottom < y0 || pr.top > y1 || pr.right < x0 || pr.left > x1) continue;
+    rg.selectNodeContents(n);
+    for (const r of rg.getClientRects()) if (r.width > 1 && r.right > x0 && r.left < x1 && r.bottom > y0 && r.top < y1) return true;
+  }
+  for (const e of document.querySelectorAll('main input,main textarea,main .btn')) { const r = e.getBoundingClientRect(); if (r.right > x0 && r.left < x1 && r.bottom > y0 && r.top < y1) return true; }
+  return false;
+}
+function placeDock() {
+  if (stageVis || dockOff) return;
+  const vw = innerWidth, vh = innerHeight, g = 16, pad = 6;
+  const sizes = { n: [Math.min(250, vw * .46), 208], c: [Math.min(168, vw * .34), 140] };
+  for (const sz of ['n', 'c']) for (const pl of ['r', 'l']) {
+    const [w, h] = sizes[sz], x0 = pl === 'r' ? vw - g - w : g, y0 = vh - g - h;
+    if (!textHit(x0 - pad, y0 - pad, x0 + w + pad, y0 + h + pad)) { dockPlace = pl; dockSize = sz; applyDock(true); return; }
+  }
+  applyDock(false);
+}
+function applyDock(ok) {
+  dockEl.classList.toggle('left', dockPlace === 'l'); dockEl.classList.toggle('compact', dockSize === 'c');
+  dockEl.classList.toggle('show', ok && !stageVis && !dockOff);
+  $('#dockOpen').classList.toggle('show', (!ok && !stageVis && !dockOff) || (!stageVis && dockOff));
+  $('#dockOpen').classList.toggle('left', dockPlace === 'l');
+  if (ok) { dock.dirty = true; kick(); setTimeout(() => { dock.relayout(); }, 30); }
+}
+let dockT = 0;
+function syncDock() { clearTimeout(dockT); dockT = setTimeout(placeDock, 120); if (stageVis) { dockEl.classList.remove('show'); $('#dockOpen').classList.remove('show'); } }
+let scT = 0; addEventListener('scroll', () => { if (!stageVis && !scT) scT = setTimeout(() => { scT = 0; placeDock(); }, 140); }, { passive: true });
+addEventListener('resize', () => syncDock());
+$('#dockHide').addEventListener('click', () => { dockOff = true; dockEl.classList.remove('show'); $('#dockOpen').classList.add('show'); $('#dockOpen').focus(); });
+$('#dockOpen').addEventListener('click', () => { dockOff = false; $('#dockOpen').classList.remove('show'); placeDock(); setTimeout(() => $('#dockSleep').focus(), 80); });
+
+// ------------------------------------------------------------------
+// BRAIN
+// ------------------------------------------------------------------
+const brain = {
+  over: null, lastInput: now(), nightSim: false, sleepLock: false, pet: 0, stare: 0, pokes: [], drag: null, scrollV: 0, lastY: scrollY, glance: null, boredT: 4,
+  strike: null, typingUntil: 0, typeEl: null, wake: 0, awayUntil: 0, hideUntil: 0, lastMood: 'content', reason: 'Just arrived.',
+  mood(name, secs, prio, reason) {
+    const o = this.over;
+    if (o && o.until > now() && o.prio > prio) return;
+    this.over = { mood: name, until: now() + secs * 1000, prio, reason: reason || WHY[name] };
+    if (reduce) { clearTimeout(this._rt); this._rt = setTimeout(() => { stage.dirty = dock.dirty = true; kick(); }, secs * 1000 + 60); }
+    this.apply(); stage.dirty = dock.dirty = true; kick();
+  },
+  isNight() { const h = new Date().getHours(); return this.nightSim || h >= 21 || h < 6; },
+  input() { const was = this.idle(); this.lastInput = now(); if (nib.mood === 'asleep' && !this.sleepLock) { this.mood('surprised', .9, 5, 'Woken up. Skin blanched, pupils tiny.'); setTimeout(() => this.mood('sleepy', 1.6, 2, 'Groggy for a moment.'), 950); } },
+  idle() { return (now() - this.lastInput) / 1000; },
+  baseline() {
+    if (this.sleepLock) return ['asleep', 'Sent to sleep. It stays down until you wake it.'];
+    const idle = this.idle(), night = this.isNight();
+    if (idle > (night ? 22 : 48)) return ['asleep', night ? 'Late and quiet. It drifted off.' : 'Nobody around for a while. It fell asleep.'];
+    if (idle > (night ? 7 : 24)) return ['sleepy', night ? 'It is night where you are, so it winds down early.' : 'Quiet for a while. Lids getting heavy.'];
+    if (this.near) return ['curious', 'The pointer is close. It wants a better look.'];
+    return ['content', WHY.content];
+  },
+  apply() {
+    const o = this.over; let m, why;
+    if (o && o.until > now()) { m = o.mood; why = o.reason; } else { [m, why] = this.baseline(); }
+    if (m !== nib.mood) {
+      nib.setMood(m);
+      if (m === 'proud' && this.showoff) Object.assign(nib.T, { shim: 1, pSp: 4, pBand: .8 });
+      onMoodChange(m, why);
+    }
+  },
+  update(dt) {
+    const t = now(), nb = nib;
+    // pointer in design coordinates
+    let pd = null; if (PT.in && nb.cur) pd = nb.toDesign(PT.x, PT.y);
+    const rect = nb.cur && nb.cur.v.rect; const inRect = !!(pd && rect && PT.x >= rect.left && PT.x <= rect.right && PT.y >= rect.top && PT.y <= rect.bottom);
+    this.near = !!(inRect && Math.hypot(pd.x - nb.px, pd.y - nb.py) < 60) && !reduce;
+    // scroll
+    const sy = scrollY, sv = (sy - this.lastY) / Math.max(dt, 1e-3); this.lastY = sy; this.scrollV += (sv - this.scrollV) * Math.min(1, dt * 6);
+    // look target
+    let look = null;
+    if (!reduce) {
+      if (this.glance && this.glance.until > t) look = this.glance;
+      else if (t < this.awayUntil) look = { x: nb.px + 60, y: nb.py - 30 };
+      else if (this.typeEl && t < this.typingUntil) { const r = this.typeEl.getBoundingClientRect(); const d = nb.toDesign(r.left + r.width / 2, r.top + r.height / 2); if (d) look = d; }
+      else if (Math.abs(this.scrollV) > 350) look = { x: nb.px, y: nb.py + Math.sign(this.scrollV) * 60 };
+      else if (this.foods().length) { const f = this.foods()[0]; look = { x: f.x, y: f.y }; }
+      else if (pd) look = pd;
+    }
+    if (look) { nb.look.x = look.x; nb.look.y = look.y; nb.look.w = 1; } else nb.look.w = 0;
+    // scrolling wakes curiosity
+    if (!reduce && Math.abs(this.scrollV) > 500 && nb.mood !== 'asleep' && t - (this._sc || 0) > 2500) { this._sc = t; this.lastInput = t; this.mood('curious', 1.4, 2, 'The page is moving. It watches where you are going.'); }
+    // petting
+    const pet = !reduce && inRect && pd && nb.hit(pd.x, pd.y) && !this.drag;
+    if (pet && PT.speed > 25 && PT.speed < 1100 && !PT.touch) { this.pet = Math.min(3, this.pet + dt * 1.4); this.lastInput = t; }
+    else this.pet = Math.max(0, this.pet - dt * .6);
+    if (this.pet > 1.1) { this.mood('delighted', .8, 4, 'Being petted. Fins fast, skin shimmering.'); if (Math.random() < dt * 6) nb.spawn(1, nb.px + rnd(-14, 14), nb.py - 12, rnd(-6, 6), rnd(-26, -14), 1.1, 42, 255, 140, 150); }
+    // stare contest (secret)
+    if (!reduce && pd && inRect && !PT.touch && Math.hypot(pd.x - nb.px, pd.y - nb.py) < 24 && PT.speed < 40 && !this.drag) { this.stare += dt; } else this.stare = Math.max(0, this.stare - dt * 2);
+    if (this.stare > 3) { this.stare = 0; this.awayUntil = t + 3000; this.mood('shy', 3.2, 6, 'You won the stare contest. It looks away and blushes.'); }
+    // food + strike
+    this.updateFood(dt, t);
+    // lean toward pointer when curious
+    if (nb.mood === 'curious' && pd && !this.food2) { nb.lean.x = clamp((pd.x - nb.px) * .12, -9, 9); nb.lean.y = clamp((pd.y - nb.py) * .1, -6, 6); }
+    else if (nb.mood === 'shy') { const away = pd ? Math.sign(nb.px - pd.x) || 1 : 1; nb.lean.x = lerp(nb.lean.x, away * 16, dt * 2); nb.lean.y = lerp(nb.lean.y, 8, dt * 2); }
+    else { nb.lean.x = lerp(nb.lean.x, 0, dt * 2); nb.lean.y = lerp(nb.lean.y, 0, dt * 2); }
+    // home drifts toward food
+    if (!this.foods().length) { nb.home.x = lerp(nb.home.x, 0, dt * 1.2); nb.home.y = lerp(nb.home.y, 0, dt * 1.2); }
+    // bored actions
+    const idle = this.idle();
+    if (!reduce && idle > 8 && idle < 24 && nb.mood === 'content' && !this.over) {
+      this.boredT -= dt;
+      if (this.boredT <= 0) {
+        this.boredT = rnd(3.5, 6.5); const a = (Math.random() * 4) | 0;
+        if (a === 0) nb.bubbles(5, nb.px + 3, nb.py + 10);
+        else if (a === 1) this.glance = { x: nb.px + rnd(-70, 70), y: nb.py + rnd(-30, 20), until: t + 1400 };
+        else if (a === 2) nb.tentMode('wave', 1.6, false);
+        else { nb.act = 'stretch'; nb.actT = 1.3; nb.kqv -= 7; }
+      }
+    }
+    if (!reduce && nb.mood === 'sleepy' && Math.random() < dt * .5) nb.bubbles(1, nb.px + 3, nb.py + 8);
+    if (!reduce && nb.mood === 'asleep' && Math.random() < dt * .7) nb.spawn(3, nb.px + 22, nb.py - 14, 3, -7, 3, 90, 180, 190, 245);
+    if (!reduce && nb.mood === 'delighted' && Math.random() < dt * 3) nb.sparks(1, nb.px + rnd(-18, 18), nb.py + rnd(-12, 4), [[255, 220, 120], [255, 140, 140], [150, 240, 230]]);
+    if (!reduce && nb.mood === 'proud' && Math.random() < dt * 5) nb.sparks(1, nb.px + rnd(-20, 20), nb.py + rnd(-14, 4), [[255, 220, 120], [255, 120, 100]]);
+    if (!reduce && nb.mood === 'concerned' && Math.random() < dt * .8) nb.spawn(1, nb.px - 11, nb.py + 7, 0, 6, 1.4, 46, 130, 190, 255);
+    // reduce motion: hold a pose for blush etc, no timers
+    this.apply();
+  },
+  foods() { return nib.food; },
+  updateFood(dt, t) {
+    const nb = nib, fs = nb.food;
+    for (let i = fs.length - 1; i >= 0; i--) { const f = fs[i]; if (!reduce) { f.y += (6 + Math.sin(t * .004 + f.ph) * 2) * dt; f.x += Math.sin(t * .003 + f.ph) * 3 * dt; } f.y = Math.min(f.y, nb.floor - 2); }
+    this.food2 = fs.length > 0;
+    if (!fs.length) { this.strike = null; return; }
+    const f = fs[0];
+    // swim toward it
+    const tx = clamp(f.x * .8, -nb.bounds.x, nb.bounds.x), ty = clamp(f.y - 38, -nb.bounds.y, nb.floor - 36);
+    nb.home.x = lerp(nb.home.x, tx, dt * 1.4); nb.home.y = lerp(nb.home.y, ty, dt * 1.4);
+    const dx = f.x - nb.px, dy = f.y - (nb.py + 12), d = Math.hypot(dx, dy);
+    if (!this.strike) {
+      this.mood(d < 60 ? 'focused' : 'curious', .6, 3, d < 60 ? 'Lining up a catch. Lids narrow, brows down.' : 'Food! It noticed something sinking.');
+      if (d < 38 && !reduce) { this.strike = { t: now() + 520, f }; nb.tents[0].mode = nb.tents[1].mode = 'rest'; }
+      else if (d < 38 && reduce) { this.eat(f); }
+    } else if (now() > this.strike.t && this.strike.f) {
+      const s = this.strike; if (!s.hit) { s.hit = true; nb.reachTo(dx < 0 ? -1 : 1, f.x, f.y, .5, true); s.t = now() + 280; }
+      else this.eat(f);
+    }
+  },
+  eat(f) {
+    const nb = nib, i = nb.food.indexOf(f); if (i >= 0) nb.food.splice(i, 1);
+    this.strike = null; nb.tents[0].mode = nb.tents[1].mode = 'rest'; nb.tents[0].until = nb.tents[1].until = 0;
+    nb.sparks(10, f.x, f.y, [[255, 150, 130], [255, 220, 120]]); nb.kqv += 7;
+    this.mood('delighted', 2.2, 4, 'Caught a snack. Skin flushes coral and gold.');
+  },
+  drop(x, y) { if (nib.food.length >= 3) nib.food.shift(); nib.food.push({ x, y, ph: rnd(0, 6) }); this.input(); stage.dirty = dock.dirty = true; kick(); if (reduce) { this.mood('curious', 2, 3, 'Food! It noticed something sinking.'); } },
+  poke(fromX, fromY) {
+    const t = now(); this.pokes = this.pokes.filter(p => t - p < 3500); this.pokes.push(t); this.input();
+    nib.jet(nib.px - fromX, nib.py - fromY, 22);
+    if (this.pokes.length >= 3) { this.pokes.length = 0; nib.ink(18, nib.px, nib.py + 8); this.mood('shy', 4.5, 6, 'Poked too many times. It inked, dimmed and hid.'); nib.jet(nib.px - fromX, 6, 30); }
+    else this.mood('surprised', .9, 5, 'A poke. Skin blanched, pupils shrank to dots.');
+  },
+  event(name) {
+    this.input();
+    if (name === 'error') { nib.tentMode('scratch', 1.8, false); this.mood('concerned', 4, 7, 'The form had a problem. It tilts and turns blue.'); }
+    else if (name === 'success') { nib.tentMode('wave', 3, true); nib.sparks(26, nib.px, nib.py - 4, [[255, 214, 120], [255, 112, 96], [127, 232, 224], [197, 139, 255]]); nib.jet(0, -1, 18); this.showoff = false; this.mood('proud', 3.8, 7, 'It worked. It puffs up and flashes gold and coral.'); }
+    else if (name === 'loading') { nib.tentMode('tap', 2.6, true); this.mood('focused', 2.6, 7, 'Something is loading. It taps along, brows down.'); }
+    else if (name === 'night') { this.nightSim = true; this.sleepLock = false; this.over = null; this.lastInput = now() - 9000; this.apply(); }
+    else if (name === 'day') { this.nightSim = false; this.sleepLock = false; this.over = null; this.lastInput = now(); this.apply(); }
+    else if (name === 'idle') { this.sleepLock = false; this.over = null; this.lastInput = now() - (this.idle() > 20 ? 60000 : 27000); this.apply(); }
+    else if (name === 'wake') { this.sleepLock = false; this.nightSim = false; this.over = null; const was = nib.mood === 'asleep'; this.lastInput = now(); if (was) { this.mood('surprised', .9, 5, 'Woken up. Skin blanched, pupils tiny.'); setTimeout(() => this.mood('content', 2, 2, 'Back to normal.'), 1000); } else this.apply(); }
+    else if (name === 'sleep') { this.sleepLock = !this.sleepLock; this.over = null; if (!this.sleepLock) { this.lastInput = now(); this.mood('surprised', .8, 5, 'Woken up. Skin blanched, pupils tiny.'); } this.apply(); }
+    else if (name === 'showoff') { this.showoff = true; nib.tentMode('wave', 3, true); this.mood('proud', 3.4, 6, 'Showing off. The whole skin ripples.'); Object.assign(nib.T, { shim: 1, pSp: 4, pBand: .8 }); }
+    syncSleepBtns(); stage.dirty = dock.dirty = true; kick();
+  },
+  force(m) {
+    this.input(); this.sleepLock = (m === 'asleep'); this.over = null;
+    if (m === 'asleep') { this.apply(); } else this.mood(m, 5, 8, WHY[m]);
+    syncSleepBtns();
+  }
+};
+// UI sync
+const live = $('#live'); let lastSay = 0, sayTimer = 0, pendingSay = '';
+function announce(text) {
+  const t = now(); pendingSay = text;
+  if (t - lastSay > 4500) { lastSay = t; live.textContent = text; }
+  else if (!sayTimer) { sayTimer = setTimeout(() => { sayTimer = 0; lastSay = now(); live.textContent = pendingSay; }, 4500 - (t - lastSay)); }
+}
+function onMoodChange(m, why) {
+  $('#moodName').textContent = LABEL[m]; $('#moodWhy').textContent = why;
+  $$('.ecard').forEach(c => c.classList.toggle('on', c.dataset.mood === m));
+  announce('Nib feels ' + LABEL[m].toLowerCase() + '. ' + why);
+}
+function syncSleepBtns() {
+  const s = brain.sleepLock;
+  [$('#btnSleep'), $('#dockSleep')].forEach(b => { if (!b) return; b.setAttribute('aria-pressed', s ? 'true' : 'false'); b.textContent = s ? 'Wake Nib' : (b.id === 'dockSleep' ? 'Sleep' : 'Send to sleep'); });
+}
+nib.onMood = null;
+
+// pointer interaction on stage and dock
+function bindPointer(cv) {
+  cv.addEventListener('pointerdown', e => {
+    const d = nib.toDesign(e.clientX, e.clientY); if (!d) return; PT.x = e.clientX; PT.y = e.clientY; PT.in = true;
+    if (nib.hit(d.x, d.y)) {
+      brain.drag = { ox: nib.px - d.x, oy: nib.py - d.y, t0: now(), moved: false, sx: e.clientX, sy: e.clientY, id: e.pointerId };
+      try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+      brain.poke(d.x, d.y + 1);
+    } else if (e.pointerType !== 'touch' || true) { brain.drop(d.x, Math.min(d.y, nib.floor - 4)); }
+  });
+  cv.addEventListener('pointermove', e => {
+    const dr = brain.drag; if (!dr || e.pointerId !== dr.id) return;
+    if (!dr.moved && Math.hypot(e.clientX - dr.sx, e.clientY - dr.sy) > 8) { dr.moved = true; brain.pokes.length = 0; brain.mood('surprised', .5, 5, 'Picked up. Pupils shrink, arms trail behind.'); }
+    if (dr.moved) { const d = nib.toDesign(e.clientX, e.clientY); nib.grab = { x: d.x + dr.ox, y: d.y + dr.oy }; brain.input(); stage.dirty = dock.dirty = true; kick(); }
+  });
+  const up = e => { const dr = brain.drag; if (!dr) return; brain.drag = null; nib.grab = null; if (dr.moved) { brain.mood('delighted', 1.6, 4, 'Put down gently. That was a fun ride.'); nib.bubbles(6, nib.px, nib.py); } };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+}
+bindPointer(stageCv); bindPointer(dockCv);
+stageCv.addEventListener('dblclick', e => { const d = nib.toDesign(e.clientX, e.clientY); if (d && !nib.hit(d.x, d.y)) { nib.food.length = 0; brain.event('showoff'); } });
+['keydown', 'wheel', 'touchstart'].forEach(ev => addEventListener(ev, () => { brain.lastInput = now(); if (nib.mood === 'asleep' && !brain.sleepLock && ev !== 'wheel') brain.input(); }, { passive: true }));
+addEventListener('scroll', () => { brain.lastInput = now(); if (nib.mood === 'asleep' && !brain.sleepLock) brain.input(); }, { passive: true });
+addEventListener('pointermove', () => { if (PT.speed > 80) brain.lastInput = now(); }, { passive: true });
+
+// toolbar
+$('#btnPet').addEventListener('click', () => { brain.input(); brain.pet = 3; brain.mood('delighted', 2.4, 4, 'Being petted. Fins fast, skin shimmering.'); for (let i = 0; i < 6; i++) nib.spawn(1, nib.px + rnd(-14, 14), nib.py - 12, rnd(-6, 6), rnd(-26, -14), 1.2, 42, 255, 140, 150); });
+$('#btnPoke').addEventListener('click', () => { brain.poke(nib.px + 10, nib.py + 4); });
+$('#btnFeed').addEventListener('click', () => { brain.drop(rnd(-30, 30), -28); });
+$('#btnSleep').addEventListener('click', () => brain.event('sleep'));
+$('#dockSleep').addEventListener('click', () => brain.event('sleep'));
+
+// playground
+$$('[data-ev]').forEach(b => b.addEventListener('click', () => brain.event(b.dataset.ev)));
+const form = $('#joinForm'), email = $('#email'), msg = $('#formMsg'), note = $('#note');
+function trackTyping(el) {
+  el.addEventListener('focus', () => { brain.typeEl = el; brain.input(); });
+  el.addEventListener('input', () => { brain.typeEl = el; brain.typingUntil = now() + 1400; brain.input(); nib.tentMode('tap', .5, true); brain.mood('focused', 1.3, 3, 'You are typing. It watches the field and taps along.'); });
+}
+trackTyping(email); trackTyping(note);
+form.addEventListener('submit', e => {
+  e.preventDefault(); const v = email.value.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { email.setAttribute('aria-invalid', 'true'); msg.textContent = 'That email does not look right. Try name@example.com.'; msg.className = 'fmsg bad'; brain.event('error'); return; }
+  email.removeAttribute('aria-invalid'); msg.textContent = 'Checking...'; msg.className = 'fmsg'; brain.event('loading');
+  setTimeout(() => { msg.textContent = 'You are in. Welcome to the shoal.'; msg.className = 'fmsg ok'; brain.event('success'); }, reduce ? 200 : 1600);
+});
+
+// ------------------------------------------------------------------
+// EMOTION SHEET
+// ------------------------------------------------------------------
+const SHEET = [
+  ['content', 'Teal skin with a slow gold ripple. Soft eyes, arms drifting.', 'Default. Arrival, calm pages, nothing to report.'],
+  ['curious', 'Bright cyan with gold leopard spots. Eyes wide, one brow up.', 'Pointer comes near, the page scrolls, something new appears.'],
+  ['delighted', 'Coral and gold shimmer. Happy arcs for eyes, blushing cheeks.', 'Petting, a caught snack, a gentle ride.'],
+  ['surprised', 'Skin blanches almost white. Pupils shrink to dots, body stretches.', 'A poke, a sudden noise-like event, waking up.'],
+  ['shy', 'Skin dims to the colour of the water. Arms tucked, blushing.', 'Too many pokes, losing the stare contest.'],
+  ['concerned', 'Cool lilac blue. Brows slanted up, tilted, arms drooping.', 'Form errors, a 404, bad news. Never for something minor.'],
+  ['proud', 'Gold with coral waves racing across. Puffed up, chin high.', 'Success: signup done, upload finished, goal reached.'],
+  ['focused', 'Green with scanning stripes. Brows down, arms tapping.', 'Loading, saving, you typing in a field.'],
+  ['sleepy', 'Dim blue. Heavy lids, slow sinking, arms hanging.', 'A quiet minute, or after 9pm local time.'],
+  ['asleep', 'Deep blue, eyes closed, resting on the sand. Zs drift up.', 'Long quiet, the sleep button, the footer.']
+];
+const sheetEl = $('#sheet'); const sheets = [];
+SHEET.forEach(([m, skin, trig], i) => {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'ecard'; b.dataset.mood = m; b.setAttribute('aria-label', LABEL[m] + '. ' + trig + ' Press to make the main Nib feel this.');
+  b.innerHTML = '<canvas aria-hidden="true"></canvas><span class="en">' + LABEL[m] + '</span><span class="es">' + skin + '</span><span class="et"><b>Triggered by</b> ' + trig + '</span><span class="ego">Make Nib feel this</span>';
+  sheetEl.appendChild(b);
+  b.addEventListener('click', () => { brain.force(m); stage.dirty = dock.dirty = true; kick(); });
+  sheets.push(puppet($('canvas', b), { mood: m, fw: 60, fh: 58, cy: .46, seed: i, still: false, fsDiv: 56, fsMin: 5.5, fsMax: 8, env: m === 'asleep' ? (v) => seabed(v, 2, [150, 120, 85]) : null }));
+});
+
+// ------------------------------------------------------------------
+// IN THE WILD
+// ------------------------------------------------------------------
+const navP = puppet($('#wNav'), { mood: 'content', fw: 58, fh: 44, cy: .42, noSym: true, fsDiv: 40, fsMin: 4.6, fsMax: 5.4 });
+$$('#navMock a').forEach(a => { a.addEventListener('mouseenter', () => { navP.nib.setMood('curious'); const r = a.getBoundingClientRect(); navP._lk = r; }); a.addEventListener('mouseleave', () => { navP.nib.setMood('content'); navP._lk = null; }); a.addEventListener('focus', () => navP.nib.setMood('curious')); a.addEventListener('blur', () => navP.nib.setMood('content')); a.addEventListener('click', e => e.preventDefault()); });
+const p404 = puppet($('#w404'), { mood: 'concerned', fw: 64, fh: 56, cy: .36, fsDiv: 50, fsMin: 5.4, fsMax: 7.5 });
+if (!reduce) setInterval(() => { if (p404.vis) p404.nib.tentMode('scratch', 1.6, false); }, 4200);
+const pLoad = puppet($('#wLoad'), { mood: 'focused', fw: 56, fh: 52, cy: .36, fsDiv: 50, fsMin: 5.4, fsMax: 7 });
+pLoad.nib.tentMode('tap', 1e9, true);
+const pSign = puppet($('#wSign'), { mood: 'content', fw: 62, fh: 54, cy: .36, fsDiv: 50, fsMin: 5.4, fsMax: 7.5 });
+function celebrate() { pSign.nib.setMood('proud'); pSign.nib.tentMode('wave', 3, true); pSign.nib.sparks(28, pSign.nib.px, pSign.nib.py - 4, [[255, 214, 120], [255, 112, 96], [127, 232, 224], [197, 139, 255]]); pSign.nib.jet(0, -1, 18); clearTimeout(pSign._c); pSign._c = setTimeout(() => { pSign.nib.setMood('content'); pSign.dirty = true; kick(); }, 4200); pSign.dirty = true; kick(); $('#signMsg').textContent = 'Welcome to the shoal, Sam.'; }
+$('#signBtn').addEventListener('click', celebrate);
+let signSeen = false; new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && !signSeen) { signSeen = true; setTimeout(celebrate, 600); } }), { threshold: .6 }).observe($('#wSign'));
+const pSleep = puppet($('#wSleep'), { mood: 'asleep', fw: 56, fh: 38, cy: .3, fsDiv: 70, fsMin: 5.5, fsMax: 7, env: (v) => seabed(v, 2, [90, 74, 55]) });
+$('#wakeBtn').addEventListener('click', () => { pSleep.nib.setMood('surprised'); pSleep.nib.bubbles(5, pSleep.nib.px, pSleep.nib.py); clearTimeout(pSleep._t1); pSleep._t1 = setTimeout(() => { pSleep.nib.setMood('sleepy'); pSleep.dirty = true; kick(); pSleep._t2 = setTimeout(() => { pSleep.nib.setMood('asleep'); pSleep.dirty = true; kick(); }, 3000); }, 1100); pSleep.dirty = true; kick(); });
+// nav puppet looks at the link under the pointer
+navP.sim = (function (orig) { return function (dt) { const n = navP.nib; if (navP._lk && !reduce && n.cur) { const d = n.toDesign(navP._lk.left + navP._lk.width / 2, navP._lk.top + navP._lk.height / 2); if (d) { n.look.x = d.x; n.look.y = d.y; n.look.w = 1; } n.sim(dt); } else orig.call(navP, dt); }; })(navP.sim);
+
+// loading bar
+const bar = $('#loadBar'); if (reduce) bar.style.width = '62%';
+
+// ------------------------------------------------------------------
+// SKETCHES
+// ------------------------------------------------------------------
+function mini(cv, o) {
+  const sc = new Scene(cv, { fsDiv: 46, fsMin: 5.4, fsMax: 7.5 }); sc.still = 2.2; sc.t = 0; sc.s = {};
+  sc.onLayout = function () { this.px = 0; };
+  sc.sim = function (dt) { if (!reduce) this.t += dt; else this.t = 3; o.sim(this, dt); };
+  sc.draw = function () { const v = this.v; v.clear(); o.draw(v, this); };
+  sc.start(); return sc;
+}
+function ptIn(sc) { if (reduce || !PT.in) return null; const r = sc.v.rect; if (!r) return null; return { x: (PT.x - r.left) / sc.v.cw, y: (PT.y - r.top) / sc.v.cw }; }
+function disc(v, cx, cy, rx, ry, fn) { // world coords, ry in world units
+  const asp = v.asp;
+  for (let r = Math.floor((cy - ry) / asp); r <= Math.ceil((cy + ry) / asp); r++) for (let c = Math.floor(cx - rx); c <= Math.ceil(cx + rx); c++) {
+    const dx = (c + .5 - cx) / rx, dy = ((r + .5) * asp - cy) / ry, d = dx * dx + dy * dy; if (d <= 1) fn(c, r, dx, dy, d);
+  }
+}
+// A: Wisp the jelly
+mini($('#sk1'), {
+  sim(sc, dt) { const s = sc.s, v = sc.v; if (s.x == null) { s.x = v.W / 2; s.y = v.H * .35; s.vx = 0; s.vy = 0; } const p = ptIn(sc); const tx = p ? p.x : v.W / 2 + Math.sin(sc.t * .5) * v.W * .25, ty = p ? p.y - 8 : v.H * .4 + Math.sin(sc.t * .8) * 8; s.pul = Math.sin(sc.t * 2.6); s.vx += ((tx - s.x) * 1.2 - s.vx * 1.6) * dt; s.vy += ((ty - s.y) * 1.2 - s.vy * 1.6 - (s.pul > .6 ? -18 : 0)) * dt; s.x += s.vx * dt; s.y += s.vy * dt; },
+  draw(v, sc) { const s = sc.s; if (s.x == null) return; const w = 9 - s.pul * 1.2, h = 6.5 + s.pul;
+    disc(v, s.x, s.y, w, h * 1, (c, r, dx, dy, d) => { if (dy > .15) return; const rim = d > .72; v.put(c, r, rim ? 37 : 35, rim ? 210 : 150, rim ? 150 : 90, 255); });
+    for (let k = -3; k <= 3; k++) for (let m = 1; m < 11; m++) { const x = s.x + k * 2.6 + Math.sin(sc.t * 2.4 - m * .5 + k) * (.6 + m * .25), y = s.y + m * 1.2 * v.asp * .62 + 2; const a = 1 - m / 12; v.put(Math.round(x), Math.floor(y / v.asp), m % 3 ? 58 : 59, 200 * a, 130 * a, 255 * a); } }
+});
+// B: Clack the hermit crab
+mini($('#sk2'), {
+  sim(sc, dt) { const s = sc.s, v = sc.v; if (s.x == null) { s.x = v.W * .3; s.d = 1; s.h = 0; } const p = ptIn(sc); const fast = p && Math.hypot(p.x - s.x, p.y - v.H * .7) < 22 && PT.speed > 200; s.h += ((fast || (p && Math.hypot(p.x - s.x, p.y - v.H * .7) < 9) ? 1 : 0) - s.h) * Math.min(1, dt * 6); if (s.h < .4) { s.x += s.d * 5 * dt; if (s.x > v.W * .8) s.d = -1; if (s.x < v.W * .2) s.d = 1; } },
+  draw(v, sc) { const s = sc.s; if (s.x == null) return; const gy = v.H * .78; seabed(v, 3, [150, 120, 90]);
+    disc(v, s.x - 3, gy - 7, 8, 8, (c, r, dx, dy, d) => { const sp = Math.atan2(dy, dx) + d * 7; const ch = d > .8 ? 35 : (Math.sin(sp * 1.5) > 0 ? 111 : 48); v.put(c, r, ch, 255 * (1 - d * .3), 150 + 60 * (1 - d), 120); });
+    if (s.h < .6) { const ex = s.x + 6 * s.d; for (let k = 0; k < 2; k++) { const lx = ex + k * 2.2 - 1; v.put(Math.round(lx), Math.floor((gy - 5 - 2) / v.asp), 124, 235, 220, 200); v.put(Math.round(lx), Math.floor((gy - 8) / v.asp), 111, 255, 255, 255); }
+      for (let k = 0; k < 3; k++) { const ph = Math.sin(sc.t * 9 + k * 2) > 0; v.put(Math.round(s.x + k * 2.5 - 1), Math.floor((gy + 1) / v.asp), ph ? 47 : 92, 255, 150, 120); }
+      disc(v, s.x + 4 * s.d, gy - 1, 4, 3, (c, r) => v.put(c, r, 35, 255, 160, 130)); } }
+});
+// C: Puff the pufferfish
+mini($('#sk3'), {
+  sim(sc, dt) { const s = sc.s, v = sc.v; if (s.x == null) { s.x = v.W / 2; s.k = 0; } const p = ptIn(sc); const near = p && Math.hypot(p.x - s.x, (p.y - v.H * .45)) < 26; s.k += ((near ? 1 : 0) - s.k) * Math.min(1, dt * 5); s.x = v.W / 2 + Math.sin(sc.t * .6) * 10 * (1 - s.k); },
+  draw(v, sc) { const s = sc.s; if (s.x == null) return; const r0 = 6 + s.k * 6, cy = v.H * .45;
+    disc(v, s.x, cy, r0, r0, (c, r, dx, dy, d) => v.put(c, r, d > .8 ? 37 : 35, 255 * (.7 + .3 * (1 - d)), 200 * (.6 + .4 * (1 - d)), 90));
+    if (s.k > .2) for (let a = 0; a < 16; a++) { const an = a / 16 * 6.283, rr = r0 + 1.6 + s.k * 1.5; v.put(Math.round(s.x + Math.cos(an) * rr), Math.floor((cy + Math.sin(an) * rr) / v.asp), 94, 255, 120, 100); }
+    v.put(Math.round(s.x + r0 * .45), Math.floor((cy - r0 * .3) / v.asp), 64, 20, 20, 30); v.put(Math.round(s.x + r0 * .45) - 1, Math.floor((cy - r0 * .3) / v.asp), 111, 255, 255, 255);
+    v.put(Math.round(s.x - r0 - 2), Math.floor(cy / v.asp), Math.sin(sc.t * 8) > 0 ? 60 : 62, 255, 200, 90); }
+});
+
+// ------------------------------------------------------------------
+// boot
+// ------------------------------------------------------------------
+function boot() {
+  scenes_start();
+  syncSleepBtns();
+  const h = new Date().getHours(); const night = h >= 21 || h < 6;
+  onMoodChange('content', night ? 'It is night where you are, so it will wind down early.' : 'Just arrived. Everything is fine.');
+}
+function scenes_start() { [stage, dock].forEach(s => s.start()); }
+// (puppets and sketches start themselves)
+const fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+boot();
+fontsReady.then(() => setTimeout(() => { window.SHOAL.scenes.forEach(s => { if (s.ready) s.relayout(); }); }, 60));
+// hide the dock until we know where the stage is
+syncDock();
+})();
+
+</script>
+</body>
+</html>

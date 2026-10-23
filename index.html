@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Glyphmotion</title>
+<meta name="description" content="Glyphmotion: interfaces drawn in living glyphs. A design language and engine for full-color text-character motion graphics.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Archivo+Black&display=swap" rel="stylesheet">
+<style>
+/* Layout: full-width living hero, then a plain index of everything in the repo. */
+:root {
+  --bg: #070b18; --panel: #0b1124; --ink: #dfe9f1; --muted: #8a9bb0; --sun: #ffb15c; --sea: #5cc0d8; --edge: rgba(130,160,190,.22);
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display: "Archivo Black", Impact, "Arial Black", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 var(--mono); }
+a { color: inherit; }
+.hero { position: relative; height: min(78vh, 720px); min-height: 440px; overflow: hidden; border-bottom: 1px solid var(--edge); }
+.hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hero .copy { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 max(16px, env(safe-area-inset-left, 0px)) 28px max(16px, env(safe-area-inset-right, 0px));
+  max-width: 1100px; margin: 0 auto; padding-top: 60px; z-index: 1; }
+.hero::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 46%; pointer-events: none; background: linear-gradient(to bottom, rgba(7,11,24,0), rgba(7,11,24,.88) 60%); }
+.hero h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.tag { margin: 0; font-size: clamp(16px, 2.4vw, 22px); color: var(--ink); }
+.sub { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+main { max-width: 1100px; margin: 0 auto; padding: 40px max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 44px; }
+h2 { margin: 0 0 14px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--sun); font-weight: 600; }
+.ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.idea { background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; padding: 16px; }
+.idea b { display: block; margin-bottom: 4px; }
+.idea p { margin: 0; color: var(--muted); font-size: 13px; }
+.list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
+.list a { display: block; height: 100%; text-decoration: none; background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; padding: 14px; transition: border-color .2s; }
+.list a:hover { border-color: rgba(255,177,92,.55); }
+.list a:focus-visible { outline: 2px solid var(--sun); outline-offset: 2px; }
+.list b { display: block; color: var(--ink); }
+.list span { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.list em { font-style: normal; color: var(--sun); font-size: 11px; letter-spacing: .06em; }
+footer { color: var(--muted); font-size: 12px; border-top: 1px solid var(--edge); padding-top: 18px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <canvas id="hero" role="img" aria-label="The word Glyphmotion assembled from glowing characters over drifting light."></canvas>
+  <div class="copy">
+    <h1>Glyphmotion</h1>
+    <p class="tag">Interfaces drawn in living glyphs.</p>
+    <p class="sub">A design language and a small engine for web interfaces made of full-color text characters, driven by simulation. Move your pointer through the word.</p>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>The idea</h2>
+    <div class="ideas">
+      <div class="idea"><b>Simulated, not drawn</b><p>Water, fire, flocks and weather run as physics underneath. The glyphs are how you see them.</p></div>
+      <div class="idea"><b>The interface is the medium</b><p>A button is the pool of molten metal, not a box in front of a scene.</p></div>
+      <div class="idea"><b>Behavior, not loops</b><p>Things settle, get bored, notice you and fall asleep.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Built on the engine</h2>
+    <ul class="list">
+      <li><a href="examples/profile-card.html"><b>Breach profile card</b><span>Where it started: a humpback whale breaching behind a profile card.</span></a></li>
+      <li><a href="examples/hello.html"><b>Hello</b><span>A smoke field and a pointer light in about 30 lines.</span></a></li>
+      <li><a href="examples/button.html"><b>Ember button</b><span>Sparks on hover, a burst and a ring on press.</span></a></li>
+      <li><a href="examples/wordmark.html"><b>Wordmark</b><span>Every letter cell is a particle with a home.</span></a></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Design language championship</h2>
+    <ul class="list">
+      <li><a href="gallery/championship/team-creatures.html"><em>Winner, 45.5 of 60</em><b>Shoal</b><span>A living ecosystem. Type "whale" anywhere.</span></a></li>
+      <li><a href="gallery/championship/team-sky.html"><em>Second, 40.5</em><b>Meridian</b><span>One sky from dawn to deep space as you scroll.</span></a></li>
+      <li><a href="gallery/championship/team-matter.html"><em>Third, 39</em><b>Meltwork</b><span>Every control is a material with a meaning.</span></a></li>
+      <li><a href="gallery/championship/team-signal.html"><em>Fourth, 38.5</em><b>Carrier</b><span>The page as a radio instrument.</span></a></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Mascots</h2>
+    <ul class="list">
+      <li><a href="gallery/mascots/signal.html"><b>Vesper</b><span>A bat whose ears light up when the echo comes back.</span></a></li>
+      <li><a href="gallery/mascots/sky.html"><b>Nomi</b><span>A sundial keeper whose shadow follows the real time of day.</span></a></li>
+      <li><a href="gallery/mascots/creatures.html"><b>Nib</b><span>A cuttlefish that wears every mood on its skin.</span></a></li>
+      <li><a href="gallery/mascots/matter.html"><b>Fettle</b><span>A slag salamander. How it feels is how hot it glows.</span></a></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Component lab</h2>
+    <ul class="list">
+      <li><a href="gallery/lab/hero-cta.html"><b>Hero and call to action</b><span>Aurora hero, burst button, comet strip.</span></a></li>
+      <li><a href="gallery/lab/data-pricing.html"><b>Data and pricing</b><span>Stat tiles driven by their numbers, fire pricing.</span></a></li>
+      <li><a href="gallery/lab/states-feedback.html"><b>App states</b><span>Skyline upload, lighthouse 404, weather dialogs.</span></a></li>
+      <li><a href="gallery/lab/content-nav.html"><b>Content and navigation</b><span>City event cards, firefly quotes, harbor footer.</span></a></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Read</h2>
+    <ul class="list">
+      <li><a href="docs/principles.md"><b>Principles</b><span>Twelve rules the judges taught us.</span></a></li>
+      <li><a href="docs/api.md"><b>API reference</b><span>Surfaces, helpers, reduced motion, performance.</span></a></li>
+      <li><a href="docs/history/"><b>History</b><span>The briefs and every judge's scorecard.</span></a></li>
+    </ul>
+  </section>
+
+  <footer>Glyphmotion. Created by Chris Rader with Claude.</footer>
+</main>
+
+<script src="src/glyphmotion.js"></script>
+<script>
+(() => {
+const { Pool, textMask, rnd, hash2, fbm, smooth, clamp, lerp } = Glyphmotion;
+let P = null, top = 0;
+const GLYPHS = '#%@&#@';
+
+const surface = Glyphmotion.surface(document.getElementById('hero'), {
+  fontSize: w => clamp(w / 150, 4.5, 11), bloom: 0.6,
+  setup(s) {
+    // the word sits in the upper part of the hero, clear of the copy below it
+    const mask = textMask(s, 'glyphmotion', { font: '400 100px "Archivo Black", Impact, "Arial Black", sans-serif', fill: s.vw < 600 ? 0.95 : 0.78 });
+    let n = 0, minR = 1e9, maxR = 0;
+    for (let i = 0; i < mask.length; i++) if (mask[i]) { n++; const r = (i / s.cols) | 0; minR = Math.min(minR, r); maxR = Math.max(maxR, r); }
+    top = Math.round(s.rows * 0.36 - (minR + maxR) / 2);
+    P = new Pool(n, ['x', 'y', 'vx', 'vy', 'hx', 'hy', 'delay', 'seed']);
+    for (let i = 0; i < mask.length; i++) if (mask[i]) {
+      const c = i % s.cols, r = ((i / s.cols) | 0) + top;
+      P.spawn({ hx: c + 0.5, hy: (r + 0.5) * s.asp, seed: hash2(c, r), x: rnd(0, s.W), y: rnd(0, s.H) });
+    }
+    for (let i = 0; i < P.n; i++) P.delay[i] = (P.hx[i] / s.W) * 1.1 + rnd(0, 0.3);
+  },
+  still(s) { for (let i = 0; i < P.n; i++) { P.x[i] = P.hx[i]; P.y[i] = P.hy[i]; } },
+  step(s, dt) {
+    const p = s.pointer;
+    for (let i = 0; i < P.n; i++) {
+      if (P.delay[i] > 0) { P.delay[i] -= dt; continue; }
+      let ax = (P.hx[i] - P.x[i]) * 18 - (P.y[i] - P.hy[i]) * 6, ay = (P.hy[i] - P.y[i]) * 18 + (P.x[i] - P.hx[i]) * 6;
+      if (p.inside) {
+        const dx = P.x[i] - p.x, dy = P.y[i] - p.y, d2 = dx * dx + dy * dy;
+        if (d2 < 140) { const f = (140 - d2) * 8 / (Math.sqrt(d2) + 0.5); ax += dx * f; ay += dy * f; }
+      }
+      P.vx[i] = (P.vx[i] + ax * dt) * (1 - 6.5 * dt); P.vy[i] = (P.vy[i] + ay * dt) * (1 - 6.5 * dt);
+      P.x[i] += P.vx[i] * dt; P.y[i] += P.vy[i] * dt;
+    }
+  },
+  draw(s) {
+    const t = s.time, p = s.pointer;
+    // background: slow warped light, warmer toward the bottom like the last minute of a sunset
+    for (let r = 0; r < s.rows; r++) {
+      const f = r / s.rows;
+      for (let c = 0; c < s.cols; c++) {
+        const x = c + 0.5, y = (r + 0.5) * s.asp;
+        const w = fbm(x * 0.02 + t * 0.03, y * 0.02, 2) * 5;
+        const n = fbm(x * 0.04 + w - t * 0.05, y * 0.05 + w * 0.6, 3);
+        const d = p.inside ? Math.hypot(x - p.x, y - p.y) : 1e9, light = Math.exp(-d * d / 700);
+        const v = smooth(0.5, 0.82, n) * (0.35 + 0.4 * f) + light * 0.35;
+        const i = r * s.cols + c;
+        if (v < 0.07) { s.putI(i, ' ', 0, 0, 0); continue; }
+        s.putI(i, ' .:-=+'[clamp(Math.round(v * 6), 1, 5)],
+          lerp(40, 230, f * 0.7 + light * 0.5) * (0.5 + v), lerp(70, 120, f) * (0.5 + v), lerp(150, 120, f) * (0.5 + v));
+      }
+    }
+    const sweep = ((t * 0.3) % 1.7 - 0.35) * s.W;
+    for (let i = 0; i < P.n; i++) {
+      const off = Math.hypot(P.x[i] - P.hx[i], P.y[i] - P.hy[i]), settled = clamp(1 - off / 6, 0, 1);
+      const glint = Math.exp(-Math.pow((P.hx[i] - sweep) / 5, 2)) * settled;
+      const ch = settled > 0.9 ? GLYPHS[(P.seed[i] * 6) | 0] : '.:-=+*'[(settled * 5) | 0];
+      s.putW(P.x[i], P.y[i], ch, lerp(150, 255, glint), lerp(215, 240, glint), lerp(240, 200, glint));
+    }
+  }
+});
+// the wordmark face may arrive after the grid font; re-rasterize once it does
+if (document.fonts && document.fonts.load) document.fonts.load('400 100px "Archivo Black"').then(() => surface.layout());
+
+})();
+</script>
+</body>
+</html>

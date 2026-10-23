@@ -1,0 +1,32 @@
+{
+  "criterion": "uniqueness",
+  "method": "Read the brief and all four sources, ran each page in Chromium at 1280x900 with no page errors, and viewed full-length scroll captures (hero, buttons, menu/pointer, share moment, footer). Compared each against known ASCII/canvas references (ASCII aquariums, Matrix and CRT phosphor demos, ASCII weather and clouds, particle backgrounds) and asked whether the controls and elements carry their own ideas or just sit on a themed backdrop.",
+  "scores": {
+    "matter": {
+      "score": 8,
+      "best": "Every control is drawn in the medium and each one is a different material with a stated meaning (ember commits, ink chooses, smoke dismisses, sand is small, acid destroys). The acid button eats itself outward from the pointer while held and the sand icon is 200 grains that collapse and pour into the next icon shape. The footer wordmark fills with molten metal as you scroll, and the nav drop menu is poured like a mold.",
+      "worst": "Molten lava and hot-metal pour in ASCII is a known demo genre, and the hero is a pour stream plus a pool with a normal HTML headline over it. The ink and smoke buttons read more like familiar fluid and particle effects than new inventions.",
+      "evidence": "Buttons section shows six material cells with no DOM button chrome, only character art (e.g. ember pool with SCRAP/CAST labels embedded in the simulation). The rule 'one material per meaning' makes the semantics of the language original, not just the look. Footer letters read MELTWORK at full width in heat gradient."
+    },
+    "signal": {
+      "score": 5.5,
+      "best": "A carrier-wave wordmark that is born as a sine wave and modulates into letters, plus the Transmit button where each press launches a packet with its own hex address and channel color. The nav as a spectrum analyzer with a packet running the wire is a clever idea.",
+      "worst": "The visual vocabulary is the most familiar of the four: phosphor trails, raster scanlines, dotted-border boxes, RGB split, decode-from-noise, and an ASCII world map with city dots. These are CRT and Matrix-style cliches. Buttons are small dashed boxes that look like terminal UI, and the section rules (phosphor decay, decode never fade) are stock hacker-theme moves.",
+      "evidence": "Hero shows a large ASCII CARRIER with a scan line through it and faint vertical Matrix-like columns below. Buttons grid looks like tidy terminal boxes with low visual difference between primary and secondary at rest. Footer is an ASCII world map of nodes above a normal link grid, a familiar network-map trope."
+    },
+    "sky": {
+      "score": 6,
+      "best": "The whole page is driven by one clock: scroll scrubs the sky from dawn to storm to night, the palette is sampled from the sky, and the footer is a live four-city sunlit-planet strip with a night aurora. The icon button runs a full day in seven seconds, which is a good press-again idea.",
+      "worst": "The three core buttons are ordinary rounded HTML pills sitting on a canvas, and the weather metaphors (hover brings clouds, press brings rain, lightning on delete) are what the brief and theme directly suggest. ASCII clouds, stars and rain are a very common character-art subject, and the card panels are standard glass boxes.",
+      "evidence": "Hero shows a big chunky MERIDIAN wordmark in cloud characters over a gradient with standard peach and glass-pill buttons. Pointer section uses plain translucent cards over the sky. Footer at night shows ASCII cloud mass and four clock tiles as ordinary DOM."
+    },
+    "creatures": {
+      "score": 7.5,
+      "best": "Behavior instead of animation: flocking, fleeing, following light, feeding, synced fireflies and sleep, with the cursor as a lantern. The wordmark is literally made of fish that scatter and return, the jellyfish button leans to you and jets away, the toggle knob is a fish that dozes and dims every school on the page, and there is a typed secret that calls a whale. Arrow glyphs encode which way creatures face.",
+      "worst": "ASCII fish, jellyfish and underwater scenes are an established genre (asciiquarium), and the hero and footer scenes (reef, kelp, a day-cycle estuary) lean on that picture. Several buttons keep a normal HTML pill shape with creatures merely orbiting it, so the creature never becomes the control.",
+      "evidence": "Buttons grid shows coral fish ring around Start a school, a jellyfish drifting behind Watch the dive, a plankton underline, fireflies orbiting an icon, a fish inside the sleep toggle. Footer estuary with DAWN/NOON/DUSK/NIGHT chips shows a split sky and water with kelp and fish."
+    }
+  },
+  "winner": "matter",
+  "one_line_verdict": "Matter wins because its buttons are real material simulations with their own meanings, not scenery; creatures is close behind with genuine flocking behavior but a familiar ASCII aquarium look, while sky and signal lean on stock weather and CRT imagery."
+}
