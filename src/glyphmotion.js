@@ -85,13 +85,19 @@ GM.Pool = Pool;
 GM.STEP = 1 / 60;
 const surfaces = new Set();
 let raf = 0, last = 0;
+const frameHooks = new Set();
 function anyActive() { for (const s of surfaces) if (s.active) return true; return false; }
 function frame(now) {
   raf = 0;
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  // page-level work (scroll speed, shared clocks, DOM text) runs once per frame, before any surface
+  for (const fn of frameHooks) fn(dt);
   for (const s of surfaces) if (s.active) s._advance(dt);
   wake();
 }
+// run fn(dt) once per animation frame while any surface is animating; returns an unsubscribe function.
+// Under reduced motion there are no frames, so do not rely on it for state that must change.
+GM.onFrame = fn => { frameHooks.add(fn); wake(); return () => frameHooks.delete(fn); };
 function wake() {
   if (raf || GM.reducedMotion || document.hidden || !anyActive()) return;
   raf = requestAnimationFrame(t => { if (!last || t - last > 200) last = t; frame(t); });
@@ -109,7 +115,12 @@ if (mq) {
   mq.addEventListener ? mq.addEventListener('change', onChange) : mq.addListener(onChange);
 }
 const io = 'IntersectionObserver' in root ? new IntersectionObserver(entries => {
-  for (const e of entries) { const s = e.target.__glyphSurface; if (s) { s.visible = e.isIntersecting; if (s.visible) s.invalidate(); } }
+  for (const e of entries) {
+    const s = e.target.__glyphSurface; if (!s || s.visible === e.isIntersecting) continue;
+    s.visible = e.isIntersecting;
+    if (s.visible) s.invalidate();
+    if (s.o.onVisible) s.o.onVisible(s, s.visible);
+  }
   wake();
 }, { rootMargin: '120px' }) : null;
 
@@ -131,6 +142,11 @@ class Surface {
    *   step(s,dt) fixed 60Hz simulation step
    *   draw(s)    fill the grid for this frame (s.clear() first if you need it)
    *   still(s)   reduced motion: put the world in a good resting pose (default: step 1.2s)
+   *   onVisible(s, visible)  called when the surface scrolls into or out of view
+   *   persistence seconds a glyph keeps glowing after it stops being drawn (phosphor afterglow). Default 0
+   *   pointer    'canvas' (default) or 'window': track the pointer page-wide, for overlays with pointer-events: none
+   *   baseline   'top' (default) or 'middle': where glyphs sit in their cell
+   *   relayoutDelay ms to wait after a resize before re-laying out. Default 120 (0 = every resize)
    */
   constructor(canvas, o) {
     this.canvas = canvas; this.o = Object.assign({ bloom: 0.5, bloomScale: 5, fps: 30, lineHeight: 1.2, weight: 600, family: DEFAULT_FAMILY, background: '#070b18' }, o);
@@ -140,7 +156,11 @@ class Surface {
     this.pointer = { x: -1e9, y: -1e9, inside: false, down: false, vx: 0, vy: 0 };
     canvas.__glyphSurface = this;
     this._bindPointer();
-    this.ro = new ResizeObserver(() => { clearTimeout(this._rz); this._rz = setTimeout(() => this.layout(), this.cols ? 120 : 0); });
+    this.ro = new ResizeObserver(() => {
+      const wait = this.cols ? (this.o.relayoutDelay == null ? 120 : this.o.relayoutDelay) : 0;
+      clearTimeout(this._rz);
+      if (wait === 0) this.layout(); else this._rz = setTimeout(() => this.layout(), wait);
+    });
     this.ro.observe(canvas);
     if (io) io.observe(canvas);
     surfaces.add(this);
@@ -172,6 +192,12 @@ class Surface {
     const N = this.cols * this.rows; this.N = N;
     this.ch = new Array(N).fill(' ');
     this.r = new Uint8ClampedArray(N); this.g = new Uint8ClampedArray(N); this.b = new Uint8ClampedArray(N);
+    this.a = new Uint8ClampedArray(N).fill(255);
+    if (this.o.persistence > 0) {
+      this.pch = new Array(N).fill(' '); this.plife = new Float32Array(N);
+      this.pr = new Uint8ClampedArray(N); this.pg = new Uint8ClampedArray(N); this.pb = new Uint8ClampedArray(N); this.pa = new Uint8ClampedArray(N);
+    }
+    this._lastRender = this.time;
     this.glow.width = Math.max(1, Math.round(this.canvas.width / this.o.bloomScale));
     this.glow.height = Math.max(1, Math.round(this.canvas.height / this.o.bloomScale));
     if (this.o.setup) this.o.setup(this);
@@ -181,13 +207,15 @@ class Surface {
   }
 
   // ---- grid writes ----
+  // A is optional opacity 0..1 (default 1); a blank ' ' cell is never painted
   clear() { this.ch.fill(' '); }
+  blank(i) { this.ch[i] = ' '; }
   idx(c, r) { return (c < 0 || r < 0 || c >= this.cols || r >= this.rows) ? -1 : r * this.cols + c; }
-  put(c, r, ch, R, G, B) { const i = this.idx(c | 0, r | 0); if (i >= 0) { this.ch[i] = ch; this.r[i] = R; this.g[i] = G; this.b[i] = B; } return i; }
-  putI(i, ch, R, G, B) { this.ch[i] = ch; this.r[i] = R; this.g[i] = G; this.b[i] = B; }
+  put(c, r, ch, R, G, B, A) { const i = this.idx(c | 0, r | 0); if (i >= 0) this.putI(i, ch, R, G, B, A); return i; }
+  putI(i, ch, R, G, B, A) { this.ch[i] = ch; this.r[i] = R; this.g[i] = G; this.b[i] = B; this.a[i] = A === undefined ? 255 : A * 255; }
   // world coords (x in columns, y in column-widths) to a cell
-  putW(x, y, ch, R, G, B) { return this.put(Math.floor(x), Math.floor(y / this.asp), ch, R, G, B); }
-  text(c, r, str, R, G, B) { for (let k = 0; k < str.length; k++) if (str[k] !== ' ') this.put(c + k, r, str[k], R, G, B); }
+  putW(x, y, ch, R, G, B, A) { return this.put(Math.floor(x), Math.floor(y / this.asp), ch, R, G, B, A); }
+  text(c, r, str, R, G, B, A) { for (let k = 0; k < str.length; k++) if (str[k] !== ' ') this.put(c + k, r, str[k], R, G, B, A); }
 
   // ---- lifecycle ----
   pause() { this.paused = true; }
@@ -215,28 +243,49 @@ class Surface {
   _render() {
     this.dirty = false;
     if (this.o.draw) this.o.draw(this);
+    if (this.pch) this._persist();
     this.present();
+  }
+  // phosphor afterglow: a cell that stops being drawn keeps its glyph and fades out over o.persistence seconds
+  _persist() {
+    const dt = Math.max(0, this.time - this._lastRender) || 1 / this.o.fps; this._lastRender = this.time;
+    const fade = GM.reducedMotion ? 1 : dt / this.o.persistence;
+    const { ch, r, g, b, a, pch, plife, pr, pg, pb, pa } = this;
+    for (let i = 0; i < this.N; i++) {
+      if (ch[i] !== ' ') { pch[i] = ch[i]; pr[i] = r[i]; pg[i] = g[i]; pb[i] = b[i]; pa[i] = a[i]; plife[i] = 1; }
+      else if (plife[i] > 0) {
+        plife[i] -= fade;
+        if (plife[i] > 0) { ch[i] = pch[i]; r[i] = pr[i]; g[i] = pg[i]; b[i] = pb[i]; a[i] = pa[i] * plife[i]; }
+      }
+    }
   }
 
   // ---- paint the grid, then a cheap bloom: shrink the frame and add it back stretched ----
   present() {
-    const ctx = this.ctx, { ch, r, g, b, cols, rows, cw, chh } = this;
+    const ctx = this.ctx, { ch, r, g, b, a, cols, rows, cw, chh } = this;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     if (this.o.transparent) ctx.clearRect(0, 0, this.vw, this.vh);
     else { ctx.fillStyle = this.o.background; ctx.fillRect(0, 0, this.vw, this.vh); }
-    ctx.font = this.font; ctx.textBaseline = 'top';
-    let lastK = -1;
+    const mid = this.o.baseline === 'middle';
+    ctx.font = this.font; ctx.textBaseline = mid ? 'middle' : 'top';
+    const y0 = mid ? chh / 2 : 0;
+    let lastK = -1, lastA = 255;
     for (let row = 0; row < rows; row++) {
-      const y = row * chh, base = row * cols;
+      const y = row * chh + y0, base = row * cols;
       for (let c = 0; c < cols; c++) {
         const i = base + c, s = ch[i];
         if (s === ' ') continue;
+        // alpha is quantized to 16 steps so runs of similar cells keep one state change
+        const al = a[i] & 0xf0 | 0x0f;
+        if (al < 0x10) continue;
+        if (al !== lastA) { ctx.globalAlpha = al / 255; lastA = al; }
         const k = ((r[i] & 0xfc) << 16) | ((g[i] & 0xfc) << 8) | (b[i] & 0xfc);
         if (k !== lastK) { ctx.fillStyle = css(k); lastK = k; }
         ctx.fillText(s, c * cw, y);
       }
     }
+    ctx.globalAlpha = 1;
     if (this.o.bloom > 0) {
       const gctx = this.gctx;
       gctx.globalCompositeOperation = 'copy';
@@ -267,9 +316,21 @@ class Surface {
       pointerup: () => { p.down = false; },
       pointerleave: () => { p.inside = false; p.down = false; },
     };
-    for (const k in this._h) el.addEventListener(k, this._h[k]);
+    if (this.o.pointer === 'window') {
+      // overlays with pointer-events: none never get events, so listen on the window and test the rect
+      const inRect = e => { const rc = el.getBoundingClientRect(); return e.clientX >= rc.left && e.clientX <= rc.right && e.clientY >= rc.top && e.clientY <= rc.bottom; };
+      const h = this._h, mv = h.pointermove, dn = h.pointerdown;
+      this._h = {
+        pointermove: e => { if (inRect(e)) mv(e); else if (p.inside) { at(e); p.inside = false; } },
+        pointerdown: e => { if (inRect(e)) dn(e); },
+        pointerup: h.pointerup,
+        blur: h.pointerleave,
+      };
+      this._target = root;
+    } else this._target = el;
+    for (const k in this._h) this._target.addEventListener(k, this._h[k], { passive: true });
   }
-  _unbind() { for (const k in this._h) this.canvas.removeEventListener(k, this._h[k]); }
+  _unbind() { for (const k in this._h) this._target.removeEventListener(k, this._h[k]); }
 }
 GM.Surface = Surface;
 GM.surface = (canvas, o) => new Surface(canvas, o);
@@ -283,20 +344,31 @@ GM.textMask = (s, text, o) => {
   const cols = s.cols, rows = s.rows, asp = s.asp;
   const c = document.createElement('canvas'); c.width = cols; c.height = rows;
   const x = c.getContext('2d');
-  x.font = font; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = font; x.textAlign = 'left'; x.textBaseline = 'middle';
   // '\n' splits the word into stacked lines, for narrow screens
   const lines = String(text).split('\n');
+  // spacing: extra space between letters, in ems; stretch: make letters taller (1 = natural)
+  const em = parseFloat(/(\d+(?:\.\d+)?)px/.exec(font) ? /(\d+(?:\.\d+)?)px/.exec(font)[1] : 100);
+  const gap = (o.spacing || 0) * em, stretch = o.stretch || 1;
+  const widthOf = line => { let w = 0; for (const chr of line) w += x.measureText(chr).width; return w + gap * Math.max(0, [...line].length - 1); };
   let tw = 0, th = 0;
   for (const line of lines) {
     const m = x.measureText(line);
-    tw = Math.max(tw, m.width);
-    th = Math.max(th, (m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) || 100);
+    tw = Math.max(tw, gap ? widthOf(line) : m.width);
+    th = Math.max(th, (m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) || em);
   }
+  th *= stretch;
   const lh = th * (o.lineGap || 1.25), total = th + lh * (lines.length - 1);
   // cells are taller than wide, so squash vertically by the aspect ratio
   const k = Math.min(cols * fill / tw, rows * asp * fill / total);
-  x.setTransform(k, 0, 0, k / asp, cols / 2, rows / 2);
-  lines.forEach((line, n) => x.fillText(line, 0, (n - (lines.length - 1) / 2) * lh));
+  const cy = o.center == null ? rows / 2 : o.center * rows;
+  x.setTransform(k, 0, 0, k * stretch / asp, cols / 2, cy);
+  lines.forEach((line, n) => {
+    const y = (n - (lines.length - 1) / 2) * lh / stretch;
+    if (!gap) { x.textAlign = 'center'; x.fillText(line, 0, y); return; }
+    let px = -widthOf(line) / 2;
+    for (const chr of line) { x.fillText(chr, px, y); px += x.measureText(chr).width + gap; }
+  });
   const data = x.getImageData(0, 0, cols, rows).data, mask = new Uint8Array(cols * rows);
   for (let i = 0; i < mask.length; i++) mask[i] = data[i * 4 + 3] > 110 ? 1 : 0;
   return mask;
