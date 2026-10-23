@@ -211,7 +211,7 @@ class Surface {
   clear() { this.ch.fill(' '); }
   blank(i) { this.ch[i] = ' '; }
   idx(c, r) { return (c < 0 || r < 0 || c >= this.cols || r >= this.rows) ? -1 : r * this.cols + c; }
-  put(c, r, ch, R, G, B, A) { const i = this.idx(c | 0, r | 0); if (i >= 0) this.putI(i, ch, R, G, B, A); return i; }
+  put(c, r, ch, R, G, B, A) { if (c < 0 || r < 0) return -1; const i = this.idx(c | 0, r | 0); if (i >= 0) this.putI(i, ch, R, G, B, A); return i; }
   putI(i, ch, R, G, B, A) { this.ch[i] = ch; this.r[i] = R; this.g[i] = G; this.b[i] = B; this.a[i] = A === undefined ? 255 : A * 255; }
   // world coords (x in columns, y in column-widths) to a cell
   putW(x, y, ch, R, G, B, A) { return this.put(Math.floor(x), Math.floor(y / this.asp), ch, R, G, B, A); }
