@@ -295,11 +295,9 @@ let HR=0,HG=0,HB=0;
 function heat(h){if(h<0)h=0;else if(h>1)h=1;let i=1;while(i<5&&h>HT[i][0])i++;const a=HT[i-1],b=HT[i],t=(h-a[0])/(b[0]-a[0]);HR=a[1]+(b[1]-a[1])*t;HG=a[2]+(b[2]-a[2])*t;HB=a[3]+(b[3]-a[3])*t}
 const hc=h=>GM.RAMP.charCodeAt(Math.min(9,Math.max(0,(h*9.99)|0)));
 const fields=[];
-let touchT=0;
 /* pointer: 'window' tracks the pointer for pointer-events:none overlays. Presses are routed to each field
    under the pointer; this listener is added after the surfaces exist so the engine has already updated them. */
 function onPress(){for(const f of fields)if(f.vis&&f.down){f.updPtr();if(f.inside){f.down(f.px,f.py);if(GM.reducedMotion)f.s.invalidate()}}}
-addEventListener('pointerup',e=>{if(e.pointerType==='touch'){clearTimeout(touchT);touchT=setTimeout(()=>{for(const f of fields)f.s.pointer.inside=false},500)}},{passive:true});
 const status=document.getElementById('status');
 function say(t){status.textContent='';setTimeout(()=>{status.textContent=t},30)}
 
@@ -366,16 +364,10 @@ class Field{
   kick(){if(GM.reducedMotion&&this.laid)this.settle(this.kickN)}
 }
 
-/* text mask: the engine's textMask. The letters are centered in the rows above the reserved strip.
-   The engine centers on the em box, so lower the center by how far the capitals sit above it, plus 3% of
-   the letter height (where this page always set its baseline). */
-const tmx=document.createElement('canvas').getContext('2d');
-function textMask(f,text,reserve,fill,stretch){
-  const font='400 100px '+DISP,s=f.s;
-  tmx.font=font;tmx.textBaseline='middle';
-  const m=tmx.measureText(text),ink=m.actualBoundingBoxAscent+m.actualBoundingBoxDescent,up=(m.actualBoundingBoxAscent-m.actualBoundingBoxDescent)/2+.03*ink,th=ink*stretch;
-  const k=Math.min(s.cols*fill/m.width,s.rows*s.asp*fill/th);
-  return GM.textMask(s,text,{font,fill,stretch,center:((f.rows-reserve)/2+up*k*stretch/s.asp)/f.rows});
+/* text mask: the engine's textMask, with the letters centered in the rows above the reserved strip.
+   dy nudges the center down a row where the original's baseline landed half a row lower (footer on wide screens). */
+function textMask(f,text,reserve,fill,stretch,dy){
+  return GM.textMask(f.s,text,{font:'400 100px '+DISP,fill,stretch,ink:true,center:((f.rows-reserve)/2+(dy||0))/f.rows});
 }
 /* a surface that has nothing to draw stops its loop until it is needed again */
 function idleStop(f,idle){if(idle&&!GM.reducedMotion)f.s.pause()}
@@ -1057,7 +1049,7 @@ class Cruc extends Field{
 /* ---------- footer: giant letters filled by scrolling ---------- */
 class Foot extends Field{
   constructor(cv){super(cv,{fs:(w)=>clamp(w/150,4.5,9),lh:1.2,bloom:.6,maxp:200});this.lvl=0;this.prog=0}
-  onLayout(){const f=this;f.mask=textMask(f,'MELTWORK',0,.985,2.1);f.hb=new Float32Array(f.N);f.cells=[];f.mt=f.rows;f.mb=0;
+  onLayout(){const f=this;f.mask=textMask(f,'MELTWORK',0,.985,2.1,f.rows>33?1:0);f.hb=new Float32Array(f.N);f.cells=[];f.mt=f.rows;f.mb=0;
     for(let i=0;i<f.N;i++)if(f.mask[i]){f.cells.push(i);const r=(i/f.cols)|0;if(r<f.mt)f.mt=r;if(r>f.mb)f.mb=r}
     f.mb+=1;f.cool=0}
   floor(){return this.rows}

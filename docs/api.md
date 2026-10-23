@@ -21,14 +21,15 @@ Creates a `Surface` bound to a canvas. Size the canvas with CSS; the engine matc
 | `family` | JetBrains Mono stack | Monospace font family for the glyphs. |
 | `weight` | `600` | Font weight. |
 | `lineHeight` | `1.2` | Cell height as a multiple of the font size. |
-| `background` | `#070b18` | Color painted under the grid each frame. |
+| `background` | `#070b18` | Painted under the grid each frame. Any canvas fill works: a color, a `CanvasGradient` or a `CanvasPattern`. |
 | `transparent` | `false` | For overlays such as nav strips and button effects: skip the background so the page shows through. |
 | `bloom` | `0.5` | Glow strength, 0 to 1. `0` turns the glow pass off. |
 | `bloomScale` | `5` | How much the glow pass is shrunk. Higher is softer and cheaper. |
 | `fps` | `30` | Paint rate. The simulation always steps at 60Hz. |
 | `setup(s)` | | Called after every layout, when the grid size changes. Allocate your world here. |
 | `step(s, dt)` | | Fixed 60Hz simulation step. `dt` is `1/60`. |
-| `draw(s)` | | Fill the grid for this frame. Call `s.clear()` first if you do not overwrite every cell. |
+| `draw(s)` | | Fill the grid for this frame. Call `s.clear()` first if you do not overwrite every cell. Return `false` when nothing changed since the last paint (an idle overlay, for example) and the engine skips the paint and glow pass. |
+| `under(ctx, s)` | | Paint beneath the glyphs each frame, in CSS pixels: a sky gradient, a sun glow. It is included in the glow pass. |
 | `still(s)` | runs `step` for 1.2s | Under reduced motion, put the world in a good resting pose. |
 | `onVisible(s, visible)` | | Called when the surface scrolls into or out of view. Use it to start a reveal the first time a piece is seen. |
 | `persistence` | `0` | Seconds a glyph keeps glowing after you stop drawing it, like phosphor on an old screen. Your `draw` must `clear()` each frame for this to work. |

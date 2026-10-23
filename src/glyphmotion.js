@@ -140,7 +140,8 @@ class Surface {
    *   fps        render rate (sim always steps at 60Hz). Default 30
    *   setup(s)   after every layout (grid size changes); allocate your world here
    *   step(s,dt) fixed 60Hz simulation step
-   *   draw(s)    fill the grid for this frame (s.clear() first if you need it)
+   *   draw(s)    fill the grid for this frame (s.clear() first if you need it); return false if nothing changed
+   *   under(ctx, s) paint beneath the glyphs each frame (gradients, glows); background may also be a CanvasGradient or pattern
    *   still(s)   reduced motion: put the world in a good resting pose (default: step 1.2s)
    *   onVisible(s, visible)  called when the surface scrolls into or out of view
    *   persistence seconds a glyph keeps glowing after it stops being drawn (phosphor afterglow). Default 0
@@ -180,7 +181,7 @@ class Surface {
     const vw = Math.max(1, rect.width), vh = Math.max(1, rect.height);
     const dpr = Math.min(root.devicePixelRatio || 1, 2);
     this.vw = vw; this.vh = vh; this.dpr = dpr;
-    this.canvas.width = Math.round(vw * dpr); this.canvas.height = Math.round(vh * dpr);
+    this.canvas.width = Math.round(vw * dpr); this.canvas.height = Math.round(vh * dpr); this._blankCanvas = true;
     const fsOpt = this.o.fontSize;
     this.fs = typeof fsOpt === 'function' ? fsOpt(vw, vh) : fsOpt || clamp(vw / 60, 7, 16);
     this.font = this.o.weight + ' ' + this.fs.toFixed(2) + 'px ' + this.o.family;
@@ -205,6 +206,8 @@ class Surface {
     if (this.o.setup) this.o.setup(this);
     if (GM.reducedMotion) this._still(); else this.dirty = true;
     this.invalidate();
+    // resizing the canvas blanks it; paint now so a live resize never shows an empty frame
+    if (!GM.reducedMotion && this.visible) this._render();
     wake();
   }
 
@@ -244,7 +247,9 @@ class Surface {
   }
   _render() {
     this.dirty = false;
-    if (this.o.draw) this.o.draw(this);
+    // draw may return false to say nothing changed: the last frame stays and the paint is skipped
+    if (this.o.draw && this.o.draw(this) === false && !this._blankCanvas) return;
+    this._blankCanvas = false;
     if (this.pch) this._persist();
     this.present();
   }
@@ -272,6 +277,8 @@ class Surface {
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     if (this.o.transparent) ctx.clearRect(0, 0, this.vw, this.vh);
     else { ctx.fillStyle = this.o.background; ctx.fillRect(0, 0, this.vw, this.vh); }
+    // under(ctx, s): paint gradients or glows beneath the glyphs, in CSS pixels; they still get the glow pass
+    if (this.o.under) { this.o.under(ctx, this); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
     const mid = this.o.baseline === 'middle';
     ctx.font = this.font; ctx.textBaseline = mid ? 'middle' : 'top';
     const y0 = mid ? chh / 2 : 0;
