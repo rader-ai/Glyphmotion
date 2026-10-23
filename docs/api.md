@@ -32,7 +32,7 @@ Creates a `Surface` bound to a canvas. Size the canvas with CSS; the engine matc
 | `still(s)` | runs `step` for 1.2s | Under reduced motion, put the world in a good resting pose. |
 | `onVisible(s, visible)` | | Called when the surface scrolls into or out of view. Use it to start a reveal the first time a piece is seen. |
 | `persistence` | `0` | Seconds a glyph keeps glowing after you stop drawing it, like phosphor on an old screen. Your `draw` must `clear()` each frame for this to work. |
-| `pointer` | `'canvas'` | `'window'` tracks the pointer page-wide, for overlays styled `pointer-events: none`. `pointer.inside` is still true only over the canvas. |
+| `pointer` | `'canvas'` | `'window'` tracks the pointer page-wide, for overlays styled `pointer-events: none` and for characters that watch the pointer anywhere on the page. `pointer.x` and `pointer.y` follow it everywhere; `pointer.inside` is true only over the canvas, and clears when a touch ends or the mouse leaves the page. |
 | `baseline` | `'top'` | `'middle'` centers glyphs vertically in their cell. |
 | `relayoutDelay` | `120` | Milliseconds to wait after a resize before re-laying out. `0` re-lays out on every resize, for elements that animate their size. |
 

@@ -144,7 +144,8 @@ class Surface {
    *   still(s)   reduced motion: put the world in a good resting pose (default: step 1.2s)
    *   onVisible(s, visible)  called when the surface scrolls into or out of view
    *   persistence seconds a glyph keeps glowing after it stops being drawn (phosphor afterglow). Default 0
-   *   pointer    'canvas' (default) or 'window': track the pointer page-wide, for overlays with pointer-events: none
+   *   pointer    'canvas' (default) or 'window': track the pointer page-wide, for overlays with pointer-events: none.
+   *              With 'window', x and y follow the pointer everywhere; inside is true only over the canvas
    *   baseline   'top' (default) or 'middle': where glyphs sit in their cell
    *   relayoutDelay ms to wait after a resize before re-laying out. Default 120 (0 = every resize)
    */
@@ -319,18 +320,24 @@ class Surface {
     if (this.o.pointer === 'window') {
       // overlays with pointer-events: none never get events, so listen on the window and test the rect
       const inRect = e => { const rc = el.getBoundingClientRect(); return e.clientX >= rc.left && e.clientX <= rc.right && e.clientY >= rc.top && e.clientY <= rc.bottom; };
-      const h = this._h, mv = h.pointermove, dn = h.pointerdown;
+      // the position keeps updating everywhere on the page (for gaze); inside is true only over the canvas
+      const repaint = () => { if (GM.reducedMotion && !this._rmT) this._rmT = setTimeout(() => { this._rmT = 0; this.invalidate(); }, 60); };
+      const leave = () => { if (p.inside || p.down) { p.inside = false; p.down = false; repaint(); } };
+      const h = this._h;
       this._h = {
-        pointermove: e => { if (inRect(e)) mv(e); else if (p.inside) { at(e); p.inside = false; } },
-        pointerdown: e => { if (inRect(e)) dn(e); },
-        pointerup: h.pointerup,
+        pointermove: e => { at(e); const was = p.inside; p.inside = inRect(e); if (p.inside || was) repaint(); },
+        pointerdown: e => { at(e); p.inside = inRect(e); if (p.inside) p.down = true; },
+        pointerup: e => { p.down = false; if (e.pointerType === 'touch') leave(); },
+        pointercancel: leave,
         blur: h.pointerleave,
       };
+      this._docLeave = e => { if (!e.relatedTarget) leave(); };
+      document.addEventListener('mouseout', this._docLeave);
       this._target = root;
     } else this._target = el;
     for (const k in this._h) this._target.addEventListener(k, this._h[k], { passive: true });
   }
-  _unbind() { for (const k in this._h) this._target.removeEventListener(k, this._h[k]); }
+  _unbind() { for (const k in this._h) this._target.removeEventListener(k, this._h[k]); if (this._docLeave) document.removeEventListener('mouseout', this._docLeave); }
 }
 GM.Surface = Surface;
 GM.surface = (canvas, o) => new Surface(canvas, o);
