@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Glyphmotion: hello</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; margin: 0; background: #070b18; color: #dfe9f1; font: 13px/1.5 "JetBrains Mono", ui-monospace, monospace; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  p { position: fixed; left: 16px; bottom: 12px; margin: 0; color: #8293a9; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="c" role="img" aria-label="A drifting field of glowing characters that brightens around the pointer."></canvas>
+<p>Glyphmotion hello: a noise field, a pointer light. About 30 lines of code.</p>
+<script src="../src/glyphmotion.js"></script>
+<script>
+const { fbm, ramp, smooth, lerp } = Glyphmotion;
+Glyphmotion.surface(document.getElementById('c'), {
+  fontSize: w => Math.max(9, Math.min(15, w / 90)),
+  draw(s) {
+    const t = s.time, p = s.pointer;
+    for (let r = 0; r < s.rows; r++) {
+      for (let c = 0; c < s.cols; c++) {
+        const x = c + 0.5, y = (r + 0.5) * s.asp;
+        // domain-warped fbm reads as drifting smoke instead of blocky noise
+        const wx = fbm(x * 0.018 + t * 0.05, y * 0.018, 2) * 6, wy = fbm(x * 0.018, y * 0.018 - t * 0.04, 2) * 6;
+        const n = fbm(x * 0.045 + wx + t * 0.12, y * 0.045 + wy - t * 0.08, 4);
+        const d = p.inside ? Math.hypot(x - p.x, y - p.y) : 1e9;
+        const light = Math.exp(-d * d / 520);
+        const v = smooth(0.42, 0.78, n) * 0.85 + light * 0.7;
+        if (v < 0.08) { s.putI(r * s.cols + c, ' ', 0, 0, 0); continue; }
+        s.putI(r * s.cols + c, ramp(Math.min(1, v)),
+          lerp(40, 255, light), lerp(120, 190, v), lerp(200, 120, light));
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Glyphmotion: profile card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Major+Mono+Display&display=swap" rel="stylesheet">
+<style>
+/* Layout: one portrait card centered on a night-sea page. The ASCII breach scene fills the whole card;
+   a scrim at the bottom carries the profile. Single committed dark sunset look. */
+:root{
+  --page:#04070f;
+  --bg:#070b18;
+  --ink:#dfe9f1;
+  --muted:#8a9bb0;
+  --sun:#ffb15c;
+  --sea:#5cc0d8;
+  --edge:rgba(130,160,190,.24);
+  --scrim:7,11,24;
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display:"Major Mono Display", "JetBrains Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+html,body{min-height:100%}
+body{background:var(--page);color:var(--ink);font-family:var(--mono);
+  display:grid;place-items:center;min-height:100vh;box-sizing:border-box;
+  padding-block:32px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  background-image:radial-gradient(ellipse 60% 50% at 50% 55%, rgba(92,192,216,.07), transparent 70%)}
+
+.wrap{perspective:1100px;width:min(380px,100%)}
+.card{position:relative;width:100%;aspect-ratio:19/30;max-width:100%;border-radius:18px;overflow:hidden;
+  background:var(--bg);border:1px solid var(--edge);
+  box-shadow:0 30px 80px -20px rgba(0,0,0,.8), 0 0 0 1px rgba(255,177,92,.04), 0 0 60px -10px rgba(255,140,90,.12);
+  transform-style:preserve-3d;transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+.card canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.glare{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s;
+  background:radial-gradient(circle at var(--gx,50%) var(--gy,30%), rgba(255,200,150,.14), transparent 45%)}
+.card:hover .glare{opacity:1}
+
+.top{position:absolute;top:14px;left:16px;right:16px;display:flex;justify-content:space-between;align-items:center;gap:8px;
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.loc{display:flex;align-items:center;gap:6px;text-shadow:0 1px 6px rgba(0,0,0,.8)}
+.loc i{width:6px;height:6px;border-radius:50%;background:var(--sun);box-shadow:0 0 8px var(--sun);font-style:normal}
+.phase{font:600 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--sun);
+  background:rgba(var(--scrim),.55);border:1px solid var(--edge);border-radius:4px;padding:6px 8px;cursor:pointer;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.phase:hover{border-color:rgba(255,177,92,.6)}
+.phase:focus-visible{outline:2px solid var(--sun);outline-offset:2px}
+
+.body{position:absolute;left:0;right:0;bottom:0;padding:84px 22px 22px;display:flex;flex-direction:column;gap:14px;
+  background:linear-gradient(to bottom, rgba(var(--scrim),0) 0%, rgba(var(--scrim),.78) 26%, rgba(var(--scrim),.94) 55%)}
+.who{display:flex;align-items:center;gap:14px}
+.mono{flex:none;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;
+  font:400 17px/1 var(--display);color:var(--sun);border:1px solid rgba(255,177,92,.55);
+  background:rgba(var(--scrim),.6);box-shadow:0 0 18px rgba(255,177,92,.25), inset 0 0 12px rgba(255,177,92,.12)}
+.who div{min-width:0}
+h1{margin:0;font:400 clamp(22px,7vw,28px)/1 var(--display);letter-spacing:.02em;color:var(--ink);
+  text-shadow:0 0 18px rgba(255,177,92,.3);text-wrap:balance}
+.role{margin:6px 0 0;font-size:11px;line-height:1.45;color:#b9c8d6;letter-spacing:.02em}
+.role b{color:var(--ink);font-weight:600}
+.bio{margin:0;font-size:12px;line-height:1.6;color:var(--muted)}
+.bio em{font-style:normal;color:var(--sea)}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
+.stat{padding:10px 0;display:flex;flex-direction:column;gap:3px;min-width:0}
+.stat + .stat{padding-left:12px;border-left:1px solid var(--edge)}
+.stat b{font:700 17px/1 var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.stat span{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);line-height:1.35}
+
+.tags{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}
+.tags li{font-size:10px;letter-spacing:.04em;color:#c9d6e2;padding:5px 8px;border-radius:3px;
+  border:1px solid var(--edge);background:rgba(92,192,216,.06)}
+
+.hint{margin-top:14px;text-align:center;font-size:10px;letter-spacing:.08em;color:#55647a}
+.hint b{color:var(--muted);font-weight:600}
+
+@media (prefers-reduced-motion: reduce){ .card{transition:none} }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <article class="card" id="card" aria-labelledby="name">
+    <canvas id="sea" role="img" aria-label="Animated background drawn with text characters: a humpback whale breaches out of a sunset ocean and splashes back down."></canvas>
+    <div class="glare" aria-hidden="true"></div>
+
+    <div class="top">
+      <span class="loc"><i aria-hidden="true"></i>Orange County, CA</span>
+      <button class="phase" id="phase" type="button" aria-label="Replay the breach">&gt; cruise</button>
+    </div>
+
+    <div class="body">
+      <div class="who">
+        <div class="mono" aria-hidden="true">cr</div>
+        <div>
+          <h1 id="name">chris rader</h1>
+          <p class="role"><b>VP, Product Marketing &amp; Community</b><br>Centercode</p>
+        </div>
+      </div>
+      <p class="bio">Full stack product manager. Research, requirements, go-to-market, launch. Builds his own <em>AI agents, skills and plugins</em>.</p>
+      <div class="stats">
+        <div class="stat"><b>10</b><span>years in product</span></div>
+        <div class="stat"><b>700+</b><span>member AI communities</span></div>
+        <div class="stat"><b>32</b><span>podcast episodes</span></div>
+      </div>
+      <ul class="tags" aria-label="Focus areas">
+        <li>Product marketing</li><li>AI enablement</li><li>Conversational AI</li><li>Go-to-market</li>
+      </ul>
+    </div>
+  </article>
+  <p class="hint"><b>tap the phase tag</b> to replay the breach</p>
+</div>
+
+<script src="../src/glyphmotion.js"></script>
+<script>
+(() => {
+'use strict';
+const card = document.getElementById('card');
+const phaseBtn = document.getElementById('phase');
+
+const FAMILY = '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace';
+const RAMP = '.:-=+*#%@';
+const SKY = ' .·-~=';
+const BG = '#070b18';
+const BACK = [96, 116, 142], BELLY = [226, 234, 240], FIN = [214, 226, 234], RIM = [255, 168, 108];
+const STEP = Glyphmotion.STEP;
+const reduce = Glyphmotion.reducedMotion;
+
+// ---------- grid + world ----------
+let cols = 0, rows = 0, asp = 2, W = 0, H = 0, Ys = 0, hzRow = 0, scY = 1, scX = 1, Lh = 10;
+let sunX = 0, sunY = 0, sunR = 0;
+let N = 0, Bch = [], Br, Bg, Bb, mask, srF, sr, sH;
+let G = null;
+
+// ---------- sim state ----------
+let time = 0, cycleStart = 0, parts = [], ripples = [], swimPh = 0;
+let prevSide = null, cool = null, whale = null, finAng = 0.4, FC = 1, FS = 0;
+let shownPhase = '';
+const MAXP = 1600;
+
+// ---------- helpers (from the engine) ----------
+const { clamp, lerp, smooth, rnd, hash2, vnoise, lineChar } = Glyphmotion;
+function put(i, ch, r, g, b) { Bch[i] = ch; Br[i] = r; Bg[i] = g; Bb[i] = b; }
+// ---------- layout (sized to the card, horizon high so the breach clears the profile text) ----------
+function layout(s) {
+  cols = s.cols; rows = s.rows; asp = s.asp; W = s.W; H = s.H;
+  Ys = H * 0.44; hzRow = Ys / asp;
+  scY = H / 90; scX = Math.min(W / 80, scY);
+  Lh = Math.min(W * 0.26, H * 0.17);
+  sunX = W * 0.74; sunY = Ys - H * 0.025; sunR = Math.min(H * 0.07, W * 0.11);
+  N = s.N;
+  // write straight into the surface's grid buffers
+  Bch = s.ch; Br = s.r; Bg = s.g; Bb = s.b;
+  mask = new Uint8Array(N);
+  srF = new Float32Array(cols); sr = new Int32Array(cols); sH = new Float32Array(cols);
+  setupPath();
+}
+
+// ---------- the whale's path: cruise, power stroke (Hermite), ballistic air, damped sounding ----------
+function setupPath() {
+  const tAir = 2.2;
+  const P0 = { x: W * 0.30, y: Ys };
+  const range = W * 0.36;
+  const Hap = Math.max(H * 0.12, Math.min(H * 0.22, Ys - Lh * 0.45 - 12));
+  const g = 8 * Hap / (tAir * tAir);
+  const V0 = { x: range / tAir, y: -4 * Hap / tAir };
+  const cr = { x: W * 0.075, y: -H * 0.012 };
+  const Q = { x: P0.x - W * 0.19, y: Ys + H * 0.16 };
+  const T1 = 2.4, T2 = 1.3, T3 = tAir, T4 = 3.8, T5 = 1.5;
+  const S0 = { x: Q.x - cr.x * T1, y: Q.y - cr.y * T1 };
+  G = { tAir, P0, range, Hap, g, V0, cr, Q, S0, T1, T2, T3, T4, T5,
+        Pe: { x: P0.x + range, y: P0.y }, Ve: { x: V0.x, y: -V0.y },
+        k: 2.5, C: { x: W * 0.10, y: H * 0.015 }, cycle: T1 + T2 + T3 + T4 + T5 };
+}
+function herm(p0, m0, p1, m1, s) { const s2 = s * s, s3 = s2 * s; return p0 * (2 * s3 - 3 * s2 + 1) + m0 * (s3 - 2 * s2 + s) + p1 * (-2 * s3 + 3 * s2) + m1 * (s3 - s2); }
+function dherm(p0, m0, p1, m1, s) { const s2 = s * s; return p0 * (6 * s2 - 6 * s) + m0 * (3 * s2 - 4 * s + 1) + p1 * (-6 * s2 + 6 * s) + m1 * (3 * s2 - 2 * s); }
+
+function whaleAt(ct) {
+  const g = G; let x, y, vx, vy, ph, fade = 0, A = 0.1, air = false;
+  if (ct < g.T1) {
+    x = g.S0.x + g.cr.x * ct; y = g.S0.y + g.cr.y * ct; vx = g.cr.x; vy = g.cr.y; ph = 'cruise'; A = 0.11;
+    fade = 1 - smooth(0, 1.0, ct);
+  } else if (ct < g.T1 + g.T2) {
+    const s = (ct - g.T1) / g.T2;
+    x = herm(g.Q.x, g.cr.x * g.T2, g.P0.x, g.V0.x * g.T2, s);
+    y = herm(g.Q.y, g.cr.y * g.T2, g.P0.y, g.V0.y * g.T2, s);
+    vx = dherm(g.Q.x, g.cr.x * g.T2, g.P0.x, g.V0.x * g.T2, s) / g.T2;
+    vy = dherm(g.Q.y, g.cr.y * g.T2, g.P0.y, g.V0.y * g.T2, s) / g.T2;
+    ph = 'power stroke'; A = 0.15;
+  } else if (ct < g.T1 + g.T2 + g.T3) {
+    const t = ct - g.T1 - g.T2, sub = t / g.T3;
+    x = g.P0.x + g.V0.x * t; y = g.P0.y + g.V0.y * t + 0.5 * g.g * t * t;
+    vx = g.V0.x; vy = g.V0.y + g.g * t; air = true;
+    ph = sub < 0.16 ? 'breach' : sub < 0.8 ? 'hang time' : 'body slam'; A = 0.03;
+  } else if (ct < g.T1 + g.T2 + g.T3 + g.T4) {
+    const t = ct - (g.T1 + g.T2 + g.T3), e = Math.exp(-g.k * t), q = (1 - e) / g.k;
+    x = g.Pe.x + g.Ve.x * q + g.C.x * (t - q); y = g.Pe.y + g.Ve.y * q + g.C.y * (t - q);
+    vx = g.Ve.x * e + g.C.x * (1 - e); vy = g.Ve.y * e + g.C.y * (1 - e);
+    ph = t < 0.7 ? 'body slam' : 'sounding'; fade = smooth(g.T4 * 0.4, g.T4 * 0.95, t); A = 0.09;
+  } else {
+    return { vis: false, ph: 'calm' };
+  }
+  return { vis: true, x, y, vx, vy, a: Math.atan2(vy, vx), ph, fade, A, air };
+}
+
+// ---------- whale shape in body coordinates (u: tail -1 .. head +1, v: back - .. belly +) ----------
+function thickAt(u) {
+  if (u > 1 || u < -0.8) return 0;
+  if (u >= 0.12) { const q = (u - 0.12) / 0.88; return 0.27 * Math.sqrt(Math.max(0, 1 - q * q)); }
+  const q = (u + 0.8) / 0.92; return 0.035 + 0.235 * Math.pow(Math.sin(q * Math.PI / 2), 1.4);
+}
+function dorsal(u) { const d = u + 0.36; return 0.055 * Math.max(0, 1 - Math.abs(d) / (d < 0 ? 0.06 : 0.11)); }
+function bendAt(u, A) { const k = Math.max(0, -u + 0.1); return A * Math.sin(swimPh + u * 2.6) * k * k * 1.25; }
+
+const tmp = { part: 0, ny: 0, vb: 0, t: 0, along: 0, across: 0 };
+function sampleWhale(u, v, A, o) {
+  const pu = u - 0.36, pv = v - 0.16;
+  const along = -pu * FC + pv * FS, across = pu * FS + pv * FC;
+  if (along > 0 && along < 0.62) {
+    let wd = 0.072 * (1 - along / 0.62 * 0.72);
+    if (along > 0.55) wd *= Math.sqrt((0.62 - along) / 0.07);
+    if (Math.abs(across) < wd) { o.part = 2; o.along = along; o.across = across; return true; }
+  }
+  const vb = v - bendAt(u, A);
+  if (u < -0.72 && u > -1.04) {
+    const s = (-0.72 - u) / 0.32, av = Math.abs(vb);
+    let span = 0.03 + 0.42 * Math.pow(s, 0.8);
+    if (s > 0.85) span *= 1 - (s - 0.85) / 0.15 * 0.25;
+    if (av < span && !(s > 0.82 && av < 0.07 * (s - 0.82) / 0.22)) { o.part = 3; o.vb = vb; return true; }
+  }
+  const t = thickAt(u); if (t <= 0) return false;
+  const top = t * 0.9 + dorsal(u), bot = t * (u > 0 ? 1.12 : 1.0);
+  if (vb > -top && vb < bot) { o.part = 1; o.vb = vb; o.t = t; o.ny = vb < 0 ? vb / top : vb / bot; return true; }
+  return false;
+}
+
+// ---------- ocean surface ----------
+function surfH(x) {
+  let h = 0.9 * scY * Math.sin(x * 0.16 + time * 1.3) + 0.6 * scY * Math.sin(x * 0.061 - time * 0.8 + 1.3) + 0.35 * scY * Math.sin(x * 0.37 + time * 2.1);
+  for (let j = 0; j < ripples.length; j++) {
+    const rp = ripples[j], dt = time - rp.t0; if (dt <= 0) continue;
+    const d = Math.abs(x - rp.x), front = dt * 26 * scX + 2;
+    if (d < front) h += rp.amp * Math.exp(-dt * 0.55) * Math.sin(d * 0.45 / scX - dt * 7) * Math.exp(-d * 0.015 / scX);
+    const cr = d / (6 * scX); h -= rp.amp * 1.4 * Math.exp(-dt * 2.5) * Math.exp(-cr * cr);
+  }
+  return h;
+}
+function updateSurface() { for (let c = 0; c < cols; c++) sH[c] = surfH(c + 0.5); }
+function surfY(x) { let i = Math.floor(x); if (i < 0) i = 0; else if (i > cols - 1) i = cols - 1; return Ys - sH[i]; }
+
+// ---------- particles ----------
+function addP(type, x, y, vx, vy, life, warm) {
+  if (parts.length >= MAXP) return;
+  parts.push({ type, x, y, vx, vy, life, max: life, warm: !!warm, seed: Math.random() * 6.283 });
+}
+function splash(x0, w, down, wvx) {
+  const spread = Lh * 0.28 * (0.6 + w * 0.4);
+  const nS = Math.round((down ? 90 : 34) * w);
+  for (let i = 0; i < nS; i++) {
+    const o = rnd(-1, 1), x = x0 + o * spread, up = down ? rnd(14, 52) : rnd(8, 26);
+    addP('spray', x, surfY(x) - 0.5, o * rnd(6, 20) * scX + wvx * (down ? 0.18 : 0.35) + rnd(-5, 5) * scX,
+      -up * scY * (1 - Math.abs(o) * 0.35), rnd(1.0, 2.2), Math.random() < 0.18);
+  }
+  if (down) {
+    const nC = Math.round(28 * w);
+    for (let i = 0; i < nC; i++) {
+      const x = x0 + rnd(-0.5, 0.5) * spread * 0.5;
+      addP('spray', x, surfY(x) - 0.5, rnd(-7, 7) * scX + wvx * 0.1, -rnd(42, 70) * scY, rnd(1.6, 2.6), Math.random() < 0.25);
+    }
+    const nB = Math.round(24 * w);
+    for (let i = 0; i < nB; i++) { const x = x0 + rnd(-1, 1) * spread; addP('bubble', x, surfY(x) + rnd(1, 14) * scY, rnd(-2, 2) * scX, -rnd(4, 10) * scY, rnd(1.5, 3.5)); }
+  }
+  const nM = Math.round((down ? 46 : 16) * w);
+  for (let i = 0; i < nM; i++) { const x = x0 + rnd(-1, 1) * spread * 1.2; addP('mist', x, surfY(x) - rnd(0.5, 4), rnd(-14, 14) * scX, -rnd(4, 18) * scY, rnd(2.2, 4)); }
+  const nF = Math.round((down ? 40 : 16) * w);
+  for (let i = 0; i < nF; i++) { const o = rnd(-1, 1); addP('foam', x0 + o * spread, 0, (o < 0 ? -1 : 1) * rnd(3, 20) * scX, 0, rnd(3.5, 7)); }
+  ripples.push({ x: x0, t0: time, amp: (down ? 2.6 : 1.1) * w * scY });
+}
+
+const PTS = [[0.97, 0.55], [0.5, 0.8], [0, 1.25], [-0.5, 0.9], [-0.92, 0.8]];
+function crossings(w) {
+  const dx = Math.cos(w.a), dy = Math.sin(w.a);
+  const init = !prevSide;
+  if (init) { prevSide = new Array(PTS.length); cool = new Array(PTS.length).fill(-9); }
+  for (let i = 0; i < PTS.length; i++) {
+    const u = PTS[i][0], px = w.x + dx * u * Lh, py = w.y + dy * u * Lh;
+    const side = py > surfY(px) ? 1 : -1;
+    if (!init && side !== prevSide[i] && time - cool[i] > 0.45 && px > -4 && px < W + 4) {
+      cool[i] = time;
+      const down = side === 1;
+      const sp = Math.min(1.5, Math.abs(w.vy) / Math.abs(G.V0.y));
+      splash(px, PTS[i][1] * (down ? 1 : 0.7) * (0.5 + 0.5 * sp), down, w.vx);
+    }
+    prevSide[i] = side;
+  }
+}
+function emitters(w, ct, dt) {
+  const dx = Math.cos(w.a), dy = Math.sin(w.a), nx = -dy, ny = dx;
+  if (w.ph === 'cruise' || w.ph === 'power stroke') {
+    if (Math.random() < dt * (w.ph === 'cruise' ? 4 : 14)) {
+      const t = thickAt(0.55), px = w.x + dx * 0.55 * Lh - nx * t * Lh, py = w.y + dy * 0.55 * Lh - ny * t * Lh;
+      if (py > surfY(px) + asp) addP('bubble', px, py, rnd(-1, 1) * scX, -rnd(3, 8) * scY, rnd(1.5, 3));
+    }
+  }
+  const a0 = G.T1 + G.T2, a1 = a0 + G.T3;
+  if (ct >= a0 && ct < a1) {
+    const ta = ct - a0;
+    let n = dt * 40 * (1 - ta / G.T3 * 0.5);
+    while (Math.random() < n) {
+      n -= 1;
+      const u = rnd(-0.9, 0.95), v = rnd(-0.25, 0.3);
+      const px = w.x + dx * u * Lh + nx * v * Lh, py = w.y + dy * u * Lh + ny * v * Lh;
+      if (py < surfY(px)) addP('drip', px, py, w.vx * rnd(0.4, 0.8) + rnd(-4, 4) * scX, w.vy * rnd(0.3, 0.7) + rnd(-3, 3) * scY, rnd(1.5, 2.5));
+    }
+    if (ta < 0.55) {
+      let m = dt * 90 * (1 - ta / 0.55);
+      while (Math.random() < m) {
+        m -= 1;
+        const x = G.P0.x + rnd(-0.6, 0.9) * Lh * 0.35 + G.V0.x * ta * 0.6;
+        addP('spray', x, surfY(x) - 0.3, G.V0.x * rnd(0.1, 0.5), -rnd(12, 34) * scY, rnd(1, 1.8), Math.random() < 0.2);
+      }
+    }
+  }
+  if (ct >= a1) {
+    const ts = ct - a1;
+    if (ts < 2.6) {
+      let m = dt * 60 * (1 - ts / 2.6);
+      while (Math.random() < m) {
+        m -= 1;
+        const u = rnd(-0.9, 0.9), px = w.x + dx * u * Lh, py = w.y + dy * u * Lh + rnd(-0.2, 0.2) * Lh;
+        if (py > surfY(px) + asp) addP('bubble', px, py, rnd(-2, 2) * scX, -rnd(4, 12) * scY, rnd(1.5, 3.5));
+      }
+    }
+  }
+}
+function updateParts(dt) {
+  const gp = 68 * scY;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.life -= dt;
+    let dead = p.life <= 0;
+    if (!dead) {
+      switch (p.type) {
+        case 'spray': case 'drip':
+          p.vy += gp * dt; p.vx *= (1 - 0.25 * dt); p.x += p.vx * dt; p.y += p.vy * dt;
+          if (p.vy > 0 && p.y > surfY(p.x)) { if (Math.random() < 0.12) addP('foam', p.x, 0, p.vx * 0.2, 0, rnd(1.5, 3)); dead = true; }
+          break;
+        case 'mist':
+          p.vy += gp * 0.05 * dt; p.vx *= (1 - 0.9 * dt); p.vy *= (1 - 0.9 * dt); p.x += p.vx * dt; p.y += p.vy * dt;
+          if (p.y > surfY(p.x)) dead = true;
+          break;
+        case 'foam':
+          p.x += p.vx * dt; p.vx *= (1 - 1.2 * dt); p.y = surfY(p.x) - 0.2;
+          break;
+        case 'bubble':
+          p.x += (p.vx + Math.sin(time * 6 + p.seed) * 1.5 * scX) * dt; p.y += p.vy * dt; p.vy -= 3 * scY * dt;
+          if (p.y <= surfY(p.x) + asp * 0.6) { if (Math.random() < 0.5) addP('foam', p.x, 0, rnd(-2, 2) * scX, 0, rnd(1, 2.5)); dead = true; }
+          break;
+      }
+      if (p.x < -6 || p.x > W + 6 || p.y > H + 6) dead = true;
+    }
+    if (dead) { parts[i] = parts[parts.length - 1]; parts.pop(); }
+  }
+}
+
+// ---------- simulation ----------
+function step(dt) {
+  time += dt;
+  let ct = time - cycleStart;
+  if (ct >= G.cycle) { cycleStart += G.cycle; ct -= G.cycle; prevSide = null; }
+  updateSurface();
+  const w = whaleAt(ct); whale = w;
+  swimPh += dt * (w.ph === 'power stroke' ? 9 : w.ph === 'cruise' ? 4.5 : w.ph === 'sounding' ? 4 : 1.5);
+  finAng = w.air ? 0.55 + 0.3 * Math.sin(time * 2.6) : 0.42 + 0.08 * Math.sin(time * 2);
+  if (w.vis) { crossings(w); emitters(w, ct, dt); } else prevSide = null;
+  updateParts(dt);
+  if (ripples.length) ripples = ripples.filter(r => time - r.t0 < 9);
+}
+function resetSim() { time = 0; cycleStart = 0; parts = []; ripples = []; prevSide = null; swimPh = 0; whale = null; }
+function simulateTo(t) { resetSim(); while (time < t) step(STEP); }
+
+// ---------- drawing ----------
+const SKYC = [[0, 40, 42, 98], [0.5, 96, 58, 128], [0.8, 222, 98, 112], [1, 255, 172, 96]];
+const cA = [0, 0, 0];
+function skyCol(f) {
+  f = clamp(f, 0, 1);
+  for (let k = 1; k < SKYC.length; k++) {
+    if (f <= SKYC[k][0]) {
+      const a = SKYC[k - 1], b = SKYC[k], t = (f - a[0]) / (b[0] - a[0]);
+      cA[0] = lerp(a[1], b[1], t); cA[1] = lerp(a[2], b[2], t); cA[2] = lerp(a[3], b[3], t); return cA;
+    }
+  }
+  return cA;
+}
+const wA = [0, 0, 0];
+function waterCol(D) {
+  if (D < 0.45) { const t = smooth(0, 0.45, D); wA[0] = lerp(52, 14, t); wA[1] = lerp(146, 50, t); wA[2] = lerp(172, 88, t); }
+  else { const t = smooth(0.45, 1, D); wA[0] = lerp(14, 6, t); wA[1] = lerp(50, 20, t); wA[2] = lerp(88, 44, t); }
+  return wA;
+}
+
+function skyCell(c, r, i) {
+  const f = r / hzRow, X = c + 0.5, Y = (r + 0.5) * asp;
+  const dxs = X - sunX, dys = Y - sunY, ds = Math.sqrt(dxs * dxs + dys * dys);
+  if (ds < sunR) {
+    const q = ds / sunR, t = Math.pow(q, 1.3);
+    put(i, q < 0.55 ? '@' : q < 0.82 ? 'O' : 'o', 255, lerp(236, 128, t), lerp(170, 64, t));
+    return;
+  }
+  if (f < 0.55) {
+    const hs = hash2(c, r * 7 + 3);
+    if (hs > 0.985) {
+      const tw = 0.5 + 0.5 * Math.sin(time * (1.5 + hs * 3) + hs * 90), b = (1 - f / 0.55) * tw;
+      if (b > 0.15) { put(i, hs > 0.996 ? '+' : '.', 60 + 170 * b, 60 + 170 * b, 90 + 160 * b); return; }
+    }
+  }
+  let d = 0.03 + 0.62 * Math.pow(f, 3.2);
+  const sg = sunR * 3.2, glow = Math.exp(-(ds * ds) / (2 * sg * sg));
+  d += glow * 0.55;
+  const n = vnoise(X * 0.06 + time * 0.02, Y * 0.11) * 0.65 + vnoise(X * 0.15 - time * 0.03, Y * 0.3) * 0.35;
+  const band = smooth(0.18, 0.35, f) * (1 - smooth(0.82, 0.97, f));
+  const cl = smooth(0.56, 0.78, n) * band;
+  d += cl * 0.5;
+  const k = clamp(Math.floor(d * 5.2 + (hash2(c * 3 + 1, r * 5 + 7) - 0.5) * 0.8), 0, 5);
+  if (k === 0) { put(i, ' ', 0, 0, 0); return; }
+  const col = skyCol(f);
+  let R = col[0], Gc = col[1], B = col[2];
+  R = lerp(R, 255, cl * 0.45); Gc = lerp(Gc, 150, cl * 0.45); B = lerp(B, 160, cl * 0.45);
+  R = lerp(R, 255, glow * 0.6); Gc = lerp(Gc, 200, glow * 0.6); B = lerp(B, 130, glow * 0.6);
+  const it = 0.55 + 0.45 * Math.min(1, d);
+  put(i, SKY[k], R * it, Gc * it, B * it);
+}
+
+function waterCell(c, r, i) {
+  const depth = r - srF[c], D = clamp(depth / (rows - hzRow + 1), 0, 1);
+  const X = c + 0.5, dw = depth * asp, hw = sunR * (0.35 + dw / (H * 0.25) * 1.2), ax = Math.abs(X - sunX);
+  if (ax < hw) {
+    const g = vnoise(X * 0.6 + time * 1.7, r * 1.3 - time * 0.9), thr = 0.5 + (ax / hw) * 0.35 + D * 0.15;
+    if (g > thr) { const it = (1 - D * 0.8) * (1 - ax / hw * 0.5); put(i, g > thr + 0.12 ? '=' : '-', 255 * it, 190 * it, 110 * it); return; }
+  }
+  const n = vnoise(X * 0.09 - time * 0.4 + r * 0.15, r * 0.7 + time * 0.12);
+  const bias = (1 - D) * 0.12;
+  const ch = n > 0.74 - bias ? '~' : n > 0.6 - bias ? '-' : n > 0.5 - bias * 0.5 ? '.' : ' ';
+  if (ch === ' ') { put(i, ' ', 0, 0, 0); return; }
+  const col = waterCol(D), m = 0.7 + 0.5 * n;
+  let R = col[0] * m, Gc = col[1] * m, B = col[2] * m;
+  if (depth < 2.5) { const t = 0.25 * (1 - depth / 2.5); R = lerp(R, 210, t); Gc = lerp(Gc, 110, t); B = lerp(B, 125, t); }
+  put(i, ch, R, Gc, B);
+}
+
+const BIRDS = [{ x0: 0.9, y: 0.16, sp: 2.4, fl: 7, ph: 0 }, { x0: 0.97, y: 0.19, sp: 2.2, fl: 6.3, ph: 1.7 }];
+function drawBirds() {
+  for (const b of BIRDS) {
+    const span = W + 30;
+    const x = (((b.x0 * W - time * b.sp * scX) % span) + span) % span - 15;
+    const y = H * b.y + Math.sin(time * 0.7 + b.ph) * 1.2;
+    const c = Math.floor(x), r = Math.floor(y / asp);
+    if (c < 0 || c >= cols || r < 0 || r >= rows || r >= sr[c]) continue;
+    put(r * cols + c, Math.sin(time * b.fl + b.ph) > 0 ? 'v' : '~', 236, 200, 190);
+  }
+}
+
+let wbuf = { n: 0, part: null, ch: null, r: null, g: null, b: null };
+function drawWhale() {
+  const w = whale; if (!w || !w.vis) return;
+  FC = Math.cos(finAng); FS = Math.sin(finAng);
+  const dx = Math.cos(w.a), dy = Math.sin(w.a), nx = -dy, ny = dx;
+  const R = Lh * 1.15;
+  const c0 = Math.max(0, Math.floor(w.x - R)), c1 = Math.min(cols - 1, Math.ceil(w.x + R));
+  const r0 = Math.max(0, Math.floor((w.y - R) / asp)), r1 = Math.min(rows - 1, Math.ceil((w.y + R) / asp));
+  if (c0 > c1 || r0 > r1) return;
+  const bw = c1 - c0 + 1, bh = r1 - r0 + 1, n = bw * bh;
+  if (wbuf.n < n) wbuf = { n, part: new Uint8Array(n), ch: new Array(n), r: new Float32Array(n), g: new Float32Array(n), b: new Float32Array(n) };
+  const part = wbuf.part; part.fill(0, 0, n);
+  const finVx = -FC * dx + FS * nx, finVy = -FC * dy + FS * ny, finCh = lineChar(finVx, finVy);
+
+  for (let r = r0; r <= r1; r++) {
+    const Y = (r + 0.5) * asp;
+    for (let c = c0; c <= c1; c++) {
+      const X = c + 0.5, ox = X - w.x, oy = Y - w.y;
+      const u = (ox * dx + oy * dy) / Lh, v = (ox * nx + oy * ny) / Lh;
+      if (!sampleWhale(u, v, w.A, tmp)) continue;
+      const k = (r - r0) * bw + (c - c0);
+      part[k] = tmp.part;
+      let ch, cr, cg, cb;
+      if (tmp.part === 1) {
+        const nyN = clamp(tmp.ny, -1, 1), nz = Math.sqrt(1 - nyN * nyN);
+        const br = clamp(-nyN * 0.72 + nz * 0.7, 0, 1);
+        const white = smooth(0.15, 0.6, nyN) * clamp((u + 0.45) / 0.3, 0, 1);
+        ch = RAMP[1 + Math.round(br * 7)];
+        let m = lerp(0.6 + 0.55 * br, 0.78 + 0.25 * br, white);
+        if (white > 0.45 && u > -0.25 && u < 0.93) { ch = '='; if (Math.floor(tmp.vb * 26) & 1) m *= 0.8; }
+        cr = lerp(BACK[0], BELLY[0], white) * m; cg = lerp(BACK[1], BELLY[1], white) * m; cb = lerp(BACK[2], BELLY[2], white) * m;
+      } else if (tmp.part === 3) {
+        if (tmp.vb < 0) { ch = '#'; cr = BACK[0] * 0.9; cg = BACK[1] * 0.9; cb = BACK[2] * 0.9; }
+        else if (hash2(Math.floor(u * 30), Math.floor(v * 30) + 50) < 0.3) { ch = '#'; cr = BACK[0] * 0.8; cg = BACK[1] * 0.8; cb = BACK[2] * 0.8; }
+        else { ch = '%'; cr = BELLY[0] * 0.92; cg = BELLY[1] * 0.92; cb = BELLY[2] * 0.92; }
+      } else {
+        if (hash2(Math.floor(tmp.along * 28), Math.floor((tmp.across + 0.1) * 60)) < 0.1) { ch = 'o'; cr = 150; cg = 152; cb = 142; }
+        else { ch = finCh; const m = 0.85 + 0.15 * (1 - tmp.along / 0.62); cr = FIN[0] * m; cg = FIN[1] * m; cb = FIN[2] * m; }
+      }
+      wbuf.ch[k] = ch; wbuf.r[k] = cr; wbuf.g[k] = cg; wbuf.b[k] = cb;
+    }
+  }
+
+  const mark = (u, v, ch, cr, cg, cb) => {
+    const X = w.x + dx * u * Lh + nx * v * Lh, Y = w.y + dy * u * Lh + ny * v * Lh;
+    const c = Math.floor(X), r = Math.floor(Y / asp);
+    if (c < c0 || c > c1 || r < r0 || r > r1) return;
+    const k = (r - r0) * bw + (c - c0);
+    if (part[k] !== 1) return;
+    wbuf.ch[k] = ch; wbuf.r[k] = cr; wbuf.g[k] = cg; wbuf.b[k] = cb;
+  };
+  for (let j = 0; j < 6; j++) { const u = 0.66 + j * 0.055; mark(u, -thickAt(u) * 0.9 + 0.035, 'o', 170, 178, 190); }
+  for (let j = 0; j <= 24; j++) {
+    const s = j / 24, u = 0.985 - s * 0.4, v = 0.02 + 0.11 * s * s;
+    const du = -0.4, dv = 0.22 * s;
+    mark(u, v, lineChar(du * dx + dv * nx, du * dy + dv * ny), 30, 36, 50);
+  }
+  mark(0.62, 0.05, 'o', 248, 242, 226);
+
+  const glintSeed = Math.floor(time * 12);
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      const k = (r - r0) * bw + (c - c0), p = part[k];
+      if (!p) continue;
+      const i = r * cols + c;
+      let ch = wbuf.ch[k], cr = wbuf.r[k], cg = wbuf.g[k], cb = wbuf.b[k];
+      if (r > sr[c]) {
+        const depth = r - srF[c];
+        let f = clamp(0.38 + depth * 0.045, 0, 0.9);
+        f = Math.min(0.985, Math.max(f, f + w.fade * (1 - f)));
+        if (f > 0.97) continue;
+        const col = waterCol(clamp(depth / (rows - hzRow + 1), 0, 1));
+        cr = lerp(cr, col[0], f); cg = lerp(cg, col[1], f); cb = lerp(cb, col[2], f);
+        const ri = RAMP.indexOf(ch); if (ri > 2) ch = RAMP[ri - 2];
+      } else {
+        const rightEmpty = c === c1 || !part[k + 1], upEmpty = r === r0 || !part[k - bw];
+        if (rightEmpty || upEmpty) { cr = lerp(cr, RIM[0], 0.4); cg = lerp(cg, RIM[1], 0.4); cb = lerp(cb, RIM[2], 0.4); }
+        if (w.air && p === 1 && hash2(i, glintSeed) < 0.03) { ch = '*'; cr = 255; cg = 250; cb = 240; }
+      }
+      put(i, ch, cr, cg, cb);
+      mask[i] = 1;
+    }
+  }
+}
+
+function drawSurface() {
+  for (let c = 0; c < cols; c++) {
+    const r = sr[c]; if (r < 0 || r >= rows) continue;
+    const i = r * cols + c; if (mask[i]) continue;
+    const dh = sH[Math.min(c + 1, cols - 1)] - sH[Math.max(c - 1, 0)];
+    const ch = dh > 0.9 * scY ? '/' : dh < -0.9 * scY ? '\\' : '~';
+    const sh = 0.8 + 0.2 * Math.sin(c * 0.7 + time * 3);
+    if (Math.abs(c + 0.5 - sunX) < sunR * 1.2) put(i, ch, 255 * sh, 206 * sh, 150 * sh);
+    else put(i, ch, 140 * sh, 212 * sh, 230 * sh);
+  }
+}
+
+function drawParts() {
+  for (let j = 0; j < parts.length; j++) {
+    const p = parts[j];
+    let c = Math.floor(p.x), r;
+    if (c < 0 || c >= cols) continue;
+    if (p.type === 'foam') r = sr[c]; else r = Math.floor(p.y / asp);
+    if (r < 0 || r >= rows) continue;
+    const i = r * cols + c, lf = p.life / p.max;
+    switch (p.type) {
+      case 'spray': {
+        const sp = Math.hypot(p.vx / scX, p.vy / scY);
+        const ch = sp > 38 ? lineChar(p.vx, p.vy) : lf > 0.6 ? (p.seed < 1.2 ? 'o' : '*') : lf > 0.3 ? ':' : '.';
+        const b = 0.45 + 0.55 * lf;
+        if (p.warm) put(i, ch, 255 * b, 196 * b, 140 * b); else put(i, ch, 232 * b, 246 * b, 255 * b);
+        break;
+      }
+      case 'drip':
+        put(i, p.vy > 25 * scY ? '|' : '\'', 190, 225, 240);
+        break;
+      case 'mist': {
+        if (mask[i]) break;
+        const b = 0.3 + 0.5 * lf;
+        put(i, lf > 0.5 ? ':' : '.', 160 * b, 195 * b, 215 * b);
+        break;
+      }
+      case 'foam': {
+        const b = 0.4 + 0.6 * lf;
+        put(i, lf > 0.7 ? '°' : lf > 0.45 ? 'o' : lf > 0.2 ? '~' : '.', 235 * b, 245 * b, 250 * b);
+        break;
+      }
+      case 'bubble':
+        put(i, lf > 0.66 ? '.' : lf > 0.33 ? 'o' : 'O', 130, 210, 232);
+        break;
+    }
+  }
+}
+
+function render() {
+  for (let c = 0; c < cols; c++) { srF[c] = (Ys - sH[c]) / asp; sr[c] = Math.floor(srF[c]); }
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c; mask[i] = 0;
+      const s = sr[c];
+      if (r < s) skyCell(c, r, i); else if (r > s) waterCell(c, r, i); else put(i, ' ', 0, 0, 0);
+    }
+  }
+  drawBirds();
+  drawWhale();
+  drawSurface();
+  drawParts();
+
+  const ph = whale ? whale.ph : 'calm';
+  if (ph !== shownPhase) { shownPhase = ph; phaseBtn.textContent = '> ' + ph; }
+}
+
+// ---------- the engine runs the loop, pausing offscreen, when hidden and for reduced motion ----------
+const surface = Glyphmotion.surface(document.getElementById('sea'), {
+  fontSize: w => clamp(w / 44, 7, 10),
+  background: BG,
+  setup(s) { const ct = G ? time - cycleStart : 1.2; layout(s); simulateTo(ct); },
+  still() { simulateTo(G.T1 + G.T2 + G.T3 * 0.42); },
+  step(s, dt) { step(dt); },
+  draw() { render(); }
+});
+phaseBtn.addEventListener('click', () => { simulateTo(G.T1 * 0.6); surface.invalidate(); });
+
+// ---------- tilt + glare on hover ----------
+if (!reduce) {
+  card.addEventListener('pointermove', e => {
+    if (e.pointerType === 'touch') return;
+    const r = card.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    card.style.transition = 'transform .12s ease-out';
+    card.style.transform = 'rotateY(' + ((x - 0.5) * 9).toFixed(2) + 'deg) rotateX(' + ((0.5 - y) * 9).toFixed(2) + 'deg)';
+    card.style.setProperty('--gx', (x * 100).toFixed(1) + '%'); card.style.setProperty('--gy', (y * 100).toFixed(1) + '%');
+  });
+  card.addEventListener('pointerleave', () => { card.style.transition = ''; card.style.transform = ''; });
+}
+
+})();
+</script>
+
+</body>
+</html>

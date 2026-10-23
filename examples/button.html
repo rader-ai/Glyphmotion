@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Glyphmotion: ember button</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; --bg: #070b18; --ink: #dfe9f1; --sun: #ffb15c; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.5 "JetBrains Mono", ui-monospace, monospace; }
+  body { display: grid; place-items: center; padding-inline: max(16px, env(safe-area-inset-left, 0px)); }
+  .stage { position: relative; width: min(520px, 100%); height: 260px; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .btn { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font: 700 15px/1 "JetBrains Mono", ui-monospace, monospace; letter-spacing: .06em; text-transform: lowercase;
+    color: #1a0e05; background: var(--sun); border: 0; border-radius: 6px; padding: 14px 22px; cursor: pointer;
+    box-shadow: 0 0 30px -6px rgba(255,177,92,.7); transition: transform .12s ease, box-shadow .2s; }
+  .btn:hover { box-shadow: 0 0 44px -4px rgba(255,177,92,.9); }
+  .btn:active { transform: translate(-50%, -50%) scale(.96); }
+  .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+  p { text-align: center; color: #8293a9; margin: 0; }
+  #count { color: var(--sun); }
+</style>
+</head>
+<body>
+<main>
+  <div class="stage">
+    <canvas id="c" aria-hidden="true"></canvas>
+    <button class="btn" id="btn" type="button">ignite</button>
+  </div>
+  <p>Hover sheds sparks. Press fires a burst. Fired <span id="count" aria-live="polite">0</span> times.</p>
+</main>
+<script src="../src/glyphmotion.js"></script>
+<script>
+const { Pool, rnd, clamp, lineChar, ramp, reducedMotion } = Glyphmotion;
+const btn = document.getElementById('btn'), stage = document.querySelector('.stage');
+const sparks = new Pool(500, ['x', 'y', 'vx', 'vy', 'life', 'max']);
+const rings = new Pool(8, ['x', 'y', 'rad', 'life']);
+let hover = 0, hoverTarget = 0, box = null, fired = 0;
+
+function btnBox(s) {
+  const a = btn.getBoundingClientRect(), b = stage.getBoundingClientRect();
+  return { x0: (a.left - b.left) / s.cw, x1: (a.right - b.left) / s.cw, y0: (a.top - b.top) / s.cw, y1: (a.bottom - b.top) / s.cw };
+}
+function burst(s, n, speed) {
+  const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
+  for (let k = 0; k < n; k++) {
+    const a = rnd(0, Math.PI * 2), v = rnd(0.3, 1) * speed;
+    sparks.spawn({ x: cx + Math.cos(a) * (box.x1 - box.x0) * 0.4, y: cy + Math.sin(a) * (box.y1 - box.y0) * 0.4,
+      vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(0.6, 1.4), max: 1.4 });
+  }
+  rings.spawn({ x: cx, y: cy, rad: 2, life: 1 });
+}
+
+const s = Glyphmotion.surface(document.getElementById('c'), {
+  fontSize: 11, bloom: 0.6,
+  setup(s) { box = btnBox(s); },
+  still(s) { burst(s, 120, 40); for (let t = 0; t < 0.35; t += Glyphmotion.STEP) s.o.step(s, Glyphmotion.STEP); },
+  step(s, dt) {
+    hover += (hoverTarget - hover) * Math.min(1, dt * 6);
+    // hover: sparks peel off the button edge and float up
+    if (Math.random() < hover * dt * 70) {
+      const onTop = Math.random() < 0.6, x = rnd(box.x0, box.x1), y = onTop ? box.y0 : rnd(box.y0, box.y1);
+      sparks.spawn({ x: onTop ? x : (Math.random() < 0.5 ? box.x0 : box.x1), y, vx: rnd(-4, 4), vy: -rnd(6, 16), life: rnd(0.5, 1.1), max: 1.1 });
+    }
+    for (let i = sparks.n - 1; i >= 0; i--) {
+      sparks.life[i] -= dt;
+      if (sparks.life[i] <= 0) { sparks.kill(i); continue; }
+      sparks.vy[i] += 22 * dt; sparks.vx[i] *= 1 - 1.5 * dt; sparks.vy[i] *= 1 - 1.2 * dt;
+      sparks.x[i] += sparks.vx[i] * dt; sparks.y[i] += sparks.vy[i] * dt;
+    }
+    for (let i = rings.n - 1; i >= 0; i--) {
+      rings.life[i] -= dt * 1.4; rings.rad[i] += dt * 60;
+      if (rings.life[i] <= 0) rings.kill(i);
+    }
+  },
+  draw(s) {
+    s.clear();
+    // faint warm floor texture so the button sits in a world
+    for (let r = 0; r < s.rows; r++) for (let c = 0; c < s.cols; c++) {
+      const n = Glyphmotion.hash2(c, r);
+      if (n > 0.93) { const f = 0.25 + hover * 0.4; s.putI(r * s.cols + c, n > 0.985 ? '+' : '.', 90 * f + 20, 60 * f + 14, 50 * f + 20); }
+    }
+    for (let i = 0; i < rings.n; i++) {
+      const cx = rings.x[i], cy = rings.y[i], R = rings.rad[i], L = rings.life[i];
+      for (let a = 0; a < Math.PI * 2; a += 0.6 / Math.max(4, R)) {
+        const x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R * 0.8;
+        s.putW(x, y, lineChar(-Math.sin(a), Math.cos(a)), 255 * L, 190 * L, 120 * L);
+      }
+    }
+    for (let i = 0; i < sparks.n; i++) {
+      const lf = clamp(sparks.life[i] / sparks.max[i], 0, 1), sp = Math.hypot(sparks.vx[i], sparks.vy[i]);
+      const ch = sp > 24 ? lineChar(sparks.vx[i], sparks.vy[i]) : ramp(0.3 + lf * 0.6, '.:*o*');
+      s.putW(sparks.x[i], sparks.y[i], ch, 255, 140 + 110 * lf, 60 + 160 * lf * lf);
+    }
+  }
+});
+
+btn.addEventListener('pointerenter', () => { hoverTarget = 1; });
+btn.addEventListener('pointerleave', () => { hoverTarget = 0; });
+btn.addEventListener('focus', () => { hoverTarget = 1; });
+btn.addEventListener('blur', () => { hoverTarget = 0; });
+btn.addEventListener('click', () => {
+  box = btnBox(s); burst(s, 140, 46);
+  document.getElementById('count').textContent = ++fired;
+  if (Glyphmotion.reducedMotion) { for (let t = 0; t < 0.3; t += Glyphmotion.STEP) s.o.step(s, Glyphmotion.STEP); s.invalidate(); }
+});
+</script>
+</body>
+</html>

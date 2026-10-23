@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Data and Pricing Containers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* Component sheet: ASCII motion containers for data and pricing.
+   Every canvas is a text-character grid driven by one shared animation loop. */
+:root{
+  --page:#05070c;
+  --panel:#080c14;
+  --ink:#e7eef6;
+  --muted:#93a1b5;
+  --dim:#66758b;
+  --edge:rgba(140,165,205,.2);
+  --cyan:#5ad4ee;
+  --green:#5ee6a4;
+  --amber:#ffb454;
+  --violet:#a495ff;
+  --pink:#ff8fb8;
+  --ember:#ff8a3d;
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html{background:var(--page);-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--page);color:var(--ink);font:400 15px/1.5 var(--sans);
+  padding:40px max(16px, env(safe-area-inset-right, 0px)) 80px max(16px, env(safe-area-inset-left, 0px));
+  background-image:radial-gradient(ellipse 70% 40% at 50% 0%, rgba(90,212,238,.06), transparent 70%)}
+.page{max-width:1120px;margin:0 auto}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:6px}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+.intro h1{margin:0 0 6px;font:600 clamp(22px,5vw,30px)/1.15 var(--sans);letter-spacing:-.01em;text-wrap:balance}
+.intro p{margin:0;max-width:60ch;color:var(--muted);font-size:14px}
+
+.sheet{margin-top:56px}
+.label{display:flex;align-items:center;gap:12px;margin:0 0 16px;font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.label b{color:var(--cyan);font-weight:700}
+.label::after{content:"";flex:1;height:1px;background:var(--edge)}
+
+/* shared canvas layer */
+.tile canvas,.plan canvas,.plot canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.num,.amt,.big{font-variant-numeric:tabular-nums}
+
+/* ---------- 01 stat tiles ---------- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:14px}
+.tile{position:relative;min-height:240px;border:1px solid var(--edge);border-radius:14px;overflow:hidden;background:var(--panel);isolation:isolate;--acc:var(--cyan)}
+.tile::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(180deg, rgba(8,12,20,.86) 0%, rgba(8,12,20,.5) 38%, rgba(8,12,20,0) 64%)}
+.tile-body{position:relative;z-index:2;padding:16px 18px 0}
+.tile-label{margin:0 0 10px;font:600 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tile-label::before{content:"";display:inline-block;width:7px;height:7px;margin-right:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc);vertical-align:0}
+.tile-num{margin:0;font:700 clamp(34px,9vw,42px)/1 var(--mono);letter-spacing:-.03em;color:var(--ink);text-shadow:0 2px 14px rgba(0,0,0,.8)}
+.tile-note{margin:10px 0 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted);text-shadow:0 1px 8px rgba(0,0,0,.9)}
+.chip{font:600 11px/1 var(--mono);padding:4px 7px;border-radius:99px;color:var(--acc);background:rgba(8,12,20,.7);border:1px solid color-mix(in srgb, var(--acc) 45%, transparent)}
+
+/* ---------- 02 pricing ---------- */
+.billing{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.billing p{margin:0;font-size:14px;color:var(--muted)}
+.seg{display:inline-flex;padding:3px;border:1px solid var(--edge);border-radius:10px;background:var(--panel)}
+.seg button{appearance:none;border:0;background:transparent;color:var(--muted);font:600 12px/1 var(--mono);padding:10px 14px;min-height:40px;border-radius:7px;cursor:pointer;letter-spacing:.03em}
+.seg button[aria-pressed="true"]{background:#16202f;color:var(--ink);box-shadow:inset 0 0 0 1px var(--edge)}
+.seg button small{color:var(--green);font:600 10px var(--mono);margin-left:4px}
+.plans{display:grid;grid-template-columns:1fr;gap:16px;padding-block:4px}
+.plan{position:relative;display:flex;flex-direction:column;min-height:500px;border:1px solid var(--edge);border-radius:16px;overflow:hidden;background:var(--panel);isolation:isolate}
+.plan::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(180deg, rgba(8,12,20,.94) 0%, rgba(8,12,20,.84) 40%, rgba(8,12,20,.25) 58%, rgba(8,12,20,0) 72%)}
+.plan.featured{min-height:560px;border-color:rgba(255,138,61,.6);box-shadow:0 0 0 1px rgba(255,138,61,.14), 0 26px 80px -26px rgba(255,110,40,.5)}
+.plan-body{position:relative;z-index:2;display:flex;flex-direction:column;gap:14px;flex:1;padding:22px}
+.plan-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.plan h3{margin:0;font:700 15px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+.badge{font:700 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;padding:6px 8px;border-radius:99px;color:#1a0c04;background:var(--ember)}
+.plan-desc{margin:0;font-size:14px;color:var(--muted);max-width:30ch}
+.price{margin:2px 0 0;display:flex;align-items:baseline;gap:6px;text-shadow:0 2px 14px rgba(0,0,0,.8)}
+.amt{font:700 clamp(40px,10vw,52px)/1 var(--mono);letter-spacing:-.04em}
+.per{font:400 12px/1.2 var(--mono);color:var(--muted)}
+.feat{margin:6px 0 0;padding:0;list-style:none;display:grid;gap:10px;font-size:14px;color:#cfdae7;text-shadow:0 1px 8px rgba(0,0,0,.95)}
+.feat li{display:grid;grid-template-columns:18px 1fr;gap:4px}
+.feat li::before{content:"+";font:700 14px/1.5 var(--mono);color:var(--ember)}
+.cta{margin-top:auto;appearance:none;cursor:pointer;min-height:48px;padding:0 18px;border-radius:11px;font:700 13px/1 var(--mono);letter-spacing:.04em;
+  color:var(--ink);background:rgba(8,12,20,.78);border:1px solid rgba(255,160,100,.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);transition:background .2s,border-color .2s,transform .2s}
+.cta:hover{border-color:rgba(255,160,100,.85);background:rgba(30,16,10,.85)}
+.cta:active{transform:translateY(1px)}
+.plan.featured .cta{color:#1b0d04;background:var(--ember);border-color:var(--ember)}
+.plan.featured .cta:hover{background:#ffa062}
+.cta:focus-visible{outline-color:#ffd9b8}
+.fine{margin:10px 0 0;text-align:center;font-size:11px;color:var(--dim);font-family:var(--mono)}
+
+/* ---------- 03 usage chart ---------- */
+.chart{border:1px solid var(--edge);border-radius:16px;background:var(--panel);padding:22px}
+.chart-head{display:flex;justify-content:space-between;align-items:flex-end;gap:18px 32px;flex-wrap:wrap;margin-bottom:18px}
+.eyebrow{margin:0 0 8px;font:600 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.big{margin:0;font:700 clamp(36px,9vw,48px)/1 var(--mono);letter-spacing:-.03em}
+.big .unit{font-size:.5em;color:var(--cyan);margin-left:2px;letter-spacing:0}
+.big .of{display:block;margin-top:8px;font:400 12px/1.3 var(--mono);letter-spacing:0;color:var(--muted)}
+.facts{display:flex;flex-wrap:wrap;gap:12px 28px;margin:0}
+.facts div{min-width:0}
+.facts dt{font:600 10px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.facts dd{margin:5px 0 0;font:700 17px/1.1 var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.plot{position:relative;height:230px;border:1px solid var(--edge);border-radius:11px;overflow:hidden;background:#05080e;touch-action:pan-y;cursor:crosshair}
+.readout{margin:12px 0 0;min-height:22px;font:400 12px/1.5 var(--mono);color:var(--muted)}
+.readout b{color:var(--ink);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:10px 0 0;padding:0;list-style:none;font:400 11px/1.2 var(--mono);color:var(--dim)}
+.legend li{display:flex;align-items:center;gap:7px}
+.legend i{width:10px;height:10px;border-radius:2px;display:block}
+
+@media (min-width:900px){
+  .plans{grid-template-columns:repeat(3,1fr);align-items:stretch}
+  .plan.featured{margin-block:-10px}
+}
+@media (prefers-reduced-motion: reduce){ .cta{transition:none} }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="intro">
+  <h1>Data and pricing containers</h1>
+  <p>Three drop-in blocks for a dashboard or marketing site. Each background is a grid of text characters, and the data decides what the scene does. Example data for a made-up product called Brightwater.</p>
+</header>
+
+<!-- ============ 01 STAT TILES ============ -->
+<section class="sheet" aria-labelledby="l1">
+  <p class="label" id="l1"><b>01</b> Stat tiles</p>
+  <div class="tiles">
+
+    <article class="tile" style="--acc:#5ad4ee" data-scene="tide" data-value="72" data-to="72" data-dec="0" data-suffix="%">
+      <canvas aria-hidden="true"></canvas>
+      <div class="tile-body">
+        <p class="tile-label">Storage used</p>
+        <p class="tile-num"><span class="num" aria-hidden="true">72%</span><span class="sr">72 percent</span></p>
+        <p class="tile-note"><span class="chip">+4 pts</span> since last month</p>
+      </div>
+    </article>
+
+    <article class="tile" style="--acc:#a495ff" data-scene="skyline" data-value="38" data-to="38" data-dec="0" data-prefix="+" data-suffix="%">
+      <canvas aria-hidden="true"></canvas>
+      <div class="tile-body">
+        <p class="tile-label">New signups</p>
+        <p class="tile-num"><span class="num" aria-hidden="true">+38%</span><span class="sr">up 38 percent</span></p>
+        <p class="tile-note"><span class="chip">2,914</span> this quarter</p>
+      </div>
+    </article>
+
+    <article class="tile" style="--acc:#5ee6a4" data-scene="pulse" data-value="99.98" data-to="99.98" data-from="99" data-dec="2" data-suffix="%">
+      <canvas aria-hidden="true"></canvas>
+      <div class="tile-body">
+        <p class="tile-label">Uptime</p>
+        <p class="tile-num"><span class="num" aria-hidden="true">99.98%</span><span class="sr">99.98 percent</span></p>
+        <p class="tile-note"><span class="chip">0 outages</span> in the last 90 days</p>
+      </div>
+    </article>
+
+    <article class="tile" style="--acc:#ffb454" data-scene="plant" data-value="64" data-to="1284" data-dec="0">
+      <canvas aria-hidden="true"></canvas>
+      <div class="tile-body">
+        <p class="tile-label">Seats activated</p>
+        <p class="tile-num"><span class="num" aria-hidden="true">1,284</span><span class="sr">1,284 seats</span></p>
+        <p class="tile-note"><span class="chip">64%</span> of the 2,000 goal</p>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<!-- ============ 02 PRICING ============ -->
+<section class="sheet" aria-labelledby="l2">
+  <p class="label" id="l2"><b>02</b> Pricing cards</p>
+  <div class="billing">
+    <p>Pick the plan that fits how often you ship.</p>
+    <div class="seg" role="group" aria-label="Billing period">
+      <button type="button" id="bill-m" aria-pressed="true">Monthly</button>
+      <button type="button" id="bill-a" aria-pressed="false">Yearly <small>save 20%</small></button>
+    </div>
+  </div>
+
+  <div class="plans">
+    <article class="plan" data-scene="fire" data-heat=".8" data-flame=".2" data-spread=".1" data-embers="6" data-rate="1.4" aria-labelledby="p1">
+      <canvas aria-hidden="true"></canvas>
+      <div class="plan-body">
+        <div class="plan-head"><h3 id="p1">Spark</h3></div>
+        <p class="plan-desc">For side projects and first experiments.</p>
+        <p class="price"><span class="amt" data-m="0" data-a="0">$0</span><span class="per">per month</span></p>
+        <ul class="feat">
+          <li>1 project</li>
+          <li>10,000 requests a month</li>
+          <li>7 days of logs</li>
+          <li>Community forum support</li>
+        </ul>
+        <button class="cta" type="button">Start free</button>
+      </div>
+    </article>
+
+    <article class="plan featured" data-scene="fire" data-heat="1" data-flame=".48" data-spread="1" data-embers="46" data-rate="15" aria-labelledby="p2">
+      <canvas aria-hidden="true"></canvas>
+      <div class="plan-body">
+        <div class="plan-head"><h3 id="p2">Blaze</h3><span class="badge">Most popular</span></div>
+        <p class="plan-desc">For teams that ship every week.</p>
+        <p class="price"><span class="amt" data-m="29" data-a="23">$29</span><span class="per">per month</span></p>
+        <ul class="feat">
+          <li>20 projects</li>
+          <li>5 million requests a month</li>
+          <li>90 days of logs</li>
+          <li>Custom domains</li>
+          <li>Email support within 24 hours</li>
+        </ul>
+        <button class="cta" type="button">Start 14-day trial</button>
+      </div>
+    </article>
+
+    <article class="plan" data-scene="fire" data-heat=".75" data-flame=".27" data-spread=".28" data-embers="16" data-rate="4" aria-labelledby="p3">
+      <canvas aria-hidden="true"></canvas>
+      <div class="plan-body">
+        <div class="plan-head"><h3 id="p3">Forge</h3></div>
+        <p class="plan-desc">For companies with many people and many services.</p>
+        <p class="price"><span class="amt" data-m="99" data-a="79">$99</span><span class="per">per month</span></p>
+        <ul class="feat">
+          <li>Unlimited projects</li>
+          <li>50 million requests a month</li>
+          <li>1 year of logs</li>
+          <li>Single sign-on</li>
+        </ul>
+        <button class="cta" type="button">Talk to sales</button>
+      </div>
+    </article>
+  </div>
+  <p class="fine" id="billnote">Billed monthly. Cancel any time.</p>
+</section>
+
+<!-- ============ 03 USAGE CHART ============ -->
+<section class="sheet" aria-labelledby="l3">
+  <p class="label" id="l3"><b>03</b> Usage chart</p>
+  <div class="chart">
+    <div class="chart-head">
+      <div>
+        <p class="eyebrow">API calls this month</p>
+        <p class="big"><span class="num" id="total" aria-hidden="true">0</span><span class="unit" aria-hidden="true">M</span><span class="sr" id="total-sr"></span>
+          <span class="of" id="of"></span></p>
+      </div>
+      <dl class="facts">
+        <div><dt>On pace for</dt><dd id="pace">-</dd></div>
+        <div><dt>Days over soft cap</dt><dd id="over">-</dd></div>
+        <div><dt>Plan resets in</dt><dd>8 days</dd></div>
+      </dl>
+    </div>
+    <div class="plot" id="plot" tabindex="0" role="group" aria-label="Daily API calls for the month, 30 bars. Use the left and right arrow keys to inspect each day.">
+      <canvas aria-hidden="true"></canvas>
+    </div>
+    <p class="readout" id="readout" aria-live="polite"></p>
+    <ul class="legend" aria-hidden="true">
+      <li><i style="background:#5ee6c8"></i>Under daily soft cap</li>
+      <li><i style="background:#ffaa46"></i>Over soft cap</li>
+      <li><i style="background:#6a7ea8"></i>Forecast</li>
+      <li><i style="background:#c8faff"></i>Today</li>
+    </ul>
+  </div>
+</section>
+
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const FAMILY = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace';
+const STEP = 1 / 60;
+const reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+// ---------- helpers ----------
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+const rnd = (a, b) => a + Math.random() * (b - a);
+function hash2(x, y) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const cssCache = new Map();
+function css(k) {
+  let s = cssCache.get(k);
+  if (!s) { s = 'rgb(' + ((k >> 16) & 255) + ',' + ((k >> 8) & 255) + ',' + (k & 255) + ')'; if (cssCache.size > 8000) cssCache.clear(); cssCache.set(k, s); }
+  return s;
+}
+const numFmt = {};
+function fmtNum(v, dec) {
+  const f = numFmt[dec] || (numFmt[dec] = new Intl.NumberFormat('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }));
+  return f.format(v);
+}
+
+// ---------- surface: one canvas, one character grid, one scene ----------
+const SCENES = {};
+const surfaces = [];
+const byHost = new Map();
+
+class Surface {
+  constructor(host, name, o) {
+    this.host = host; this.name = name; this.o = o;
+    this.cv = host.querySelector('canvas');
+    this.ctx = this.cv.getContext('2d', { alpha: false });
+    this.bcv = document.createElement('canvas');
+    this.bctx = this.bcv.getContext('2d');
+    this.bg = o.bg || '#080c14';
+    this.value = o.value || 0;
+    this.nums = o.nums || [];
+    this.time = 0; this.acc = 0; this.rAcc = 1;
+    this.visible = false; this.started = false; this.dirty = true;
+    this.introT = -(o.delay || 0); this.dur = o.dur || 1.9;
+    this.prog = reduce ? 1 : 0;
+    this.scene = null; this.cols = 0; this.rows = 0;
+    this.shown = this.nums.map(() => null);
+  }
+  layout() {
+    const rect = this.host.getBoundingClientRect();
+    const vw = this.vw = Math.max(1, rect.width), vh = this.vh = Math.max(1, rect.height);
+    const dpr = this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.cv.width = Math.round(vw * dpr); this.cv.height = Math.round(vh * dpr);
+    const fs = this.fs = clamp(vw / (this.o.fsDiv || 36), 7.5, 10);
+    this.font = '600 ' + fs.toFixed(2) + 'px ' + FAMILY;
+    const ctx = this.ctx;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.font = this.font;
+    this.cw = ctx.measureText('M').width || fs * 0.6;
+    this.chh = fs * 1.2;
+    this.cols = Math.ceil(vw / this.cw); this.rows = Math.ceil(vh / this.chh);
+    this.asp = this.chh / this.cw;
+    const N = this.cols * this.rows;
+    this.ch = new Array(N).fill(' ');
+    this.R = new Uint8ClampedArray(N); this.G = new Uint8ClampedArray(N); this.B = new Uint8ClampedArray(N);
+    this.bcv.width = Math.max(1, Math.round(this.cv.width / 5));
+    this.bcv.height = Math.max(1, Math.round(this.cv.height / 5));
+    this.scene = SCENES[this.name](this);
+    this.warm(reduce ? 4 : 1.2);
+    this.dirty = true;
+  }
+  warm(sec) { const n = Math.round(sec * 60); for (let i = 0; i < n; i++) { this.time += STEP; this.scene.step(STEP); } }
+  put(c, r, ch, R, G, B) {
+    if (c < 0 || c >= this.cols || r < 0 || r >= this.rows) return;
+    const i = r * this.cols + c; this.ch[i] = ch; this.R[i] = R; this.G[i] = G; this.B[i] = B;
+  }
+  text(c, r, str, R, G, B) { for (let k = 0; k < str.length; k++) this.put(c + k, r, str[k], R, G, B); }
+  clear() { this.ch.fill(' '); }
+  stepOnce() {
+    this.time += STEP;
+    if (this.started && !reduce && this.introT < this.dur) { this.introT += STEP; this.prog = easeOut(clamp(this.introT / this.dur, 0, 1)); }
+    this.scene.step(STEP);
+  }
+  updateNums() {
+    for (let k = 0; k < this.nums.length; k++) {
+      const el = this.nums[k], d = el.dataset;
+      const to = parseFloat(d.to), from = parseFloat(d.from || '0'), dec = parseInt(d.dec || '0', 10);
+      const txt = (d.prefix || '') + fmtNum(lerp(from, to, this.prog), dec) + (d.suffix || '');
+      if (txt !== this.shown[k]) { el.textContent = txt; this.shown[k] = txt; }
+    }
+  }
+  invalidate() { this.dirty = true; if (reduce) this.render(); }
+  render() {
+    if (!this.scene) return;
+    this.updateNums();
+    this.scene.draw();
+    const { ctx, cols, rows, cw, chh, cv, bcv, bctx } = this;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    ctx.fillStyle = this.bg; ctx.fillRect(0, 0, this.vw, this.vh);
+    ctx.font = this.font; ctx.textBaseline = 'top';
+    let lastK = -1;
+    for (let r = 0; r < rows; r++) {
+      const y = r * chh, base = r * cols;
+      for (let c = 0; c < cols; c++) {
+        const i = base + c, ch = this.ch[i];
+        if (ch === ' ') continue;
+        const k = ((this.R[i] & 0xfc) << 16) | ((this.G[i] & 0xfc) << 8) | (this.B[i] & 0xfc);
+        if (k !== lastK) { ctx.fillStyle = css(k); lastK = k; }
+        ctx.fillText(ch, c * cw, y);
+      }
+    }
+    // cheap bloom: shrink the frame to 1/5, then add it back stretched
+    bctx.globalCompositeOperation = 'copy';
+    bctx.drawImage(cv, 0, 0, bcv.width, bcv.height);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(bcv, 0, 0, cv.width, cv.height);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+}
+
+function addSurface(host, name, o) {
+  const s = new Surface(host, name, o);
+  surfaces.push(s); byHost.set(host, s);
+  return s;
+}
+
+// ---------- scene: rising tide (value = percent full) ----------
+SCENES.tide = (s) => {
+  const v = clamp(s.value, 0, 100) / 100;
+  const bubs = [];
+  const base = () => s.rows * (1 - v * s.prog);
+  const surf = (c) => {
+    const t = s.time, a = 0.5 + 0.35 * (1 - s.prog);
+    return base() + a * (0.6 * Math.sin(c * 0.23 + t * 1.5) + 0.4 * Math.sin(c * 0.11 - t * 1.0 + 1.3)) + 0.15 * Math.sin(c * 0.6 + t * 2.4);
+  };
+  return {
+    step(dt) {
+      if (s.prog > 0.1 && bubs.length < 12 && Math.random() < dt * 5) bubs.push({ x: rnd(1, s.cols - 2), y: s.rows - 1, vy: rnd(2.5, 6), ph: rnd(0, 6.28) });
+      for (let i = bubs.length - 1; i >= 0; i--) {
+        const b = bubs[i]; b.y -= b.vy * dt; b.x += Math.sin(s.time * 3 + b.ph) * dt * 1.3;
+        if (b.y < surf(b.x) + 1) { bubs[i] = bubs[bubs.length - 1]; bubs.pop(); }
+      }
+    },
+    draw() {
+      s.clear();
+      const { cols, rows } = s, t = s.time;
+      for (let c = 0; c < cols; c++) {
+        const sf = surf(c), sr = Math.floor(sf);
+        // guide lines at 25, 50, 75 percent
+        for (let q = 1; q <= 3; q++) {
+          const gr = Math.round(rows * (1 - q / 4));
+          if (gr < sr && c % 4 === 0) s.put(c, gr, '.', 60, 84, 112);
+        }
+        if (sr >= 0 && sr < rows) {
+          const sl = surf(c + 1) - surf(c - 1);
+          const ch = sl > 0.5 ? '/' : sl < -0.5 ? '\\' : '~';
+          const sh = 0.82 + 0.18 * Math.sin(c * 0.7 + t * 3);
+          s.put(c, sr, ch, 140 * sh, 238 * sh, 255 * sh);
+        }
+        for (let r = Math.max(sr + 1, 0); r < rows; r++) {
+          const depth = r - sf, D = clamp(depth / (rows * 0.9), 0, 1);
+          const n = vnoise(c * 0.13 + t * 0.35 + r * 0.17, r * 0.55 - t * 0.25);
+          const k = clamp(n * 0.8 + (1 - D) * 0.35 + 0.05, 0, 1);
+          const ch = ' .:-=+'[Math.floor(k * 5.99)];
+          if (ch === ' ') continue;
+          const m = 0.6 + 0.6 * n;
+          let R = lerp(60, 14, D) * m, G = lerp(196, 70, D) * m, B = lerp(230, 130, D) * m;
+          if (depth < 2.2) { const q = 0.35 * (1 - depth / 2.2); R = lerp(R, 190, q); G = lerp(G, 240, q); B = lerp(B, 255, q); }
+          s.put(c, r, ch, R, G, B);
+        }
+      }
+      for (const b of bubs) { const lf = clamp((b.y - surf(b.x)) / rows, 0, 1); s.put(Math.round(b.x), Math.floor(b.y), lf > 0.5 ? 'o' : lf > 0.2 ? 'O' : '.', 170, 230, 250); }
+    }
+  };
+};
+
+// ---------- scene: growing skyline (value = growth percent, sets the tallest tower) ----------
+SCENES.skyline = (s) => {
+  const { cols, rows } = s;
+  const hmax = 0.3 + 0.62 * clamp(s.value / 60, 0, 1);
+  const seed = s.o.seed || 0;
+  const front = [], back = [];
+  let x = 1, i = 0;
+  while (x < cols - 1) {
+    const w = 3 + Math.floor(hash2(i, 11 + seed) * 4), trend = 0.4 + 0.6 * (x / cols);
+    front.push({ x, w: Math.min(w, cols - 1 - x), h: (0.35 + 0.65 * hash2(i, 5 + seed)) * trend });
+    x += w + (hash2(i, 3 + seed) > 0.6 ? 1 : 0); i++;
+  }
+  let tall = 0, mh = 0;
+  front.forEach((b, k) => { if (b.h > mh) { mh = b.h; tall = k; } });
+  front.forEach(b => { b.h = b.h / mh * hmax * (rows - 3); });
+  x = 0; i = 0;
+  while (x < cols) {
+    const w = 4 + Math.floor(hash2(i, 29 + seed) * 5);
+    back.push({ x, w: Math.min(w, cols - x), h: (0.3 + 0.7 * hash2(i, 9 + seed)) * hmax * (rows - 3) * 0.72 });
+    x += w; i++;
+  }
+  const g = (b, off) => easeOut(clamp((s.prog - (b.x / cols) * 0.42 - off) / 0.58, 0, 1));
+  return {
+    step() {},
+    draw() {
+      s.clear();
+      const t = s.time, gr = rows - 1;
+      for (let k = 0; k < Math.floor(cols / 3); k++) {
+        const c = Math.floor(hash2(k, 71 + seed) * cols), r = Math.floor(hash2(k, 72 + seed) * rows * 0.55);
+        const tw = 0.5 + 0.5 * Math.sin(t * (1 + hash2(k, 73) * 2.5) + k * 9);
+        if (tw > 0.3) s.put(c, r, tw > 0.85 ? '+' : '.', 90 + 110 * tw, 90 + 110 * tw, 140 + 100 * tw);
+      }
+      for (const b of back) {
+        const H = Math.round(b.h * g(b, 0.05)); if (H < 1) continue;
+        const top = gr - H;
+        for (let r = top; r < gr; r++) for (let cc = 0; cc < b.w; cc++) s.put(b.x + cc, r, r === top ? '-' : ':', 58, 56, 118);
+      }
+      front.forEach((b, k) => {
+        const H = Math.round(b.h * g(b, 0)); if (H < 1) return;
+        const top = gr - H;
+        for (let r = top; r < gr; r++) {
+          for (let cc = 0; cc < b.w; cc++) {
+            const c = b.x + cc;
+            if (r === top) { s.put(c, r, '=', 190, 180, 255); continue; }
+            if (cc === 0 || cc === b.w - 1) { s.put(c, r, '|', 126, 112, 230); continue; }
+            if (r & 1) {
+              const lit = hash2(c, r * 13 + Math.floor(t / (3 + hash2(c, r) * 6))) > 0.42;
+              if (lit) s.put(c, r, '#', 255, 198, 100); else s.put(c, r, '.', 72, 66, 136);
+            } else s.put(c, r, ':', 70, 64, 140);
+          }
+        }
+        if (k === tall && g(b, 0) > 0.95) {
+          const cx = b.x + (b.w >> 1);
+          s.put(cx, top - 1, '|', 160, 150, 240); s.put(cx, top - 2, '|', 160, 150, 240);
+          if (Math.floor(t * 1.6) % 2 === 0) s.put(cx, top - 3, '*', 255, 90, 90);
+        }
+      });
+      for (let c = 0; c < cols; c++) s.put(c, gr, '=', 88, 80, 170);
+    }
+  };
+};
+
+// ---------- scene: heartbeat line (value = uptime percent; downtime shows as flat beats) ----------
+SCENES.pulse = (s) => {
+  const { cols, rows } = s;
+  const v = clamp(s.value, 0, 100), down = (100 - v) / 100;
+  const flatProb = clamp(down * 60, 0, 0.9);
+  const col = v >= 99.9 ? [94, 232, 164] : v >= 99 ? [255, 196, 84] : [255, 100, 100];
+  const ys = new Float32Array(cols), alive = new Uint8Array(cols);
+  const B = Math.round(clamp(cols * 0.55, 22, 34)), kk = B / 26;
+  const spd = 26;
+  let head = 0, hf = 0, idx = 0;
+  const gs = (x, m, sg) => { const d = (x - m) / sg; return Math.exp(-d * d); };
+  const ecg = (xx) => { const x = xx / kk; return 0.13 * gs(x, 4, 2.2) - 0.14 * gs(x, 9, 0.8) + gs(x, 10.6, 0.85) - 0.3 * gs(x, 12.2, 0.9) + 0.26 * gs(x, 18, 3.2); };
+  const badDays = new Set();
+  for (let k = 0, n = Math.round(down * 90); k < n; k++) badDays.add(Math.floor(hash2(k, 5) * cols));
+  return {
+    step(dt) {
+      hf += spd * dt;
+      while (hf >= 1) {
+        hf -= 1; head = (head + 1) % cols; idx++;
+        const beat = Math.floor(idx / B), pos = idx % B;
+        ys[head] = (hash2(beat, 77) < flatProb ? 0 : ecg(pos)) + (Math.random() - 0.5) * 0.03;
+        alive[head] = 1;
+      }
+    },
+    draw() {
+      s.clear();
+      const mid = rows * 0.76, amp = rows * 0.34;
+      for (let r = 2; r < rows - 1; r += 3) for (let c = 0; c < cols; c += 6) s.put(c, r, '+', 26, 42, 52);
+      for (let a = 0; a < cols - 3; a++) {
+        const c = (head - a + cols) % cols; if (!alive[c]) continue;
+        const f = Math.pow(1 - a / cols, 1.2) * 0.9 + 0.1;
+        const r = Math.round(mid - ys[c] * amp);
+        const pc = (c - 1 + cols) % cols;
+        const rp = (a === cols - 4 || !alive[pc]) ? r : Math.round(mid - ys[pc] * amp);
+        const dr = r - rp;
+        let ch = dr < 0 ? '/' : dr > 0 ? '\\' : '-';
+        if (a === 0) ch = '@';
+        const R = col[0] * f, G = col[1] * f, Bc = col[2] * f;
+        if (Math.abs(dr) >= 2) for (let q = Math.min(r, rp) + 1; q < Math.max(r, rp); q++) s.put(c, q, '|', R, G, Bc);
+        if (a === 0) s.put(c, r, ch, 235, 255, 245); else s.put(c, r, ch, R, G, Bc);
+      }
+      for (let c = 0; c < cols; c++) s.put(c, rows - 1, '|', badDays.has(c) ? 255 : 52, badDays.has(c) ? 98 : 140, badDays.has(c) ? 98 : 104);
+    }
+  };
+};
+
+// ---------- scene: growing plant (value = percent of goal, sets stem height and leaf count) ----------
+SCENES.plant = (s) => {
+  const { cols, rows } = s;
+  const v = clamp(s.value / 100, 0, 1);
+  const cx = Math.round(cols * 0.7), base = rows - 3;
+  const Hmax = Math.round((base - 1) * (0.3 + 0.48 * v));
+  const nL = 3 + Math.round(v * 4);
+  const leaves = [];
+  for (let k = 0; k < nL; k++) leaves.push({ f: 0.2 + 0.62 * k / (nL - 1), side: k % 2 ? 1 : -1, len: cols * (0.075 + 0.07 * (1 - k / nL)) * (0.9 + 0.2 * hash2(k, 3)) });
+  const sway = (f) => 1.7 * f * f * Math.sin(s.time * 1.1 + f * 1.8);
+  const stemX = (k) => Math.round(cx + sway(k / Hmax));
+  return {
+    step() {},
+    draw() {
+      s.clear();
+      const t = s.time, asp = s.asp;
+      for (let k = 0; k < 6; k++) {
+        const fx = cx + Math.sin(t * 0.4 + k * 2.1) * cols * 0.2, fy = rows * (0.3 + 0.4 * (0.5 + 0.5 * Math.sin(t * 0.31 + k * 1.7)));
+        s.put(Math.round(fx), Math.round(fy), Math.sin(t * 3 + k * 2) > 0 ? '*' : '.', 210, 255, 140);
+      }
+      for (let c = 0; c < cols; c++) {
+        const n = vnoise(c * 0.4, 3);
+        s.put(c, rows - 2, n > 0.5 ? '%' : ':', 128, 88, 54);
+        s.put(c, rows - 1, '#', 84, 58, 40);
+        if (Math.abs(c - cx) < 4) s.put(c, base, ':', 112, 78, 48);
+      }
+      const Hc = Hmax * s.prog;
+      for (let k = 0; k <= Math.floor(Hc); k++) {
+        const x = stemX(k), xn = stemX(k + 1), f = k / Hmax;
+        s.put(x, base - k, xn > x ? '/' : xn < x ? '\\' : '|', lerp(70, 150, f), lerp(190, 250, f), lerp(110, 130, f));
+      }
+      for (const lf of leaves) {
+        const kb = Math.round(lf.f * Hmax); if (kb > Hc) continue;
+        const gr = clamp((Hc - kb) / (Hmax * 0.22), 0, 1), L = Math.round(lf.len * easeOut(gr));
+        const bx = stemX(kb), r0 = base - kb;
+        const rise = (j) => (j / asp) * 1.1 - (j / asp) * (j / Math.max(L, 1)) * 1.7 + Math.sin(t * 1.4 + kb) * 0.35 * (j / Math.max(L, 1));
+        for (let j = 1; j <= L; j++) {
+          const u = j / L, r = r0 - Math.round(rise(j)), r2 = r0 - Math.round(rise(j + 1));
+          let ch = r2 < r ? (lf.side > 0 ? '/' : '\\') : r2 > r ? (lf.side > 0 ? '\\' : '/') : '-';
+          if (j === L) ch = lf.side > 0 ? ')' : '(';
+          const R = lerp(70, 140, u), G = lerp(200, 250, u), B = lerp(110, 120, u);
+          s.put(bx + lf.side * j, r, ch, R, G, B);
+          if (u < 0.65) s.put(bx + lf.side * j, r + 1, ':', R * 0.6, G * 0.7, B * 0.6);
+        }
+      }
+      if (s.prog > 0.78) {
+        const gp = clamp((s.prog - 0.78) / 0.22, 0, 1), tx = stemX(Math.floor(Hc)), ty = base - Math.floor(Hc);
+        if (gp < 0.5) s.put(tx, ty - 1, '*', 255, 150, 190);
+        else {
+          s.put(tx, ty - 1, '@', 255, 206, 90);
+          for (const [dx, dy] of [[-2, 0], [2, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]]) s.put(tx + dx, ty - 1 + dy, dy === 0 ? (dx < 0 ? '(' : ')') : 'o', 255, 128, 176);
+        }
+      }
+    }
+  };
+};
+
+// ---------- scene: fire (heat, flame height and width set the tier) ----------
+const LUT = [];
+for (let k = 0; k < 64; k++) {
+  const h = k / 63; let R, G, B;
+  if (h < 0.25) { const t = h / 0.25; R = lerp(70, 190, t); G = lerp(10, 34, t); B = lerp(6, 12, t); }
+  else if (h < 0.5) { const t = (h - 0.25) / 0.25; R = lerp(190, 255, t); G = lerp(34, 110, t); B = lerp(12, 16, t); }
+  else if (h < 0.75) { const t = (h - 0.5) / 0.25; R = 255; G = lerp(110, 196, t); B = lerp(16, 60, t); }
+  else { const t = (h - 0.75) / 0.25; R = 255; G = lerp(196, 244, t); B = lerp(60, 200, t); }
+  LUT.push([R, G, B]);
+}
+const FR = ' .:-=+*#%@';
+SCENES.fire = (s) => {
+  const { cols, rows } = s, o = s.o;
+  const heat = new Float32Array(cols * rows);
+  const flameRows = Math.max(3, Math.round(rows * o.flame));
+  const cool = 0.85 / flameRows;
+  const seedRow = rows - 1 - Math.round(rows * 0.11), profs = new Float32Array(cols);
+  const emb = [];
+  let fAcc = 0, burst = 1.5;
+  const wide = Math.min(1, o.spread * 1.6);
+  function fireStep() {
+    const t = s.time, last = seedRow * cols;
+    for (let c = 0; c < cols; c++) {
+      let prof;
+      if (o.spread >= 1) prof = 0.45 + 0.65 * vnoise(c * 0.22, t * 2.2);
+      else { const d = (c / (cols - 1) - 0.5) / o.spread; prof = Math.exp(-d * d) * (0.7 + 0.3 * vnoise(c * 0.5, t * 3)); }
+      profs[c] = prof;
+      heat[last + c] = clamp(prof * o.heat * (0.82 + 0.18 * Math.random()), 0, 1);
+    }
+    for (let r = 0; r < seedRow; r++) {
+      const b = (r + 1) * cols;
+      for (let c = 0; c < cols; c++) {
+        const q = Math.random(), w = q < 0.25 ? -1 : q > 0.75 ? 1 : 0;
+        const cc = clamp(c + w + (Math.sin(t * 1.3 + r * 0.2) > 0.6 ? 1 : 0), 0, cols - 1);
+        let v = heat[b + cc];
+        const nz = vnoise(cc * 0.32, r * 0.06 + t * 1.3); v -= cool * (0.2 + 1.7 * nz * nz + Math.random() * 0.35);
+        heat[r * cols + c] = v > 0 ? v : 0;
+      }
+    }
+  }
+  return {
+    step(dt) {
+      fAcc += dt; if (fAcc >= 1 / 24) { fAcc -= 1 / 24; fireStep(); }
+      if (emb.length < o.embers && Math.random() < dt * o.rate) {
+        emb.push({ x: cols * (0.5 + (Math.random() - 0.5) * wide), y: rows - flameRows * rnd(0.2, 0.8), vx: rnd(-1.5, 1.5), vy: -rnd(3, 8) * (0.6 + o.heat), life: 0, max: rnd(2, 4.5), ph: rnd(0, 6.28) });
+      }
+      if (o.heat >= 1) {
+        burst -= dt;
+        if (burst <= 0) { burst = rnd(1.8, 3.2); for (let k = 0; k < 6 && emb.length < o.embers + 8; k++) emb.push({ x: cols * (0.5 + (Math.random() - 0.5) * wide), y: rows - flameRows * 0.6, vx: rnd(-3, 3), vy: -rnd(10, 16), life: 0, max: rnd(1.2, 2.2), ph: rnd(0, 6.28), hot: true }); }
+      }
+      for (let i = emb.length - 1; i >= 0; i--) {
+        const e = emb[i]; e.life += dt;
+        e.x += (e.vx + Math.sin(s.time * 2.5 + e.ph) * 2.2) * dt; e.y += e.vy * dt; e.vy *= (1 - 0.1 * dt);
+        if (e.life >= e.max || e.y < -1) { emb[i] = emb[emb.length - 1]; emb.pop(); }
+      }
+    },
+    draw() {
+      s.clear();
+      const t = s.time;
+      for (let r = 0; r < rows; r++) {
+        const dy = (rows - 1 - r) / rows;
+        for (let c = 0; c < cols; c++) {
+          const dx = (c / cols - 0.5) / 0.5;
+          const gl = Math.exp(-(dx * dx * 1.2) - dy * dy * 2.4) * o.heat * 0.9;
+          const q = gl * vnoise(c * 0.2 + t * 0.3, r * 0.3 - t * 0.4);
+          if (q > 0.2) s.put(c, r, q > 0.4 ? ':' : '.', 255 * Math.min(1, q * 1.8), 110 * Math.min(1, q * 1.8), 34 * Math.min(1, q * 1.8));
+        }
+      }
+      for (let r = seedRow + 1; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const pf = profs[c]; if (pf < 0.08) continue;
+        const h = pf * o.heat * (0.3 + 0.3 * vnoise(c * 0.5 + t * 0.8, r * 0.9 - t * 0.5)), p = LUT[Math.min(63, Math.floor(h * 63))];
+        s.put(c, r, h > 0.42 ? '%' : h > 0.3 ? '#' : '=', p[0], p[1], p[2]);
+      }
+      for (let r = 0; r <= seedRow; r++) for (let c = 0; c < cols; c++) {
+        const h = heat[r * cols + c]; if (h < 0.06) continue;
+        const ch = FR[Math.max(1, Math.min(9, Math.floor(h * 10)))], p = LUT[Math.min(63, Math.floor(h * 63))];
+        s.put(c, r, ch, p[0], p[1], p[2]);
+      }
+      for (const e of emb) {
+        const lf = 1 - e.life / e.max, ch = e.hot ? '*' : lf > 0.6 ? '*' : lf > 0.3 ? '+' : '.';
+        const R = lerp(160, 255, lf), G = lerp(40, 214, lf * lf), B = lerp(16, 120, lf * lf * lf), m = 0.5 + 0.5 * lf;
+        s.put(Math.round(e.x), Math.round(e.y), ch, R * m, G * m, B * m);
+      }
+    }
+  };
+};
+
+// ---------- scene: daily usage bars (data = array of daily values, soft cap line, forecast) ----------
+SCENES.bars = (s) => {
+  const { cols, rows } = s, D = s.o.chart;
+  const n = D.all.length, max = Math.max(...D.all, D.cap) * 1.12;
+  const colW = cols / n, plotH = rows - 3, baseRow = rows - 2;
+  const sparks = [];
+  const bx = (i) => { const x0 = Math.floor(i * colW), x1 = Math.max(x0, Math.floor((i + 1) * colW) - 2); return [x0, x1]; };
+  s.colW = colW;
+  return {
+    step(dt) {
+      const [x0, x1] = bx(D.today), top = baseRow - D.all[D.today] / max * plotH * s.prog;
+      if (s.prog > 0.9 && sparks.length < 8 && Math.random() < dt * 5) sparks.push({ x: rnd(x0, x1 + 1), y: top - 1, vy: -rnd(3, 7), life: 0, max: rnd(0.8, 1.6) });
+      for (let i = sparks.length - 1; i >= 0; i--) { const p = sparks[i]; p.life += dt; p.y += p.vy * dt; p.x += Math.sin(s.time * 4 + i) * dt; if (p.life > p.max) { sparks[i] = sparks[sparks.length - 1]; sparks.pop(); } }
+    },
+    draw() {
+      s.clear();
+      const t = s.time;
+      const capRow = Math.round(baseRow - D.cap / max * plotH);
+      for (let c = 0; c < cols; c++) { if (c % 2 === 0) s.put(c, capRow, '-', 150, 100, 44); s.put(c, rows - 1, '-', 50, 66, 90); }
+      s.text(Math.max(0, cols - 9), capRow - 1, 'soft cap', 190, 130, 56);
+      for (let i = 0; i < n; i += 7) s.text(bx(i)[0], rows - 1, String(i + 1), 150, 170, 200);
+      for (let i = 0; i < n; i++) {
+        const [x0, x1] = bx(i);
+        const g = easeOut(clamp((s.prog * 1.6 - (i / n) * 0.6) / 1, 0, 1));
+        const hr = Math.round(D.all[i] / max * plotH * g); if (hr < 1) continue;
+        const proj = i > D.today, today = i === D.today, over = D.all[i] > D.cap, sel = i === s.sel;
+        for (let r = 0; r < hr; r++) {
+          const row = baseRow - r, f = r / Math.max(1, plotH), isTop = r === hr - 1;
+          let R, G, B, ch;
+          if (proj) { ch = isTop ? ':' : (r & 1 ? '.' : ' '); R = 106; G = 126; B = 168; }
+          else if (today) { const pu = 0.8 + 0.2 * Math.sin(t * 4); ch = isTop ? '@' : '#'; R = 200 * pu; G = 250 * pu; B = 255 * pu; }
+          else if (over) { ch = isTop ? '=' : ':'; R = lerp(230, 255, f * 2); G = lerp(110, 172, f * 2); B = lerp(60, 70, f * 2); }
+          else { ch = isTop ? '=' : ':'; R = lerp(60, 110, f * 2); G = lerp(200, 240, f * 2); B = lerp(200, 200, f * 2); }
+          if (sel) { R = lerp(R, 255, 0.5); G = lerp(G, 255, 0.5); B = lerp(B, 255, 0.5); if (!isTop && ch !== ' ') ch = '|'; }
+          for (let c = x0; c <= x1; c++) s.put(c, row, ch, R, G, B);
+        }
+        if (sel) for (let c = x0; c <= x1; c++) s.put(c, baseRow - hr - 1, 'v', 255, 255, 255);
+      }
+      for (const p of sparks) { const lf = 1 - p.life / p.max; s.put(Math.round(p.x), Math.round(p.y), lf > 0.5 ? '*' : '.', 200 * lf + 40, 250 * lf + 40, 255 * lf + 40); }
+    }
+  };
+};
+
+// ---------- wire up: stat tiles ----------
+document.querySelectorAll('.tile').forEach((el, i) => {
+  const d = el.dataset, num = el.querySelector('.num');
+  ['to', 'from', 'dec', 'prefix', 'suffix'].forEach(k => { if (d[k] !== undefined) num.dataset[k] = d[k]; });
+  addSurface(el, d.scene, { value: parseFloat(d.value), nums: [num], delay: i * 0.12, seed: i * 17 });
+});
+
+// ---------- wire up: pricing cards ----------
+document.querySelectorAll('.plan').forEach((el, i) => {
+  const d = el.dataset;
+  addSurface(el, d.scene, {
+    heat: parseFloat(d.heat), flame: parseFloat(d.flame), spread: parseFloat(d.spread), embers: parseInt(d.embers, 10), rate: parseFloat(d.rate),
+    bg: '#0a0c14', fsDiv: 34, delay: i * 0.1
+  });
+});
+const bm = document.getElementById('bill-m'), ba = document.getElementById('bill-a'), note = document.getElementById('billnote');
+function setBilling(yearly) {
+  bm.setAttribute('aria-pressed', String(!yearly)); ba.setAttribute('aria-pressed', String(yearly));
+  document.querySelectorAll('.amt').forEach(a => { a.textContent = '$' + (yearly ? a.dataset.a : a.dataset.m); });
+  note.textContent = yearly ? 'Billed once a year. Cancel any time.' : 'Billed monthly. Cancel any time.';
+}
+bm.addEventListener('click', () => setBilling(false));
+ba.addEventListener('click', () => setBilling(true));
+
+// ---------- wire up: usage chart ----------
+(function () {
+  const vals = [0.52, 0.61, 0.58, 0.66, 0.49, 0.31, 0.28, 0.63, 0.72, 0.78, 0.74, 0.81, 0.44, 0.35, 0.69, 0.84, 0.88, 0.82, 0.91, 0.57, 0.40, 0.86];
+  const LIMIT = 25, DAYS = 30, today = vals.length - 1, cap = LIMIT / DAYS;
+  const all = vals.slice();
+  const avg7 = vals.slice(-7).reduce((a, b) => a + b, 0) / 7;
+  for (let i = vals.length; i < DAYS; i++) all.push(0.5 * all[i - 7] + 0.5 * avg7);
+  const total = vals.reduce((a, b) => a + b, 0), pace = all.reduce((a, b) => a + b, 0);
+  const over = vals.filter(x => x > cap).length;
+  const plot = document.getElementById('plot'), readout = document.getElementById('readout');
+  const totalEl = document.getElementById('total');
+  totalEl.dataset.to = total.toFixed(2); totalEl.dataset.dec = '1';
+  document.getElementById('total-sr').textContent = total.toFixed(1) + ' million';
+  document.getElementById('of').textContent = fmtNum(total / LIMIT * 100, 0) + '% of your ' + LIMIT + 'M plan, day ' + (today + 1) + ' of ' + DAYS;
+  document.getElementById('pace').textContent = pace.toFixed(1) + 'M';
+  document.getElementById('over').textContent = over + ' of ' + (today + 1);
+  const s = addSurface(plot, 'bars', { chart: { all, today, cap }, nums: [totalEl], bg: '#05080e', fsDiv: 70 });
+  s.sel = today;
+  function describe(i) {
+    const proj = i > today, tag = proj ? 'forecast' : all[i] > cap ? 'over the daily soft cap' : 'under the daily soft cap';
+    return '<b>Day ' + (i + 1) + (i === today ? ' (today)' : '') + '</b>: ' + all[i].toFixed(2) + 'M calls, ' + tag;
+  }
+  function select(i) {
+    i = clamp(i, 0, DAYS - 1); if (i === s.sel && readout.innerHTML) return;
+    s.sel = i; readout.innerHTML = describe(i); s.invalidate();
+  }
+  readout.innerHTML = describe(today);
+  plot.addEventListener('pointermove', e => {
+    const r = plot.getBoundingClientRect(), colW = s.colW || (s.cols / DAYS);
+    select(Math.floor((e.clientX - r.left) / r.width * s.cols / colW));
+  });
+  plot.addEventListener('pointerleave', () => select(today));
+  plot.addEventListener('keydown', e => {
+    const k = e.key;
+    if (k === 'ArrowLeft') select(s.sel - 1); else if (k === 'ArrowRight') select(s.sel + 1);
+    else if (k === 'Home') select(0); else if (k === 'End') select(DAYS - 1); else return;
+    e.preventDefault();
+  });
+})();
+
+// ---------- shared loop: visible canvases only, paused when the tab is hidden ----------
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (document.hidden) return;
+  for (const s of surfaces) {
+    if (!s.visible || !s.scene) continue;
+    s.acc += dt;
+    let n = 0;
+    while (s.acc >= STEP && n < 6) { s.stepOnce(); s.acc -= STEP; n++; }
+    if (n === 6) s.acc = 0;
+    s.rAcc += dt;
+    if (s.rAcc >= 1 / 30 - 0.002 || s.dirty) { s.rAcc = 0; s.dirty = false; s.render(); }
+  }
+}
+document.addEventListener('visibilitychange', () => { last = performance.now(); });
+
+let rzTimer = 0;
+const pending = new Set();
+function relayout(s) { s.layout(); if (reduce) s.render(); }
+const ro = new ResizeObserver(entries => {
+  entries.forEach(e => pending.add(byHost.get(e.target)));
+  clearTimeout(rzTimer);
+  rzTimer = setTimeout(() => { pending.forEach(s => s && relayout(s)); pending.clear(); }, 120);
+});
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    const s = byHost.get(e.target); if (!s) continue;
+    s.visible = e.isIntersecting;
+    if (s.visible) { s.started = true; s.dirty = true; }
+  }
+}, { rootMargin: '60px' });
+
+function start() {
+  surfaces.forEach(s => { s.layout(); ro.observe(s.host); if (reduce) s.render(); else io.observe(s.host); });
+  if (!reduce) requestAnimationFrame(t => { last = t; frame(t); });
+}
+const fontsReady = (document.fonts && document.fonts.load)
+  ? Promise.race([document.fonts.load('600 16px "JetBrains Mono"'), new Promise(r => setTimeout(r, 1500))])
+  : Promise.resolve();
+let started = false;
+const go = () => { if (started) return; started = true; start(); };
+fontsReady.then(go, go);
+if (document.fonts && document.fonts.addEventListener) {
+  document.fonts.addEventListener('loadingdone', () => { if (started) surfaces.forEach(relayout); });
+}
+})();
+</script>
+</body>
+</html>

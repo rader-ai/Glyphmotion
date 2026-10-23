@@ -1,0 +1,32 @@
+{
+  "criterion": "viral",
+  "method": "Loaded each page in Playwright at 1280x900 and 400x850, captured frames at 0.4s, 2s and 4.5s for the first-3-seconds hook, then triggered each share moment (hold crucible, hold hero, hold storm button, type 'whale' and hold the reef button) and screenshotted 4 frames during and 5 after release, as a mental screen recording. Judged mobile first screens separately.",
+  "scores": {
+    "matter": {
+      "score": 6,
+      "best": "The hero opens on a glowing molten stream pouring into a lava pool right under a big 'Make it while it is liquid' headline, which reads as a thumbnail on mobile too.",
+      "worst": "The share moment (hold the crucible) sits in section 04 mid-page, not in the hero, and the page-flood on release is a dim ember grid behind body text that barely reads as an event in frames; the crucible itself is a small box on a mostly empty dark page.",
+      "evidence": "matter-d-0b shows the pour hero in 2s. Hold frames show the crucible filling and a 'RELEASE' label, release frame (rel1) shows a faint red-orange character wash over the text then it cools. 'COOLING' feedback and a toast exist but the flood is low contrast. Mobile hero (mob-matter.png) keeps the vertical pour but the pour column collides with headline text on the right."
+    },
+    "signal": {
+      "score": 7,
+      "best": "Giant CARRIER wordmark decodes from scrambled glyphs ('Know it arri*>0=') in the first second, and the share moment lives in the hero itself: hold Space or hold the hero and a ring blooms, then release gives a chromatic rainbow 'BROADCAST SENT' burst across the wordmark. Hint with a kbd chip is directly under the CTA.",
+      "worst": "Share moment is desktop-leaning (Hold Space is first in the hint), the ring charge visual is small and thin during the hold, and on a 400px phone the oscilloscope wordmark is a thin strip of mushy glyphs with a big empty gap above the copy, so the hook is weak where most sharing happens.",
+      "evidence": "signal-d-0a/0b/0c show decode then locked wordmark. hold1/hold3 show a small amber percent ring ('100%'). rel0 shows full-width RGB-split letters with a large radial ring and 'BROADCAST SENT'; rel4 settles back. mob-signal.png shows illegible tall-gap hero."
+    },
+    "sky": {
+      "score": 6,
+      "best": "Sunrise gradient with a MERIDIAN character wordmark and a live time-of-day chip gives a pretty, phone-friendly first screen; storm release throws rainbow character lightning across the sky.",
+      "worst": "The share moment is a plain pill button 3 sections down, the hold feedback is mostly a progress fill and 'GATHERING...' text, and the aftermath is a washed-out gray page with small noisy characters, so a screen recording would look like a UI button rather than a spectacle. Hero wordmark is blurry and low-contrast.",
+      "evidence": "sky-d-0a shows a good dawn scene with blurry word. sky-d-hold1/hold3 show 'GATHERING...' then 'STORM CALLED' with a nearly unchanged gray backdrop. rel0 shows a rainbow arc of characters behind the heading; rel1 onward reverts to 'HOLD TO GATHER' quickly. Mobile hero shows buttons and hint pill stacked, wordmark small and fuzzy."
+    },
+    "creatures": {
+      "score": 8,
+      "best": "The 'whale' easter egg: the hero hint literally tells you to type whale and offers a '(or call it)' tap link, which works on phones, and a huge character whale glides across the whole viewport over the headline for several seconds. It is the most quote-postable moment of the four. Hero also has a school of glyph fish reacting to the cursor and a bright coral CTA.",
+      "worst": "The reef hold-to-charge section is a small canvas that looks nearly the same during the hold, so the second share moment underwhelms; the hero's glyph fish are quite faint on mobile.",
+      "evidence": "whale.png frames at 0.8s to 1.8s show the whale body entering, crossing and overlapping 'a school.' with a bloom. creatures-d-0a shows the readable hero with discoverable secret copy; mob-creatures.png shows the hint and '(or call it)' link visible on first screen at 400px. hold frames show only a thin progress line and small shifts in fish."
+    }
+  },
+  "winner": "creatures",
+  "one_line_verdict": "Creatures wins because its whale easter egg is announced in the hero, works with a tap on a phone, and fills the whole screen in a way people would post, while the others hide a smaller payoff deeper in the page."
+}

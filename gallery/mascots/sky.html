@@ -1,0 +1,1420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nomi: the Meridian mascot</title>
+<meta name="description" content="Nomi is a small shadow-keeper who tells time by how long they stand. A mascot pitch for Meridian, the shared calendar that follows the sun.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#f1f5ff; --mut:#c3cfe6; --sun:#ffc27a; --sun2:#ff9f6b; --cool:#8fd0ff; --night:#070b1e;
+  --panel:rgba(8,12,34,.78); --panel2:rgba(14,20,52,.9); --edge:rgba(190,215,255,.26);
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --disp:"Bebas Neue", Impact, "Arial Narrow", "Helvetica Neue", sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:#0a1030;scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:#0a1030 linear-gradient(180deg,#0a1030 0%,#14183f 40%,#241c4a 75%,#3a2650 100%) fixed;color:var(--ink);font:400 15px/1.7 var(--mono);overflow-x:hidden;min-height:100vh}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.stage{transition:none}.btn,.ecard{transition:none}}
+canvas{display:block}
+a{color:var(--sun)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:focus-visible{outline:2px solid #fff;outline-offset:3px;box-shadow:0 0 0 5px rgba(255,194,122,.6)}
+.skip{position:absolute;left:8px;top:-60px;background:#fff;color:#111;padding:10px 14px;border-radius:6px;z-index:200}
+.skip:focus{top:8px}
+.top{position:sticky;top:0;z-index:50;background:rgba(7,10,28,.86);border-bottom:1px solid var(--edge);backdrop-filter:blur(6px)}
+.top-in{max-width:1180px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.brand{font:400 26px/1 var(--disp);letter-spacing:.09em;color:#fff;text-decoration:none;text-shadow:0 0 14px rgba(255,194,122,.45)}
+.brand small{font:600 10px/1 var(--mono);letter-spacing:.16em;color:var(--sun);margin-left:10px;text-transform:uppercase}
+.top nav{display:flex;gap:2px;flex-wrap:wrap;margin-left:auto}
+.top nav a{font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#e7eefc;text-decoration:none;padding:11px 10px;border-radius:6px}
+.top nav a:hover{background:rgba(255,194,122,.12);color:#fff}
+section{padding:84px 16px 20px}
+#meet{padding-top:56px}
+.wrap{max-width:1100px;margin:0 auto}
+.eyebrow{display:inline-block;font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:#fff;background:var(--panel);border:1px solid var(--edge);padding:8px 10px;border-radius:4px;margin:0 0 16px}
+h1{margin:0;font:400 clamp(84px,13vw,150px)/.85 var(--disp);letter-spacing:.03em;text-shadow:0 0 40px rgba(255,194,122,.35),0 4px 30px rgba(0,0,0,.4)}
+h2{margin:0 0 14px;font:400 clamp(44px,8vw,84px)/.94 var(--disp);letter-spacing:.02em;text-wrap:balance;text-shadow:0 2px 26px rgba(0,0,0,.5)}
+h3{margin:0 0 8px;font:600 13px/1.3 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--sun)}
+.hh{display:flex;align-items:flex-end;gap:12px 40px;flex-wrap:wrap;margin-bottom:20px}
+.tag{font-size:clamp(15px,1.7vw,19px);max-width:540px;margin:0 0 8px;color:#fff}
+.lede{max-width:700px;margin:0 0 26px;color:#e9f0ff;font-size:15px}
+.panel{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:20px}
+
+/* stages */
+.stage{position:relative;border-radius:16px;border:1px solid var(--edge);overflow:hidden;height:clamp(300px,44vw,440px);background:#1d2a60;transition:height .6s cubic-bezier(.2,.8,.2,1);box-shadow:0 20px 60px -20px rgba(0,0,0,.6)}
+.stage.min{height:112px}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:pan-y}
+.stage:focus-visible{outline:2px solid #fff;outline-offset:4px}
+.stage .corner{position:absolute;right:12px;top:10px;font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#fff;background:rgba(7,10,28,.66);border:1px solid var(--edge);padding:7px 10px;border-radius:999px;pointer-events:none}
+.mood{color:var(--sun);font-weight:700}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 8px;align-items:center}
+.btn{font:700 12px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;border:1px solid var(--edge);border-radius:8px;padding:14px 18px;min-height:46px;cursor:pointer;color:#fff;background:rgba(10,16,42,.8);transition:transform .2s,background .3s,border-color .3s,box-shadow .3s;touch-action:manipulation}
+.btn:hover{border-color:var(--sun);background:rgba(60,48,92,.8);box-shadow:0 0 24px -6px rgba(255,194,122,.6)}
+.btn:active{transform:translateY(2px) scale(.97)}
+.btn[aria-pressed=true]{background:rgba(255,194,122,.2);border-color:var(--sun)}
+.btn.pri{background:linear-gradient(180deg,#ffd49b,#ff9f6b);color:#2a1424;border-color:transparent}
+.btn.bad{background:rgba(60,10,24,.78);border-color:rgba(255,130,130,.6);color:#ffd5d5}
+.btn.ok{background:rgba(14,60,40,.78);border-color:rgba(130,235,170,.6);color:#d5ffe4}
+.btn:disabled{opacity:.6;cursor:wait}
+.clockline{margin:6px 0 0;font-size:13px;color:var(--mut)}
+.hint{font-size:13px;color:#fff;background:var(--panel);border:1px solid var(--edge);border-radius:999px;display:inline-block;padding:9px 16px;margin:8px 0 0}
+.hint b{color:var(--sun)}
+
+/* why */
+.why{display:grid;grid-template-columns:1.2fr 1fr;gap:30px;align-items:start}
+.why p{margin:0 0 14px;color:#e9f0ff}
+.facts{display:grid;gap:12px}
+.fact b{display:block;font:400 34px/1 var(--disp);letter-spacing:.04em;color:#fff;margin-bottom:4px}
+.fact span{font-size:13px;color:var(--mut)}
+
+
+.bigq{max-width:820px;margin:0 0 26px;font:400 clamp(20px,2.6vw,28px)/1.45 var(--mono);color:#fff;border-left:3px solid var(--sun);padding-left:18px}
+.trio{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.trio p{margin:0;color:#e9f0ff;font-size:14.5px}
+.dayh{margin:34px 0 12px}
+.day{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.dcard{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.dcard .sh{display:block;height:10px;border-radius:5px;width:var(--w);background:linear-gradient(90deg,#05061a,rgba(5,6,26,.15));margin-bottom:12px;margin-left:0}
+.dcard .sh[style*="--r"]{margin-left:auto;background:linear-gradient(270deg,#05061a,rgba(5,6,26,.15))}
+.dcard b{display:block;font:400 32px/1 var(--disp);letter-spacing:.05em;color:#fff}
+.dcard p{margin:6px 0 0;font-size:13px;color:var(--mut)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:26px 0 0}
+.stats div{text-align:center;padding:14px;border:1px dashed var(--edge);border-radius:12px}
+.stats b{display:block;font:400 64px/1 var(--disp);color:var(--sun)}
+.stats span{font-size:12.5px;color:var(--mut)}
+.closer{max-width:760px;margin:26px 0 0;font-size:16px;color:#fff}
+/* emotion sheet */
+.sheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:20px}
+.ecard{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;justify-content:flex-start;border:1px solid var(--edge);border-radius:14px;background:var(--panel);overflow:hidden;transition:transform .25s,border-color .3s,box-shadow .3s}
+.ecard:hover{transform:translateY(-3px);border-color:var(--sun);box-shadow:0 14px 40px -14px rgba(255,194,122,.5)}
+.ecard:focus-visible{outline:2px solid #fff;outline-offset:3px;box-shadow:0 0 0 5px rgba(255,194,122,.6)}
+.ecard .cvw{position:relative;height:190px;background:#1d2a60}
+.ecard canvas{position:absolute;inset:0;width:100%;height:100%}
+.ecard .meta{padding:12px 14px 14px}
+.ecard h3{margin:0 0 6px;font:400 30px/1 var(--disp);letter-spacing:.05em;color:#fff;text-transform:none}
+.ecard p{margin:0;font-size:12.5px;line-height:1.55;color:var(--mut)}
+.toast{min-height:24px;margin:14px 0 0;font-size:13px;color:var(--sun)}
+
+/* playground */
+.play{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start}
+.play .stage{height:clamp(280px,40vw,400px)}
+.ctrl h3{margin-top:18px}.ctrl h3:first-child{margin-top:0}
+.ctrl .row{margin:8px 0}
+.field{width:100%;font:500 14px/1 var(--mono);color:#fff;background:rgba(5,8,24,.85);border:1px solid var(--edge);border-radius:8px;padding:14px;min-height:46px}
+.field:focus-visible{border-color:var(--sun)}
+.msg{min-height:22px;font-size:13px;margin:8px 0 0}.msg.bad{color:#ffb3b3}.msg.ok{color:#b6f5c9}
+.shake{animation:shake .42s linear}
+@keyframes shake{20%{transform:translate(-5px,1px)}40%{transform:translate(5px,-1px)}60%{transform:translate(-3px,0)}80%{transform:translate(2px,1px)}}
+@media (prefers-reduced-motion:reduce){.shake{animation:none;outline:2px solid #ffb3b3}}
+.secret{margin-top:16px;border-left:3px solid var(--sun);padding:6px 0 6px 14px;color:#fff;font-size:14px}
+
+/* in the wild */
+.wild{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;margin-top:22px}
+.win{border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:#0c1130}
+.chrome{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#161c44;border-bottom:1px solid var(--edge);font-size:11px;color:var(--mut)}
+.chrome i{width:9px;height:9px;border-radius:50%;background:#59638f;display:block}
+.chrome span{margin-left:8px;background:#0c1130;padding:3px 10px;border-radius:999px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scene{position:relative;height:290px;overflow:hidden;background:#1d2a60}
+.scene .cvw{position:absolute;left:0;right:0;bottom:0;top:58px}
+.scene canvas{position:absolute;inset:0;width:100%;height:100%}
+.cap{padding:12px 14px;font-size:12.5px;color:var(--mut);line-height:1.55}
+.cap b{color:#fff;display:block;font:600 12px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.fakenav{height:58px;display:flex;align-items:center;gap:14px;padding:0 12px;background:#10163d;border-bottom:1px solid var(--edge)}
+.fakenav .nm{font:400 22px/1 var(--disp);letter-spacing:.09em}
+.fakenav .nv{position:relative;width:120px;height:56px;flex:none}
+.fakenav .nv canvas{position:absolute;inset:0;width:100%;height:100%}
+.fakenav .lk{white-space:nowrap;font-size:11px;color:var(--mut);letter-spacing:.08em}
+.bars{padding:16px 14px;display:grid;gap:10px}
+.bars i{display:block;height:10px;border-radius:5px;background:rgba(190,215,255,.14)}
+.overlay{position:absolute;left:0;right:0;top:8px;z-index:2;text-align:center;pointer-events:none}
+.overlay b{display:block;font:400 40px/1 var(--disp);letter-spacing:.05em;color:#fff;text-shadow:0 2px 20px rgba(0,0,0,.6)}
+.overlay span{font-size:12px;color:#fff;background:rgba(7,10,28,.7);padding:4px 10px;border-radius:999px}
+
+/* rules + sketches */
+.rules{counter-reset:r;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:20px;list-style:none;padding:0}
+.rules li{counter-increment:r;position:relative;padding:18px 18px 18px 64px;background:var(--panel);border:1px solid var(--edge);border-radius:12px}
+.rules li::before{content:counter(r);position:absolute;left:16px;top:10px;font:400 44px/1 var(--disp);color:var(--sun)}
+.rules b{display:block;color:#fff;margin-bottom:4px}
+.rules span{font-size:13.5px;color:var(--mut)}
+.sketches{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:20px}
+.sk{border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:var(--panel)}
+.sk .cvw{position:relative;height:150px;background:linear-gradient(180deg,#1b2458,#33305f)}
+.sk canvas{position:absolute;inset:0;width:100%;height:100%}
+.sk div.t{padding:12px 14px;font-size:13px;color:var(--mut)}
+.sk b{color:#fff;display:block;font:400 26px/1 var(--disp);letter-spacing:.05em;margin-bottom:4px}
+footer{padding:80px 16px 120px;text-align:center;color:var(--mut);font-size:13px}
+
+/* dock (the companion that follows you down the page) */
+.dock{position:fixed;right:16px;bottom:16px;z-index:70;width:170px;border:1px solid var(--edge);border-radius:14px;overflow:hidden;background:#1d2a60;box-shadow:0 14px 40px -10px rgba(0,0,0,.6)}
+.dock[hidden]{display:none}
+.dock .cvw{position:relative;height:100px;pointer-events:none}
+.dock canvas{position:absolute;inset:0;width:100%;height:100%}
+.dock .bar{display:flex;border-top:1px solid var(--edge);background:rgba(7,10,28,.85)}
+.dock .bar button{flex:1;font:600 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#fff;background:none;border:0;padding:11px 4px;min-height:40px;cursor:pointer}
+.dock .bar button+button{border-left:1px solid var(--edge)}
+.dock .bar button:hover{background:rgba(255,194,122,.14)}
+.dockshow{position:fixed;right:16px;bottom:16px;z-index:70;font:700 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#fff;background:var(--panel2);border:1px solid var(--edge);border-radius:999px;padding:13px 16px;min-height:44px;cursor:pointer}
+.dockshow[hidden]{display:none}
+@media (max-width:520px){.fakenav .lk{display:none}}
+@media (max-width:760px){
+  .why,.play{grid-template-columns:1fr}
+  section{padding-top:64px}
+  .dock{width:132px}.dock .cvw{height:78px}
+  .top nav a{padding:10px 7px;font-size:10px}
+  .top nav{margin-left:0}
+  .top{position:static}
+}
+@media (max-width:1499px){
+  .dock{left:0;right:0;bottom:0;width:auto;border-radius:0;border-width:1px 0 0;display:flex;align-items:stretch;height:56px}
+  .dock[hidden]{display:none}
+  .dock .cvw{height:56px;width:150px;flex:none}
+  .dock .bar{flex:1;border-top:0;border-left:1px solid var(--edge)}
+  .dock .bar button{font-size:11px}
+  .dockshow{left:auto;right:16px;bottom:12px}
+  html{scroll-padding-bottom:72px}
+  body{padding-bottom:64px}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#meet">Skip to the pitch</a>
+<div id="live" class="sr" role="status" aria-live="polite"></div>
+<header class="top"><div class="top-in">
+  <a class="brand" href="#meet">MERIDIAN<small>Mascot</small></a>
+  <nav aria-label="Pitch sections"><a href="#meet">Meet</a><a href="#why">Why</a><a href="#emotions">Emotions</a><a href="#play">Play</a><a href="#wild">In the wild</a><a href="#rules">Rules</a><a href="#sketches">Sketches</a></nav>
+</div></header>
+
+<main>
+<section id="meet"><div class="wrap">
+  <p class="eyebrow">Mascot pitch for Meridian, the shared calendar that follows the sun</p>
+  <div class="hh"><h1>NOMI</h1>
+  <p class="tag">A small shadow-keeper who tells time by how long they stand. Their pin catches the light. Their shadow keeps the schedule.</p></div>
+  <div class="stage" id="stageHero" tabindex="0" role="group" aria-label="Nomi, the live mascot. Keyboard: left and right arrows move the light, Enter pokes, P pets, F feeds, S sends to sleep.">
+    <canvas id="cvHero" aria-hidden="true"></canvas>
+    <div class="corner" aria-hidden="true">feeling: <span class="mood">content</span></div>
+  </div>
+  <div class="row" role="group" aria-label="Play with Nomi">
+    <button class="btn" data-act="pet" type="button">Pet</button>
+    <button class="btn" data-act="poke" type="button">Poke</button>
+    <button class="btn" data-act="feed" type="button">Toss a spark</button>
+    <button class="btn" data-sleep aria-pressed="false" type="button">Send to sleep</button>
+    <button class="btn" data-act="shrink" aria-pressed="false" type="button">Make small</button>
+  </div>
+  <p class="clockline" id="clockline"></p>
+  <p class="hint"><b>Try:</b> move your pointer over the stage, it becomes the sun. <b>Secret:</b> grab the glowing pin and slide sideways to move the real sun.</p>
+</div></section>
+
+<section id="why"><div class="wrap">
+  <p class="eyebrow">Why this character</p>
+  <h2>Every calendar has a sundial inside it</h2>
+  <p class="bigq">A cloud, a sun, a raindrop with eyes. Every calendar app would pick one of those. Meridian follows the sun, so we asked what the oldest calendar object on earth is. The answer is a sundial, and the heart of a sundial is one small upright pin.</p>
+  <div class="trio">
+    <div class="panel"><h3>The idea</h3><p>The pin is called a gnomon. It stands in the light and throws a shadow, and the shadow tells the time. Nomi is that pin with a face: a warm pebble body, a glowing blade, two small arms, and a shadow that is half of the character.</p></div>
+    <div class="panel"><h3>What nobody else has</h3><p>Nomi's shadow runs a beat late, stretches long at dawn and dusk, and shrinks to a puddle at noon. Now and then it moves on its own. Nomi turns around and gives it a suspicious look. A belly strip of day ticks glows at the current hour.</p></div>
+    <div class="panel"><h3>Why people will love it</h3><p>You can pet it, feed it a spark, pick it up, and slide its pin to move the sun across the page. It sleeps when you leave, worries when a form fails, and never nags. It feels like a small pet that happens to know what time it is.</p></div>
+  </div>
+  <h3 class="dayh">One creature, four times of day</h3>
+  <div class="day">
+    <div class="dcard"><span class="sh" style="--w:86%"></span><b>8 AM</b><p>Stands tall. A long shadow stretches across the page.</p></div>
+    <div class="dcard"><span class="sh" style="--w:24%"></span><b>Noon</b><p>Round and bright. The shadow is a puddle underfoot.</p></div>
+    <div class="dcard"><span class="sh" style="--w:78%;--r:1"></span><b>6 PM</b><p>The shadow swings the other way. Nomi gets sleepy.</p></div>
+    <div class="dcard"><span class="sh" style="--w:12%"></span><b>Night</b><p>The pin becomes a bedside lamp. Nomi sleeps under it.</p></div>
+  </div>
+  <div class="stats">
+    <div><b>10</b><span>feelings that read at a glance</span></div>
+    <div><b>1</b><span>small canvas, no full-page layer</span></div>
+    <div><b>0</b><span>words needed to tell you the time</span></div>
+  </div>
+  <p class="closer">A mascot should earn its place on the page. Nomi does a real job: it makes the product's one big idea, time follows the sun, something you can touch.</p>
+</div></section>
+
+<section id="emotions"><div class="wrap">
+  <p class="eyebrow">Emotion sheet</p>
+  <h2>Ten feelings, all live</h2>
+  <p class="lede">Each card is a real Nomi in that mood, glancing around and following your pointer. Click or press a card and the live Nomi on this page feels it for six seconds (scroll up and watch, or look at the companion).</p>
+  <div class="sheet" id="sheet">
+    <button class="ecard" data-emo="content" type="button"><div class="cvw"><canvas id="cv-content" aria-hidden="true"></canvas></div><div class="meta"><h3>Content</h3><p>Trigger: nothing is happening and that is fine. The home pose. Slow breathing, soft smile, easy sway.</p></div></button>
+    <button class="ecard" data-emo="curious" type="button"><div class="cvw"><canvas id="cv-curious" aria-hidden="true"></canvas></div><div class="meta"><h3>Curious</h3><p>Trigger: your pointer arrives, you start typing, something new shows up. One brow up, pin leans toward it.</p></div></button>
+    <button class="ecard" data-emo="delighted" type="button"><div class="cvw"><canvas id="cv-delighted" aria-hidden="true"></canvas></div><div class="meta"><h3>Delighted</h3><p>Trigger: petting, eating a spark, a small win. Happy-arc eyes, blush, hops, sparks off the pin.</p></div></button>
+    <button class="ecard" data-emo="surprised" type="button"><div class="cvw"><canvas id="cv-surprised" aria-hidden="true"></canvas></div><div class="meta"><h3>Surprised</h3><p>Trigger: a poke, a very fast scroll, you wake them up. Eyes wide, pin shoots up, body stretches tall.</p></div></button>
+    <button class="ecard" data-emo="sleepy" type="button"><div class="cvw"><canvas id="cv-sleepy" aria-hidden="true"></canvas></div><div class="meta"><h3>Sleepy</h3><p>Trigger: 25 quiet seconds by day, 10 at night, or the evening hours. Heavy lids, drooping pin, slow bob.</p></div></button>
+    <button class="ecard" data-emo="asleep" type="button"><div class="cvw"><canvas id="cv-asleep" aria-hidden="true"></canvas></div><div class="meta"><h3>Asleep</h3><p>Trigger: a minute of quiet, nighttime, or the sleep button. The pin becomes a nightlight and the z's float up.</p></div></button>
+    <button class="ecard" data-emo="shy" type="button"><div class="cvw"><canvas id="cv-shy" aria-hidden="true"></canvas></div><div class="meta"><h3>Shy</h3><p>Trigger: three pokes in a row, being picked up, the light getting too close. Blush, looks away, shadow tucks in.</p></div></button>
+    <button class="ecard" data-emo="concerned" type="button"><div class="cvw"><canvas id="cv-concerned" aria-hidden="true"></canvas></div><div class="meta"><h3>Concerned</h3><p>Trigger: a form error or failed request. Worried brows, small frown, cooler color, pin sags.</p></div></button>
+    <button class="ecard" data-emo="proud" type="button"><div class="cvw"><canvas id="cv-proud" aria-hidden="true"></canvas></div><div class="meta"><h3>Proud</h3><p>Trigger: something finished, a goal reached. Chest up, tall bright pin, and the biggest, most heroic shadow.</p></div></button>
+    <button class="ecard" data-emo="focused" type="button"><div class="cvw"><canvas id="cv-focused" aria-hidden="true"></canvas></div><div class="meta"><h3>Focused</h3><p>Trigger: loading, saving, syncing. Narrowed eyes, level brows, sparks circling the pin like a progress ring.</p></div></button>
+  </div>
+  <p class="toast" id="sheetToast" aria-hidden="true"></p>
+</div></section>
+
+<section id="play"><div class="wrap">
+  <p class="eyebrow">Playground</p>
+  <h2>Break things politely</h2>
+  <p class="lede">Nomi reacts to what the page is doing. Press a button to simulate it, fill in the real form, or just play with them directly.</p>
+  <div class="play">
+    <div>
+      <div class="stage" id="stagePlay" tabindex="0" role="group" aria-label="A second live Nomi. Keyboard: left and right arrows move the light, Enter pokes, P pets, F feeds, S sends to sleep.">
+        <canvas id="cvPlay" aria-hidden="true"></canvas>
+        <div class="corner" aria-hidden="true">feeling: <span class="mood">content</span></div>
+      </div>
+      <div class="row" role="group" aria-label="Play with this Nomi">
+        <button class="btn" data-act="pet" data-stage="play" type="button">Pet</button>
+        <button class="btn" data-act="poke" data-stage="play" type="button">Poke</button>
+        <button class="btn" data-act="feed" data-stage="play" type="button">Toss a spark</button>
+        <button class="btn" data-sleep data-stage="play" aria-pressed="false" type="button">Send to sleep</button>
+      </div>
+      <p class="secret"><b>Secret:</b> grab the glowing tip of the pin and drag left or right. You are moving the sun. The shadow sweeps the ground, the sky changes, and Nomi yawns at dawn, beams at noon and dozes at dusk. Let go and the real time creeps back.</p>
+    </div>
+    <div class="panel ctrl">
+      <h3>Page events</h3>
+      <div class="row">
+        <button class="btn bad" data-ev="error" type="button">Form error</button>
+        <button class="btn ok" data-ev="success" type="button">Success</button>
+        <button class="btn" data-ev="loading" type="button">Loading</button>
+        <button class="btn" data-ev="night" type="button">Nighttime</button>
+        <button class="btn" data-ev="idle" type="button">Nobody home</button>
+      </div>
+      <h3>A real form</h3>
+      <form id="demoForm" novalidate>
+        <label class="sr" for="demoEmail">Email address</label>
+        <input class="field" id="demoEmail" type="email" placeholder="name@example.com" autocomplete="off">
+        <div class="row"><button class="btn pri" type="submit">Join the waitlist</button></div>
+        <p class="msg" id="formMsg" role="status"></p>
+      </form>
+      <p style="font-size:12.5px;color:var(--mut);margin:0">Type and Nomi reads along. Submit it empty and they worry. Submit a real-looking address and they celebrate. Scroll fast with the companion visible and it gets dizzy.</p>
+    </div>
+  </div>
+</div></section>
+
+<section id="wild"><div class="wrap">
+  <p class="eyebrow">In the wild</p>
+  <h2>Nomi on a normal Tuesday</h2>
+  <div class="wild">
+    <div class="win"><div class="chrome"><i></i><i></i><i></i><span>meridian.app/week</span></div>
+      <div class="fakenav"><div class="nv"><canvas id="cvNav" aria-hidden="true"></canvas></div><div class="nm">MERIDIAN</div><div class="lk">WEEK &nbsp; TEAMS &nbsp; SUN</div></div>
+      <div class="bars"><i style="width:80%"></i><i style="width:62%"></i><i style="width:71%"></i><i style="width:40%"></i></div>
+      <div class="cap"><b>Tucked in the nav</b>A pebble the size of a thumbnail. Eyes, a pin, and a hop when you hover the bar. It never takes a menu slot.</div></div>
+    <div class="win"><div class="chrome"><i></i><i></i><i></i><span>meridian.app/old-plan</span></div>
+      <div class="scene"><div class="cvw" id="bg404"><canvas id="cv404" aria-hidden="true"></canvas></div><div class="overlay"><b>404</b><span>That day wandered off.</span></div></div>
+      <div class="cap"><b>On the 404 page</b>Worried, curious, then shy, on a loop. Question marks drift up. A link takes you back to today.</div></div>
+    <div class="win"><div class="chrome"><i></i><i></i><i></i><span>meridian.app/sync</span></div>
+      <div class="scene"><div class="cvw" id="bgLoad"><canvas id="cvLoad" aria-hidden="true"></canvas></div><div class="overlay"><span>Syncing your week</span></div></div>
+      <div class="cap"><b>During loading</b>Focused, with sparks circling the pin as the progress ring. Nobody stares at a spinner.</div></div>
+    <div class="win"><div class="chrome"><i></i><i></i><i></i><span>meridian.app/welcome</span></div>
+      <div class="scene"><div class="cvw" id="bgWin"><canvas id="cvWin" aria-hidden="true"></canvas></div><div class="overlay"><b>YOU'RE IN</b></div></div>
+      <div class="cap"><b>Celebrating a sign-up</b>Delighted, then proud. Confetti falls and the shadow grows to hero size.</div></div>
+    <div class="win"><div class="chrome"><i></i><i></i><i></i><span>meridian.app/ (footer)</span></div>
+      <div class="scene"><div class="cvw" id="bgFoot"><canvas id="cvFoot" aria-hidden="true"></canvas></div><div class="overlay"><span>Good night. Back at sunrise.</span></div></div>
+      <div class="cap"><b>Asleep in the footer</b>Pin dimmed to a nightlight, z's floating up, shadow tucked small. The page says goodnight so Nomi does not have to.</div></div>
+  </div>
+</div></section>
+
+<section id="rules"><div class="wrap">
+  <p class="eyebrow">Character rules</p>
+  <h2>How Meridian uses Nomi</h2>
+  <ol class="rules">
+    <li><b>Appears at moments, not everywhere.</b><span>Welcome, empty states, errors, long waits, finished work, and the footer. Never in the middle of a form or on a billing page.</span></li>
+    <li><b>Never blocks anything.</b><span>Nomi lives beside content, never over it. One tap hides or sleeps them, and the choice is remembered. Reduced motion gives calm still poses that still change with feeling.</span></li>
+    <li><b>The shadow is always honest.</b><span>It follows the real time of day and the real light. Never fake it, and never give Nomi a shadow that points toward the sun.</span></li>
+    <li><b>Quiet voice.</b><span>If Nomi speaks, it is a short plain sentence in lowercase with no exclamation marks, like "that day wandered off." No jokes at the user's expense, no guilt, no nagging.</span></li>
+    <li><b>Bad news gets worry, never mockery.</b><span>Errors make Nomi concerned and never silly. Celebration is for real wins, not every click.</span></li>
+    <li><b>Wake kindly.</b><span>Nomi falls asleep when the user is away or it is late, and never asks for attention. Anything the user touches wakes them gently.</span></li>
+  </ol>
+</div></section>
+
+<section id="sketches"><div class="wrap">
+  <p class="eyebrow">The sketches</p>
+  <h2>Three that lost</h2>
+  <div class="sketches">
+    <div class="sk"><div class="cvw"><canvas id="sk1" aria-hidden="true"></canvas></div><div class="t"><b>Wick, the moth</b>Circles the pointer like a lamp. Lovely, but a bug has no body to hold seven moods, and everyone has seen a moth near a light.</div></div>
+    <div class="sk"><div class="cvw"><canvas id="sk2" aria-hidden="true"></canvas></div><div class="t"><b>Cumulo, the cloud</b>Rains when you press. This was the obvious weather move that round 1 was marked down for, so it stayed a sketch.</div></div>
+    <div class="sk"><div class="cvw"><canvas id="sk3" aria-hidden="true"></canvas></div><div class="t"><b>Tick, the clock hand</b>A needle that points at you. Clever, but a pointer with eyes is a widget, not a friend, and it cannot hop, blush or sleep.</div></div>
+  </div>
+</div></section>
+</main>
+<footer>Nomi for Meridian. A pitch built from characters on a canvas. Nothing leaves your browser.</footer>
+
+<div class="dock" id="dock" hidden role="complementary" aria-label="Nomi companion">
+  <div class="cvw"><canvas id="cvDock" aria-hidden="true"></canvas></div>
+  <div class="bar"><button id="dockSleep" type="button" aria-pressed="false">Sleep</button><button id="dockHide" type="button">Hide</button></div>
+</div>
+<button class="dockshow" id="dockShow" type="button" hidden>Wake Nomi</button>
+
+<script>
+(() => {
+'use strict';
+const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const rnd = (a, b) => a + Math.random() * (b - a);
+function hash2(x, y) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const FAMILY = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
+const CH = []; for (let i = 0; i < 256; i++) CH[i] = String.fromCharCode(i);
+const cc = (s) => s.charCodeAt(0);
+const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+const FILL = new Array(1 << 18);
+function fillOf(k) {
+  let s = FILL[k];
+  if (!s) s = FILL[k] = 'rgba(' + ((((k >> 10) & 15) << 4) | 8) + ',' + ((((k >> 6) & 15) << 4) | 8) + ',' + ((((k >> 2) & 15) << 4) | 8) + ',' + ((((k & 3) + 1) / 4).toFixed(2)) + ')';
+  return s;
+}
+
+/* ================= character grid layer ================= */
+class Layer {
+  constructor(cv, o) {
+    this.cv = cv; this.o = o; this.ctx = cv.getContext('2d');
+    this.bcv = document.createElement('canvas'); this.bctx = this.bcv.getContext('2d');
+    this.bloom = o.bloom == null ? 0.35 : o.bloom; this.ready = false;
+    this.cols = 1; this.rows = 1; this.cw = 6; this.chh = 12; this.vw = 1; this.vh = 1;
+  }
+  layout() {
+    const cv = this.cv, o = this.o;
+    const r = cv.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) { this.ready = false; return; }
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const fs = o.fs; this.fs = fs; this.font = '600 ' + fs + 'px ' + FAMILY;
+    const ctx = this.ctx; ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.vw = r.width; this.vh = r.height;
+    cv.width = Math.round(this.vw * dpr); cv.height = Math.round(this.vh * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = this.font; ctx.textBaseline = 'middle';
+    this.cw = ctx.measureText('M').width || fs * 0.6; this.chh = fs * 1.2;
+    this.cols = Math.ceil(this.vw / this.cw); this.rows = Math.ceil(this.vh / this.chh);
+    const N = this.N = this.cols * this.rows;
+    this.Bc = new Uint8Array(N); this.Br = new Uint8ClampedArray(N); this.Bg = new Uint8ClampedArray(N); this.Bb = new Uint8ClampedArray(N); this.Ba = new Uint8ClampedArray(N);
+    this.bcv.width = Math.max(1, Math.round(cv.width / 5)); this.bcv.height = Math.max(1, Math.round(cv.height / 5));
+    this.ready = true; this.dpr = dpr;
+    if (o.onLayout) o.onLayout(this);
+  }
+  clearBuf() { this.Bc.fill(0); }
+  put(c, r, ch, R, G, B, A) {
+    if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return;
+    const i = r * this.cols + c; this.Bc[i] = ch; this.Br[i] = R; this.Bg[i] = G; this.Bb[i] = B; this.Ba[i] = A;
+  }
+  putXY(x, y, ch, R, G, B, A) { this.put(Math.floor(x / this.cw), Math.floor(y / this.chh), ch, R, G, B, A); }
+  paint() {
+    const { ctx, cols, rows, cw, chh, Bc, Br, Bg, Bb, Ba } = this;
+    ctx.clearRect(0, 0, this.vw, this.vh);
+    ctx.font = this.font; ctx.textBaseline = 'middle'; let last = -1;
+    for (let r = 0; r < rows; r++) {
+      const y = r * chh + chh * 0.5 + 0.5;
+      for (let c = 0, i = r * cols; c < cols; c++, i++) {
+        const ch = Bc[i]; if (!ch) continue;
+        const k = ((Br[i] >> 4) << 10) | ((Bg[i] >> 4) << 6) | ((Bb[i] >> 4) << 2) | (Ba[i] >> 6);
+        if (k !== last) { ctx.fillStyle = fillOf(k); last = k; }
+        ctx.fillText(CH[ch], c * cw, y);
+      }
+    }
+  }
+  bloomPass(x0, y0, x1, y1) {
+    if (!this.bloom) return;
+    const { ctx, bctx, bcv, cv } = this; const d = this.dpr;
+    if (x0 == null) { x0 = 0; y0 = 0; x1 = this.vw; y1 = this.vh; }
+    x0 = Math.max(0, Math.floor(x0 * d)); y0 = Math.max(0, Math.floor(y0 * d)); x1 = Math.min(cv.width, Math.ceil(x1 * d)); y1 = Math.min(cv.height, Math.ceil(y1 * d));
+    const sw = x1 - x0, sh = y1 - y0; if (sw < 4 || sh < 4) return;
+    const bw = Math.max(1, Math.round(sw / 5)), bh = Math.max(1, Math.round(sh / 5));
+    bctx.globalCompositeOperation = 'copy'; bctx.drawImage(cv, x0, y0, sw, sh, 0, 0, bw, bh);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = this.bloom;
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(bcv, 0, 0, bw, bh, x0, y0, sw, sh); ctx.restore();
+  }
+}
+
+/* ================= world: time of day, pointer, scroll ================= */
+const G = { px: -9999, py: -9999, pt: -99, clientDown: false, scrollV: 0, lastScrollY: window.scrollY || 0, typeT: -99, typeLen: 0, hourOv: null, hourOvT: 0, hourScrub: false, T: 0 };
+function realHour() { const d = new Date(); return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600; }
+function hourNow() { return G.hourOv != null ? G.hourOv : realHour(); }
+const PAL = [
+  [0, [6, 8, 28], [20, 22, 56]], [4.8, [12, 16, 50], [44, 40, 86]], [5.8, [44, 58, 124], [236, 130, 112]],
+  [7, [62, 112, 190], [250, 196, 150]], [10, [34, 96, 188], [128, 190, 240]], [13, [26, 80, 176], [104, 172, 232]],
+  [16, [40, 96, 182], [176, 204, 232]], [18, [54, 56, 126], [250, 134, 82]], [19.2, [30, 30, 80], [190, 86, 112]],
+  [20.6, [12, 14, 44], [48, 44, 94]], [24, [6, 8, 28], [20, 22, 56]]
+];
+function skyAt(h) {
+  h = ((h % 24) + 24) % 24; let i = 0; while (i < PAL.length - 2 && PAL[i + 1][0] <= h) i++;
+  const a = PAL[i], b = PAL[i + 1], t = (h - a[0]) / (b[0] - a[0]);
+  const zen = mix3(a[1], b[1], t), hor = mix3(a[2], b[2], t);
+  const alt = Math.sin(Math.PI * (h - 6) / 12);
+  const day = smooth(-0.08, 0.28, alt);
+  const ground = mix3(mix3(hor, [26, 20, 62], 0.55), [40, 42, 92], 1 - day);
+  return { zen, hor, ground, alt, day, h };
+}
+const rgbs = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
+function stageBg(S, gpct) {
+  return 'linear-gradient(to bottom,' + rgbs(S.zen) + ' 0%,' + rgbs(S.hor) + ' ' + (gpct - 1) + '%,' + rgbs(mix3(S.ground, [255, 255, 255], 0.06)) + ' ' + gpct + '%,' + rgbs(S.ground) + ' 100%)';
+}
+
+/* ================= emotions ================= */
+const E = {
+  content:   { open: .95, happy: 0, sad: 0, lid: 0, mc: .5, mo: 0, mw: 1, pinUp: 1, pinLean: 0, glow: .55, blush: .1, post: 1, scl: 1, look: .8, hop: .4, bob: .5, tint: .6, shd: 1, sh: 0, bl: 0, br: 0, sleep: 0, zed: 0, orbit: 0, spark: .05, tilt: 0 },
+  curious:   { open: 1.2, happy: 0, sad: .25, lid: 0, mc: .1, mo: .25, mw: .6, pinUp: 1.15, pinLean: 0, glow: .75, blush: 0, post: 1.08, scl: 1, look: 1, hop: .7, bob: .4, tint: .6, shd: 1, sh: 0, bl: 1, br: 0, sleep: 0, zed: 0, orbit: 0, spark: 0, tilt: .5 },
+  delighted: { open: .85, happy: 1, sad: 0, lid: 0, mc: .95, mo: .75, mw: 1.25, pinUp: 1.25, pinLean: 0, glow: 1, blush: .75, post: 1.05, scl: 1.03, look: .5, hop: 1, bob: 1, tint: .95, shd: 1.1, sh: .06, bl: 0, br: 0, sleep: 0, zed: 0, orbit: 0, spark: 1, tilt: 0 },
+  surprised: { open: 1.5, happy: 0, sad: 0, lid: 0, mc: 0, mo: 1, mw: .5, pinUp: 1.45, pinLean: 0, glow: .95, blush: 0, post: 1.16, scl: 1, look: 1, hop: 0, bob: 0, tint: .55, shd: 1.1, sh: .35, bl: 1, br: 1, sleep: 0, zed: 0, orbit: 0, spark: 0, tilt: 0 },
+  sleepy:    { open: .38, happy: 0, sad: 0, lid: .5, mc: .05, mo: 0, mw: .7, pinUp: .75, pinLean: -.5, glow: .28, blush: 0, post: .92, scl: 1, look: .3, hop: .05, bob: .35, tint: .4, shd: .9, sh: 0, bl: 0, br: 0, sleep: 0, zed: 0, orbit: 0, spark: 0, tilt: 0 },
+  asleep:    { open: 0, happy: 0, sad: 0, lid: 0, mc: .3, mo: 0, mw: .6, pinUp: .68, pinLean: -.75, glow: .5, blush: .1, post: .86, scl: .98, look: 0, hop: 0, bob: .3, tint: .3, shd: .8, sh: 0, bl: 0, br: 0, sleep: 1, zed: 1, orbit: 0, spark: 0, tilt: 0 },
+  shy:       { open: .8, happy: .0, sad: .35, lid: .12, mc: -.12, mo: 0, mw: .5, pinUp: .5, pinLean: .85, glow: .45, blush: 1, post: .88, scl: .92, look: -.8, hop: .05, bob: .2, tint: .8, shd: .55, sh: .3, bl: 0, br: 0, sleep: 0, zed: 0, orbit: 0, spark: 0, tilt: 0 },
+  concerned: { open: 1.05, happy: 0, sad: 1, lid: 0, mc: -.6, mo: 0, mw: .85, pinUp: .8, pinLean: -.4, glow: .22, blush: 0, post: .94, scl: 1, look: .6, hop: .05, bob: .15, tint: .08, shd: 1.15, sh: .12, bl: 0, br: 0, sleep: 0, zed: 0, orbit: 0, spark: 0, tilt: 0 },
+  proud:     { open: .62, happy: .55, sad: 0, lid: .22, mc: .85, mo: 0, mw: 1.15, pinUp: 1.45, pinLean: 0, glow: 1, blush: .2, post: 1.13, scl: 1.06, look: .3, hop: .3, bob: .6, tint: 1, shd: 1.55, sh: 0, bl: 0, br: 0, sleep: 0, zed: 0, orbit: 0, spark: .8, tilt: 0 },
+  focused:   { open: .62, happy: 0, sad: -1, lid: .2, mc: 0, mo: 0, mw: .7, pinUp: 1.05, pinLean: 0, glow: .9, blush: 0, post: 1, scl: 1, look: 1, hop: 0, bob: .1, tint: .5, shd: 1, sh: 0, bl: 0, br: 0, sleep: 0, zed: 0, orbit: 1, spark: 0, tilt: 0 }
+};
+const ARM = { content: .12, curious: .3, delighted: 1, surprised: .85, sleepy: 0, asleep: 0, shy: .05, concerned: .1, proud: .65, focused: .2 };
+for (const k in ARM) E[k].arm = ARM[k];
+const KEYS = Object.keys(E.content);
+const ORDER = ['content', 'curious', 'delighted', 'surprised', 'sleepy', 'asleep', 'shy', 'concerned', 'proud', 'focused'];
+const SAY = {
+  content: 'Nomi is content.', curious: 'Nomi is curious about something.', delighted: 'Nomi is delighted.', surprised: 'Nomi is startled.',
+  sleepy: 'Nomi is getting sleepy.', asleep: 'Nomi is asleep.', shy: 'Nomi is feeling shy.', concerned: 'Nomi looks concerned.',
+  proud: 'Nomi looks proud.', focused: 'Nomi is concentrating.'
+};
+const LABEL = { content: 'Content', curious: 'Curious', delighted: 'Delighted', surprised: 'Surprised', sleepy: 'Sleepy', asleep: 'Asleep', shy: 'Shy', concerned: 'Concerned', proud: 'Proud', focused: 'Focused' };
+
+/* ================= actors + shared loop ================= */
+const actors = [];
+const live = { el: null, last: -99, pending: null };
+function announce(text) {
+  const el = live.el; if (!el) return;
+  const now = G.T;
+  if (now - live.last < 4) { live.pending = text; return; }
+  live.last = now; live.pending = null; el.textContent = text;
+}
+function flushAnnounce() {
+  if (live.pending && G.T - live.last >= 4) { live.last = G.T; live.el.textContent = live.pending; live.pending = null; }
+}
+
+/* particle pool kinds */
+const PK = { dust: 1, spark: 2, zed: 3, conf: 4, glint: 5, food: 6, q: 7, ember: 8 };
+
+class Nomi {
+  constructor(cv, o) {
+    this.o = o; this.cv = cv;
+    this.L = new Layer(cv, { fs: o.fs, bloom: o.bloom == null ? 0.35 : o.bloom, onLayout: () => this.onLayout() });
+    this.P = {}; for (const k of KEYS) this.P[k] = E.content[k];
+    this.emo = o.emo || 'content'; this.emoT = 0; this.nextEmo = null; this.forced = !!o.emo; this.cycle = o.cycle || null; this.cycI = 0; this.cycT = o.cycleT || 3;
+    if (this.forced) for (const k of KEYS) this.P[k] = E[this.emo][k];
+    this.vis = false; this.x = 0; this.x0 = null; this.hy = 0; this.vy = 0; this.vx = 0; this.q = 0; this.qv = 0;
+    this.pa = 0; this.pav = 0; this.pl = 0; this.hopS = 0; this.hopT = 0; this.hopTx = 0; this.target = null; this.nextHop = rnd(1.5, 3);
+    this.lookx = 0; this.looky = 0; this.gx = 0; this.gy2 = 0; this.glanceT = 1;
+    this.blinkT = rnd(1.5, 4); this.blink = 0; this.blinkPh = 0; this.breath = rnd(0, 6); this.phase = 0;
+    this.idle = 0; this.sleepFlag = false; this.lm = 0; this.lx_ = 0; this.ly_ = 0; this.lastDirX = 1; this.xs = 0; this.pas = 0; this.mischief = 0; this.mischT = rnd(9, 16);
+    this.pet = 0; this.pokes = 0; this.pokeT = 0; this.held = false; this.scrub = false; this.shake = 0; this.purr = 0; this.px = -9999; this.py = -9999; this.ptrT = -99; this.inside = false;
+    this.parts = []; for (let i = 0; i < (o.pn || 28); i++) this.parts.push({ on: 0, k: 0, ch: 0, x: 0, y: 0, vx: 0, vy: 0, t: 0, m: 1, r: 255, g: 255, b: 255 });
+    this.zT = 0; this.spT = 0; this.rect = null; this.sunS = 0; this.skyS = null; this.tickAcc = 0; this.hourSeen = -1;
+    this.foodX = null; this.mood = 0; this.lastSaid = ''; this.confetti = 0; this.fedCount = 0; this.sizeScale = 1;
+    this.tail = 0; this.noticeT = 0; this.flyT = rnd(8, 14); this.fly = null;
+    actors.push(this); this.draw1 = () => { if (this.L.ready) this.draw(); };
+  }
+  onLayout() {
+    const L = this.L, o = this.o;
+    this.u = Math.min(L.vw / (o.uw || 7.4), L.vh / (o.uh || 4.7)) * (o.uk || 1);
+    if (o.umax) this.u = Math.min(this.u, o.umax);
+    this.gyp = Math.round(L.vh * (o.ground == null ? 0.8 : o.ground));
+    this.gr = Math.floor(this.gyp / L.chh);
+    this.gy = this.gr * L.chh;
+    if (this.x0 == null) { this.x = L.vw * (o.cx == null ? 0.5 : o.cx); this.xs = this.x; this.x0 = this.x; }
+    this.x = clamp(this.x, this.u * 1.6, L.vw - this.u * 1.6); this.xs = this.x;
+    this.shd = new Float32Array(L.N);
+    this.gpct = (this.gr * L.chh) / L.vh * 100;
+    this.applyBg(true);
+    if (reduce || !this.vis) this.settle();
+  }
+  applyBg(force) {
+    const h = hourNow();
+    if (!force && Math.abs(h - this.hourSeen) < 0.01) return;
+    this.hourSeen = h; const S = skyAt(h); this.skyS = S;
+    if (this.o.bg !== false && this.L.ready) this.cv.parentNode.style.background = stageBg(S, this.gpct);
+  }
+  /* ------ emotion control ------ */
+  feel(name, dur, next, nextDur) {
+    if (this.forced && !this.o.free) return;
+    this.nextDur = nextDur || 0;
+    if (this.emo !== name) { this.emo = name; if (this.o.main) announce(SAY[name]); }
+    this.emoT = dur || 0; this.nextEmo = next || null;
+    if (reduce) {
+      clearTimeout(this._rt);
+      if (dur > 0) this._rt = setTimeout(() => { const nx = this.nextEmo || this.baseEmo(); const nd = this.nextDur || 0; this.nextEmo = null; this.emoT = 0; if (nx !== this.emo || nd) this.feel(nx, nd); else this.settle(); }, Math.min(dur, 3) * 1000 + 300);
+      this.settle();
+    }
+  }
+  baseEmo() {
+    if (this.sleepFlag) return 'asleep';
+    const h = hourNow(), night = (h >= 22 || h < 5.5);
+    if (this.idle > (night ? 28 : 75)) return 'asleep';
+    if (this.idle > (night ? 9 : 24)) return 'sleepy';
+    if (this.inside && this.lm > 0.5 && this.o.main) return 'curious';
+    return 'content';
+  }
+  wake(surprise) {
+    this.idle = 0;
+    if (this.sleepFlag) return;
+    if (this.emo === 'asleep' || this.emo === 'sleepy') this.feel(this.emo === 'asleep' ? 'surprised' : 'curious', 0.8, 'curious');
+    this.addQ(1.2);
+  }
+  setSleep(on) { this.sleepFlag = on; this.idle = on ? 999 : 0; if (on) { this.feel('asleep', 0); } else { this.feel('surprised', 0.7, 'sleepy'); this.idle = 0; } this.emoT = on ? 0 : this.emoT; if (reduce) this.settle(); }
+  addQ(v) { this.qv += v * 10; }
+  /* ------ particles ------ */
+  emit(k, ch, x, y, vx, vy, life, r, g, b) {
+    const ps = this.parts; let p = null;
+    for (let i = 0; i < ps.length; i++) if (!ps[i].on) { p = ps[i]; break; }
+    if (!p) return null;
+    p.on = 1; p.k = k; p.ch = cc(ch); p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.t = 0; p.m = life; p.r = r; p.g = g; p.b = b; return p;
+  }
+  dropFood(x) {
+    for (const p of this.parts) if (p.on && p.k === PK.food) p.on = 0;
+    const u = this.u; this.emit(PK.food, '*', clamp(x, u, this.L.vw - u), this.gy - u * 0.25, 0, 0, 99, 255, 214, 130);
+    this.foodX = clamp(x, u, this.L.vw - u); this.idle = 0; if (this.emo === 'asleep' || this.emo === 'sleepy') this.wake();
+    else this.feel('curious', 2.5);
+    this.target = this.foodX;
+  }
+  burst(n, r, g, b, up) {
+    const u = this.u; const bx = this.x, by = this.gy - this.bodyH() - this.hy;
+    for (let i = 0; i < n; i++) { const a = rnd(0, 6.283), s = rnd(0.5, 2.4) * u; this.emit(PK.spark, i % 3 ? '*' : '+', bx + this.pa * 0.5, by - this.pinLen(), Math.cos(a) * s, Math.sin(a) * s - (up ? u : 0), rnd(0.7, 1.4), r, g, b); }
+  }
+  bodyH() { return 1.95 * this.u * this.P.post * this.P.scl * (1 - this.q * 0.5); }
+  bodyW() { return 2.5 * this.u * this.P.scl * (1 + this.q * 0.5); }
+  pinLen() { return 0.85 * this.u * this.P.pinUp * (1 - this.q * 0.25) * (1 - 0.18 * clamp((62 - this.u) / 30, 0, 1)); }
+  /* ------ settle (reduced motion / offscreen first frame) ------ */
+  settle() {
+    for (const k of KEYS) this.P[k] = E[this.emo][k];
+    this.q = 0; this.qv = 0; this.hy = 0; this.vy = 0; this.hopS = 0; this.blink = 0;
+    const tgt = this.looking(); this.lookx = tgt[0] * this.P.look; this.looky = tgt[1] * this.P.look;
+    this.pa = this.pinTarget(); this.pav = 0; this.pas = this.pa; this.xs = this.x;
+    this.updLight(0.001); this.applyBg(true);
+    if (this.L.ready) this.draw();
+  }
+  /* ------ look + light ------ */
+  looking() {
+    const u = this.u;
+    let tx = 0, ty = 0;
+    if (this.held) return [0, 1];
+    if (G.T - G.typeT < 1.6 && this.o.main !== 'dock') { return [clamp(G.typeLen * 0.06 - 0.3, -1, 1) * 0.8, -0.6]; }
+    if (this.foodX != null) { tx = clamp((this.foodX - this.x) / (3 * u), -1, 1); ty = -0.6; return [tx, ty]; }
+    if (this.noticeT > 0) return [this.sunDir() * 0.9, -1];
+    if (this.fly && this.fly.on) return [clamp((this.fly.x - this.x) / (3 * u), -1, 1), clamp((this.fly.y - (this.gy - this.bodyH() * 0.6)) / (3 * u), -1, 1) * -1];
+    const r = this.rect;
+    if (this.o.look !== false && r && G.pt > -90 && G.T - G.pt < 6) {
+      const cx = r.left + this.x, cy = r.top + this.gy - this.bodyH() * 0.6;
+      let dx = G.px - cx, dy = G.py - cy; const d = Math.hypot(dx, dy) || 1;
+      const k = Math.min(1, d / (u * 3));
+      tx = dx / d * k; ty = dy / d * k;
+      return [tx, ty];
+    }
+    return [this.gx, this.gy2];
+  }
+  sunDir() { const h = hourNow(); return h < 12 ? 1 : -1; }
+  pinTarget() {
+    const u = this.u, P = this.P;
+    let t = P.pinLean * 0.55 * u * (this.lastDirX || 1) - 0.34 * u * this.sunDir();
+    if (this.emo === 'curious') t += this.lookx * 0.5 * u;
+    if (this.emo === 'proud' || this.emo === 'delighted') t += Math.sin(this.phase * 0.7) * 0.08 * u;
+    return t;
+  }
+  updLight(dt) {
+    const u = this.u; const S = this.skyS || skyAt(hourNow());
+    const want = (this.inside && !this.held && this.px > -9000) ? 1 : 0;
+    this.lm += (want - this.lm) * (1 - Math.exp(-dt * (want ? 6 : 2.2)));
+    if (want) { this.lx_ += (this.px - this.lx_) * (1 - Math.exp(-dt * 14)); this.ly_ += (this.py - this.ly_) * (1 - Math.exp(-dt * 14)); }
+    else if (this.lm < 0.02) { this.lx_ = this.px > -9000 ? this.px : this.x; this.ly_ = this.py > -9000 ? this.py : 0; }
+    const h = hourNow(); const alt = S.alt; const elev = Math.max(0.16, alt * 1.3);
+    const dir = h < 12 ? 1 : -1;
+    const cot = Math.min(3.3, 1 / Math.tan(Math.min(1.4, elev)));
+    const dayK = S.day;
+    // at night the pin is the lamp: shadow stays short and close
+    this.sunS = dir * (cot * dayK + 0.22 * (1 - dayK));
+    this.dayK = dayK;
+  }
+  /* ------ step ------ */
+  step(dt) {
+    const o = this.o, u = this.u, L = this.L; if (!L.ready) return;
+    G.T += 0; // global time advanced in loop
+    this.phase += dt * 3; this.breath += dt * (this.emo === 'asleep' ? 1.5 : this.emo === 'sleepy' ? 2 : 2.8);
+    this.idle += dt;
+    // scheduled cycle for showcase instances
+    if (this.cycle) { this.cycT -= dt; if (this.cycT <= 0) { this.cycI = (this.cycI + 1) % this.cycle.length; this.emo = this.cycle[this.cycI]; this.cycT = o.cycleT || 3; } }
+    // emotion timer
+    if (!this.forced) {
+      if (this.emoT > 0) { this.emoT -= dt; if (this.emoT <= 0) { this.emoT = 0; const nx = this.nextEmo || this.baseEmo(); this.nextEmo = null; const nd = this.nextDur; this.feel(nx, nd || (nx === 'surprised' ? 0.6 : 0)); } }
+      else { const b = this.baseEmo(); if (b !== this.emo && !this.held && !this.scrub) { this.emo = b; if (o.main) announce(SAY[b]); } }
+    }
+    const tgtE = E[this.emo], P = this.P;
+    const kk = 1 - Math.exp(-dt * (this.emo === 'surprised' ? 16 : 6.5));
+    for (let i = 0; i < KEYS.length; i++) { const k = KEYS[i]; P[k] += (tgtE[k] - P[k]) * kk; }
+    // pointer-derived
+    this.updLight(dt);
+    // look
+    this.glanceT -= dt;
+    if (this.glanceT <= 0) {
+      this.glanceT = rnd(1.4, 4.2);
+      const r = Math.random();
+      if (r < 0.2) { this.gx = this.sunDir() * 0.6; this.gy2 = -1; } else { this.gx = rnd(-1, 1); this.gy2 = rnd(-0.4, 0.7); }
+    }
+    let t = this.looking(); const lk = P.look;
+    let lxT = t[0] * lk, lyT = t[1] * lk;
+    if (P.look < 0) { lxT = -t[0] * 0.7; lyT = 0.2; }
+    const kl = 1 - Math.exp(-dt * 9);
+    this.lookx += (lxT - this.lookx) * kl; this.looky += (lyT - this.looky) * kl;
+    // blink
+    this.blinkT -= dt;
+    if (this.blinkT <= 0 && this.blinkPh === 0) { this.blinkPh = 0.0001; }
+    if (this.blinkPh > 0) {
+      this.blinkPh += dt / (this.emo === 'sleepy' ? 0.34 : 0.16);
+      const b = this.blinkPh; this.blink = b < 1 ? Math.sin(b * Math.PI / 2) : Math.max(0, 1 - (b - 1) * 1.3);
+      if (b > 1.8) { this.blinkPh = 0; this.blink = 0; this.blinkT = Math.random() < 0.18 ? 0.18 : rnd(2, 5.5); }
+    }
+    // squash spring
+    const kq = 260, cq = 15;
+    this.qv += (-kq * this.q - cq * this.qv) * dt; this.q += this.qv * dt; this.q = clamp(this.q, -0.45, 0.55);
+    // hop state machine
+    const grounded = this.hopS === 0;
+    if (this.held) {
+      this.hy += (this.heldY - this.hy) * (1 - Math.exp(-dt * 18)); this.x += (this.heldX - this.x) * (1 - Math.exp(-dt * 18)); this.vx = 0;
+    } else if (this.hopS === 1) {
+      this.hopT -= dt; if (this.hopT <= 0) { this.hopS = 2; this.vy = this.hopV; this.vx = this.hopVx; this.addQ(-0.9); }
+    } else if (this.hopS === 2) {
+      this.hy += this.vy * dt; this.vy -= this.hopG * dt; this.x += this.vx * dt;
+      this.q += (-0.22 * Math.min(1, Math.abs(this.vy) / this.hopV) - this.q) * 0.2;
+      if (this.hy <= 0 && this.vy < 0) {
+        this.hy = 0; this.hopS = 0; this.vx = 0; this.addQ(1.6 * (0.6 + Math.abs(this.vy) / this.hopV)); this.pav += (Math.random() - 0.5) * 6 * u;
+        for (let i = 0; i < 4; i++) this.emit(PK.dust, '.', this.x + (i % 2 ? 1 : -1) * u * 0.9, this.gy - 2, (i % 2 ? 1 : -1) * rnd(0.3, 1) * u, -rnd(0.2, 0.6) * u, 0.5, 220, 200, 180);
+        this.nextHop = this.target != null ? 0.12 : rnd(3, 7);
+      }
+    } else {
+      // ground: gravity if lifted
+      if (this.hy > 0) { this.vy -= 30 * u * dt; this.hy += this.vy * dt; if (this.hy <= 0) { this.hy = 0; this.vy = 0; this.addQ(2.2); } }
+      this.nextHop -= dt;
+      this.aiHop(dt);
+    }
+    this.x = clamp(this.x, u * 1.5, L.vw - u * 1.5);
+    // pin spring
+    const pt = this.pinTarget() * (this.held ? 0.2 : 1);
+    this.pav += (-90 * (this.pa - pt) - 9 * this.pav) * dt; this.pa += this.pav * dt;
+    this.pa = clamp(this.pa, -1.2 * u, 1.2 * u);
+    // shadow lag
+    this.xs += (this.x - this.xs) * (1 - Math.exp(-dt * 7)); this.pas += (this.pa - this.pas) * (1 - Math.exp(-dt * 6));
+    // mischief
+    if (!this.forced && this.emo === 'content') {
+      this.mischT -= dt;
+      if (this.mischT <= 0 && this.mischief <= 0) { this.mischief = 1.8; this.mischT = rnd(14, 26); this.mischSeen = false; }
+    }
+    if (this.noticeT > 0) this.noticeT -= dt;
+    if (!this.forced && this.emo === 'content' && !this.fly) {
+      this.flyT -= dt;
+      if (this.flyT <= 0) { const dir = Math.random() < 0.5 ? 1 : -1; this.fly = this.emit(PK.glint, '*', dir > 0 ? -10 : L.vw + 10, this.gy - 2.7 * u, dir * 0.8 * u, 0, 7, 190, 235, 255); this.flyT = rnd(16, 28); if (this.fly) { this.fly.y0 = this.fly.y; this.feel('curious', 6, null); } }
+    }
+    if (this.fly) { if (!this.fly.on) { this.fly = null; if (this.emo === 'curious' && this.emoT > 0) this.emoT = 0.4; } }
+    if (this.mischief > 0) { this.mischief -= dt; if (this.mischief <= 0) { if (this.emo === 'content') { this.feel('curious', 1.7); this.noticeT = 1.7; } } }
+    // petting decay
+    this.pet = Math.max(0, this.pet - dt * 0.5); this.pokeT -= dt; if (this.pokeT <= 0) this.pokes = 0;
+    this.shake = Math.max(0, this.shake - dt);
+    // delighted purr
+    if (this.purr > 0) { this.purr -= dt; }
+    // emitters
+    if (P.zed > 0.5) { this.zT -= dt; if (this.zT <= 0) { this.zT = 1.5; this.emit(PK.zed, 'z', this.x + this.bodyW() * 0.35, this.gy - this.bodyH() * 1.0 - this.hy, 0.25 * u, -0.6 * u, 3.2, 200, 220, 255); } }
+    if (P.spark > 0.4 && Math.random() < dt * 5 * P.spark) {
+      const a = rnd(-2.6, -0.5), s = rnd(0.6, 1.8) * u;
+      this.emit(PK.spark, Math.random() < 0.5 ? '*' : '.', this.x + this.pa, this.gy - this.bodyH() - this.pinLen() - this.hy, Math.cos(a) * s * 0.6, Math.sin(a) * s, rnd(0.6, 1.2), 255, 214, 130);
+    }
+    if (this.confetti > 0) { this.confetti -= dt; if (Math.random() < dt * 14) { const cs = [[255, 120, 120], [255, 214, 130], [140, 220, 255], [150, 240, 160], [220, 160, 255]][(Math.random() * 5) | 0]; this.emit(PK.conf, Math.random() < 0.5 ? '*' : '+', rnd(0, this.L.vw), -4, rnd(-0.3, 0.3) * u, rnd(1.2, 2.4) * u, 4, cs[0], cs[1], cs[2]); } }
+    this.stepParts(dt);
+    if (o.onStep) o.onStep(this, dt);
+  }
+  aiHop(dt) {
+    if (this.forced && !this.o.hopForced) return;
+    const u = this.u, P = this.P;
+    if (this.emo === 'asleep' || this.emo === 'sleepy' || this.emo === 'surprised' || this.emo === 'focused' || this.scrub) return;
+    // food check
+    if (this.foodX != null) {
+      if (Math.abs(this.foodX - this.x) < u * 0.9) { this.eat(); return; }
+      this.target = this.foodX;
+    }
+    if (this.nextHop > 0 && this.target == null) return;
+    if (this.nextHop > 0) return;
+    if (this.target == null) {
+      // choose a place to go
+      const L = this.L;
+      if (this.inside && this.lm > 0.5 && P.hop > 0.2) {
+        const d = this.px - this.x; this.target = this.emo === 'shy' ? this.x - Math.sign(d) * 2 * u : this.px - Math.sign(d) * 2.6 * u;
+        if (Math.abs(d) < 3.2 * u) { this.target = null; this.nextHop = rnd(1.2, 2.5); return; }
+      } else if (P.hop > 0.15) { this.target = rnd(L.vw * 0.2, L.vw * 0.8); }
+      else { this.nextHop = 1; return; }
+      this.target = clamp(this.target, u * 1.6, L.vw - u * 1.6);
+    }
+    const d = this.target - this.x;
+    if (Math.abs(d) < u * 0.35) { this.target = null; this.nextHop = rnd(3, 7); return; }
+    const dist = Math.sign(d) * Math.min(Math.abs(d), u * (1.2 + 1.1 * P.hop));
+    this.lastDirX = Math.sign(d) || 1;
+    this.hopS = 1; this.hopT = 0.16; this.addQ(1.1);
+    const T = 0.44; const hgt = u * (0.5 + 0.55 * P.hop + (this.emo === 'delighted' ? 0.5 : 0));
+    this.hopG = 8 * hgt / (T * T); this.hopV = this.hopG * T / 2; this.hopVx = dist / T;
+    this.pav += -Math.sign(d) * 4 * u;
+  }
+  eat() {
+    this.foodX = null; this.target = null; for (const p of this.parts) if (p.on && p.k === PK.food) p.on = 0;
+    this.addQ(1.4); this.burst(14, 255, 214, 130, true); this.fedCount++;
+    this.feel('delighted', 3.2, 'content'); this.nextHop = rnd(2, 4); this.pav += 5 * u0(this);
+  }
+  stepParts(dt) {
+    const u = this.u;
+    for (const p of this.parts) {
+      if (!p.on) continue; p.t += dt; if (p.t > p.m) { p.on = 0; continue; }
+      if (p.k === PK.food) { p.y = this.gy - u * 0.28 - Math.abs(Math.sin(G.T * 3)) * 0.12 * u; continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.k === PK.conf) { p.vy += 0.1 * dt * u; p.x += Math.sin(p.t * 4 + p.x) * 0.3; if (p.y > this.gy + 6) p.on = 0; }
+      else if (p.k === PK.spark) { p.vy += 1.4 * u * dt; p.vx *= 0.985; }
+      else if (p.k === PK.zed) { p.x += Math.sin(p.t * 2) * 0.2; }
+      else if (p.k === PK.glint) { p.y = p.y0 + Math.sin(p.t * 2.4) * 0.5 * u; if (p.x < -20 || p.x > this.L.vw + 20) p.on = 0; }
+      else if (p.k === PK.dust) { p.vx *= 0.94; }
+    }
+  }
+  /* ------ pointer API (called by page glue) ------ */
+  pointerAt(x, y) { this.px = x; this.py = y; this.inside = true; this.ptrT = G.T; }
+  pointerOut() { this.inside = false; }
+  hitBody(x, y) { const u = this.u, bx = Math.abs(x - this.x), by = this.gy - this.hy - y; return bx < this.bodyW() * 0.62 && by > -0.3 * u && by < this.bodyH() * 1.1; }
+  hitPin(x, y) {
+    const u = this.u; const tx = this.x + this.pa, ty = this.gy - this.hy - this.bodyH() - this.pinLen();
+    return Math.hypot(x - tx, (y - ty) * 0.8) < u * 0.75;
+  }
+  poke() {
+    this.idle = 0; this.pokes++; this.pokeT = 3; this.addQ(2.2); this.pav += (Math.random() - 0.5) * 8 * this.u;
+    if (this.sleepFlag) { this.sleepFlag = false; }
+    if (this.pokes >= 5) this.feel('concerned', 2.4, 'shy');
+    else if (this.pokes >= 3) this.feel('shy', 3.2, 'content');
+    else this.feel('surprised', 0.7, this.pokes === 2 ? 'curious' : 'delighted');
+    if (this.pokes < 3) { this.nextEmo = this.nextEmo; }
+    if (!reduce && this.hopS === 0 && this.pokes < 3) { this.hopS = 1; this.hopT = 0.08; this.hopG = 8 * this.u * 0.7 / 0.3 / 0.3 * 0.09 * 10 / 3.3; this.hopG = 8 * (this.u * 0.8) / (0.4 * 0.4); this.hopV = this.hopG * 0.4 / 2; this.hopVx = 0; }
+    if (reduce) this.settle();
+  }
+  petMove(dist, dt) {
+    if (this.held || this.scrub) return;
+    this.pet += dist / this.u * 0.9;
+    if (this.pet > 3.5 && this.emo !== 'delighted') { this.feel('delighted', 2.2); this.purr = 2.2; this.idle = 0; if (this.sleepFlag) this.sleepFlag = false; }
+    else if (this.pet > 3.5) { this.emoT = Math.max(this.emoT, 1.6); this.purr = 1.6; }
+  }
+  /* ================= DRAW ================= */
+  draw() {
+    const L = this.L, { cols, rows, cw, chh } = L, u = this.u, P = this.P, o = this.o;
+    L.clearBuf();
+    const S = this.skyS || skyAt(hourNow()); const T = G.T;
+    const gy = this.gy, gr = this.gr;
+    // ---- ground ----
+    if (o.ground !== false) {
+      const gc = S.ground; const lg = mix3(gc, [255, 236, 200], 0.38 + 0.2 * S.day);
+      if (!this.gcache || this.gcache.cols !== cols || this.gcache.gr !== gr) {
+        const list = [];
+        for (let r = gr; r < rows; r++) {
+          const depth = (r - gr) / Math.max(1, rows - gr);
+          for (let c = 0; c < cols; c++) {
+            const h = hash2(c, r * 7 + 3); let ch = 0, a = 0;
+            if (r === gr) { ch = h < 0.7 ? 95 : 0; a = 70; } else if (h < 0.16) { ch = h < 0.07 ? 46 : 58; a = 60 - depth * 30; }
+            if (ch) list.push(c, r, ch, a);
+          }
+        }
+        this.gcache = { cols, gr, list };
+      }
+      const gl = this.gcache.list; const lmOn = this.lm > 0.02;
+      for (let j = 0; j < gl.length; j += 4) {
+        const c = gl[j], r = gl[j + 1]; let glow = 0;
+        if (lmOn) { const dx = (c * cw - this.lx_) / (3.2 * u); glow = this.lm * Math.exp(-dx * dx) * 0.9; }
+        L.put(c, r, gl[j + 2], lerp(lg[0], 255, glow * 0.6), lerp(lg[1], 226, glow * 0.6), lerp(lg[2], 170, glow * 0.4), clamp(gl[j + 3] + glow * 110, 0, 255));
+      }
+    }
+    // ---- shadow ----
+    this.drawShadow(S);
+    // ---- body ----
+    this.drawBody(S);
+    // ---- pin ----
+    this.drawPin();
+    this.drawParts();
+    if (o.extra) o.extra(this);
+    const bu = this.u; L.paint(); L.bloomPass(this.x - bu * 2.7, (this.tipY || 0) - bu * 1.3, this.x + bu * 2.7, this.gy + bu * 0.4);
+  }
+  offs(ox, h, ptr) {
+    const u = this.u; let sun = this.sunS * h * 1.0;
+    let off = sun;
+    if (this.lm > 0.01) {
+      const Hl = Math.max(this.gy - this.ly_, u * 1.0); const hh = Math.min(h, Hl * 0.8);
+      const pt = (ox - this.lx_) * hh / (Hl - hh);
+      off = sun * (1 - this.lm) + pt * this.lm;
+    }
+    return clamp(off * this.P.shd * (this.o.shadowK || 1), -5.2 * u, 5.2 * u);
+  }
+  drawShadow(S) {
+    const L = this.L, { cols, rows, cw, chh } = L, u = this.u, P = this.P, shd = this.shd;
+    const gr = this.gr; shd.fill(0, Math.max(0, (gr - 1)) * cols);
+    const W = this.bodyW(), H = this.bodyH();
+    const bx = this.xs, cy0 = this.gy + 0.3 * u;
+    const mis = this.mischief > 0 ? Math.sin(G.T * 11) * 0.7 * u * Math.min(1, this.mischief) : 0;
+    const stamp = (gx, thick, str) => {
+      const c = Math.floor(gx / cw); if (c < 0 || c >= cols) return;
+      const rmin = Math.floor((cy0 - thick) / chh), rmax = Math.floor((cy0 + thick) / chh);
+      for (let r = Math.max(gr, rmin); r <= rmax && r < rows; r++) {
+        const cyc = (r + 0.5) * chh; const dy = Math.abs(cyc - cy0) / Math.max(thick, 1);
+        const v = str * (1 - dy * dy * 0.55); const i = r * cols + c; if (v > shd[i]) shd[i] = v;
+      }
+    };
+    // contact blob under the feet
+    for (let gx = bx - W * 0.5; gx <= bx + W * 0.5; gx += cw * 0.8) {
+      const nx = (gx - bx) / (W * 0.5); stamp(gx, Math.max(chh * 0.6, 0.22 * u * Math.sqrt(Math.max(0, 1 - nx * nx))), 0.85 * clamp(1 - this.hy / (2 * u), 0.3, 1));
+    }
+    // body column streaks
+    const lift = this.hy;
+    const step = cw * 0.9;
+    for (let lx = -W / 2 + step * 0.5; lx < W / 2; lx += step) {
+      const nx = lx / (W / 2); const topH = (H * (0.5 + 0.5 * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(nx), 2.2)), 1 / 2.2))) * 0.95 + lift;
+      const ox = bx + lx; const off = this.offs(ox, topH);
+      const n = Math.ceil(Math.abs(off) / cw);
+      const th = Math.max(chh * 0.7, 0.34 * u * Math.sqrt(Math.max(0.1, 1 - nx * nx)));
+      for (let k = 0; k <= n; k++) { const t = n ? k / n : 0; stamp(ox + off * t, th * (1 - 0.7 * t * t), 0.8 - 0.2 * t); }
+    }
+    // pin streak (lagged, plus mischief wiggle)
+    const baseH = H * 0.95 + lift, pl = this.pinLen();
+    let px0 = bx, py0 = 0, started = false, lastOx = 0;
+    for (let k = 0; k <= 14; k++) {
+      const t = k / 14; const hh = baseH + pl * t; const ox = bx + this.pas * t * t + mis * t * t * 0.0 ;
+      const off = this.offs(ox, hh) + mis * t * 1.6;
+      const gx = ox + off;
+      if (started) { const d = Math.abs(gx - lastOx), n = Math.ceil(d / cw); for (let j = 0; j <= n; j++) stamp(lerp(lastOx, gx, n ? j / n : 0), Math.max(chh * 0.45, 0.06 * u), 0.9); }
+      lastOx = gx; started = true;
+    }
+    // paint shadow
+    const sc = [8, 6, 34];
+    for (let r = Math.max(0, gr); r < rows; r++) for (let c = 0; c < cols; c++) {
+      const v = shd[r * cols + c]; if (v < 0.14) continue;
+      const ch = v > 0.7 ? 35 : v > 0.45 ? 61 : 58;
+      L.put(c, r, ch, sc[0], sc[1], sc[2], clamp(v * 270, 0, 255));
+    }
+  }
+  drawBody(S) {
+    const L = this.L, { cols, rows, cw, chh } = L, u = this.u, P = this.P, o = this.o, T = G.T;
+    const hy = this.hy; let W = this.bodyW(), H = this.bodyH();
+    // breathing + bob
+    const br = Math.sin(this.breath) * (0.012 + 0.012 * (this.emo === 'asleep' ? 2.5 : 1));
+    H *= 1 + br; W *= 1 - br * 0.5;
+    const tremble = (P.sh * (Math.sin(T * 47) * 0.6) + (this.purr > 0 ? Math.sin(T * 38) * 0.5 : 0)) * u * 0.035 + (this.shake > 0 ? Math.sin(T * 60) * u * 0.07 : 0);
+    const x = this.x + tremble; const bottom = this.gy - hy - (this.held ? 0 : 0);
+    const tiltBase = clamp(this.vx / (u * 22), -0.3, 0.3) + (this.hopS === 0 ? Math.sin(this.phase * 1.0) * 0.012 * P.bob : 0) + P.tilt * 0.08 * this.lookx;
+    this.tilt = tiltBase; this.bx = x; this.bottom = bottom; this.Hh = H; this.Ww = W;
+    // light vector
+    const sd = this.sunS; const dk = this.dayK;
+    let Lx = -Math.sign(sd || 1) * 0.55 * dk, Ly = 0.65 + 0.3 * (1 - dk), Lz = 0.55;
+    if (this.lm > 0.01) { const dx = this.lx_ - x, dy = (this.gy - this.ly_) - H * 0.5; const n = Math.hypot(dx, dy, u * 2) || 1; Lx = lerp(Lx, dx / n, this.lm); Ly = lerp(Ly, dy / n, this.lm); Lz = lerp(Lz, u * 2 / n, this.lm); }
+    const ln = Math.hypot(Lx, Ly, Lz) || 1; Lx /= ln; Ly /= ln; Lz /= ln;
+    const cool = [168, 190, 240], warm = [255, 218, 160], gold = [255, 200, 110];
+    const base = P.tint > 0.75 ? mix3(warm, gold, (P.tint - 0.75) * 4) : mix3(cool, warm, P.tint / 0.75);
+    const glowK = P.glow;
+    const x0 = x - W * 0.62 - tiltBase * H, x1 = x + W * 0.62 + tiltBase * H;
+    const yT = bottom - H * 1.06, yB = bottom + 2;
+    const c0 = Math.max(0, Math.floor(x0 / cw)), c1 = Math.min(cols - 1, Math.ceil(x1 / cw));
+    const r0 = Math.max(0, Math.floor(yT / chh)), r1 = Math.min(rows - 1, Math.floor(yB / chh));
+    const tipX = x + this.pa, tipY = bottom - H - this.pinLen();
+    const pm = 2 / 1.0;
+    // blush centers
+    const bxL = -0.36 * W, bxR = 0.36 * W, byC = 0.45 * H, bR = 0.2 * u;
+    for (let r = r0; r <= r1; r++) {
+      const cy = (r + 0.5) * chh; const ly = bottom - cy;
+      for (let c = c0; c <= c1; c++) {
+        const cx = (c + 0.5) * cw; const lx = cx - x - tiltBase * ly;
+        const nx = lx / (W / 2), ny = (ly - H / 2) / (H / 2);
+        const p = ny > 0 ? 2.05 : 5.5;
+        const f = Math.pow(Math.abs(nx), p) + Math.pow(Math.abs(ny), p);
+        if (f >= 1) continue;
+        const rr = nx * nx + ny * ny;
+        const nz = Math.sqrt(Math.max(0.06, 1 - Math.min(1, rr * 0.9)));
+        let lam = Math.max(0, nx * Lx + ny * Ly + nz * Lz);
+        // glow from the pin tip
+        const dxg = cx - tipX, dyg = cy - tipY; const dg = Math.sqrt(dxg * dxg + dyg * dyg) / (2.6 * u);
+        const pinL = glowK * 0.5 * Math.max(0, 1 - dg);
+        let s = clamp(0.28 + 0.62 * lam + pinL + 0.3 * (1 - dk) * (0.5 + 0.5 * ny * -1) + (vnoise(cx / cw * 0.55 + 3, cy / chh * 0.55 + T * 0.35) - 0.5) * 0.14, 0, 1);
+        const edge = clamp((1 - f) / 0.12, 0, 1);
+        const sd = clamp(s + (hash2(c, r) - 0.5) * 0.4, 0, 0.999); let idx = 3 + Math.floor(sd * 5);
+        const k = (0.5 + 0.55 * s) * (1 + 0.25 * (1 - dk)) * (edge < 0.55 ? 0.62 + 0.38 * edge / 0.55 : 1);
+        let R = base[0] * k, Gc = base[1] * k, B = base[2] * k;
+        // rim light
+        const rim = Math.pow(Math.max(0, 1 - nz), 3) * 0.35 * dk;
+        R += rim * 90; Gc += rim * 70; B += rim * 40;
+        if (P.blush > 0.02) {
+          const d1 = ((lx - bxL) * (lx - bxL) + (ly - byC) * (ly - byC)) / (bR * bR), d2 = ((lx - bxR) * (lx - bxR) + (ly - byC) * (ly - byC)) / (bR * bR);
+          const bl = P.blush * (Math.exp(-d1 * 1.2) + Math.exp(-d2 * 1.2));
+          if (bl > 0.05) { const m = clamp(bl, 0, 0.85); R = lerp(R, 255, m); Gc = lerp(Gc, 112, m); B = lerp(B, 140, m); }
+        }
+        if (f > 0.9) { L.put(c, r, 35, base[0] * 0.42, base[1] * 0.3, base[2] * 0.36 + 18, 255); continue; }
+        L.put(c, r, CH_RAMP[idx], R, Gc, B, 255);
+      }
+    }
+    // feet
+    const foot = (sx) => {
+      const lift = this.hopS === 2 ? 0.28 * u : (this.hopS === 0 && this.hy < 1 && this.vx === 0 ? 0 : 0);
+      const fl = this.held ? -0.35 * u : lift;
+      const fx = x + sx * W * 0.28, fy = bottom + 2 - fl;
+      const fr = Math.max(0.2 * u, cw * 0.7);
+      for (let c = Math.floor((fx - fr) / cw); c <= Math.floor((fx + fr) / cw); c++) {
+        const r = Math.floor(fy / chh); L.put(c, r, 61, base[0] * 0.55, base[1] * 0.5, base[2] * 0.5, 255);
+        if (this.held) { L.put(c, r - 1, 124, base[0] * 0.5, base[1] * 0.45, base[2] * 0.45, 230); }
+      }
+    };
+    foot(-1); foot(1);
+    this.drawArms(x, bottom, W, H, tiltBase, base);
+    this.drawFace(x, bottom, W, H, tiltBase, base);
+  }
+  drawArms(x, bottom, W, H, tilt, base) {
+    const L = this.L, u = this.u, P = this.P, T = G.T; const len = 0.85 * u * (this.held ? 0.8 : 1); const arm = P.arm;
+    for (let side = -1; side <= 1; side += 2) {
+      const sx = x + side * W * 0.47 + tilt * H * 0.36, sy = bottom - H * 0.34;
+      let a = lerp(0.5, 2.55, arm);
+      if (this.held) a = 2.7 + Math.sin(T * 9 + side) * 0.2;
+      else if (arm > 0.5) a += Math.sin(T * 7 + side * 1.7) * 0.22 * arm;
+      else a += Math.sin(this.breath * 0.9 + side) * 0.05;
+      const dx = side * Math.sin(a), dy = Math.cos(a);
+      const n = Math.max(2, Math.ceil(len / (L.chh * 0.8)));
+      for (let i = 1; i <= n; i++) {
+        const t = i / n; const ax = sx + dx * len * t, ay = sy + dy * len * t;
+        let ch;
+        if (i === n) ch = 111; else { const adx = Math.abs(dx), ady = Math.abs(dy); ch = adx < 0.4 * ady ? 124 : ady < 0.4 * adx ? 45 : (dx * dy > 0 ? 92 : 47); }
+        L.putXY(ax, ay, ch, base[0] * 0.95, base[1] * 0.8, base[2] * 0.75 + 10, 255);
+      }
+    }
+  }
+  drawFace(x, bottom, W, H, tilt, base) {
+    const L = this.L, { cw, chh } = L, u = this.u, P = this.P, T = G.T;
+    const sm = clamp((62 - u) / 30, 0, 1);
+    const nk = 1 - (this.dayK == null ? 1 : this.dayK);
+    const ink = [34 + nk * 150, 22 + nk * 120, 66 + nk * 150];
+    const lookx = this.lookx, looky = this.looky;
+    const faceShift = lookx * 0.16 * u, faceUp = -looky * 0.1 * u;
+    const eyeLy = H * 0.58 + faceUp, eyeLx = W * (0.19 + 0.03 * sm);
+    const blinkK = this.blink;
+    let openEff = P.open * (1 - blinkK * 0.95);
+    for (let side = -1; side <= 1; side += 2) {
+      const ex = x + side * eyeLx + faceShift + tilt * eyeLy, ey = bottom - eyeLy;
+      const rxE = Math.max(0.26 * u * (1 + 0.1 * Math.max(0, P.open - 1)) * (1 + 0.45 * sm), 0.55 * cw);
+      let ryE = Math.max(0.42 * u * openEff * (1 + 0.35 * sm), 0.0);
+      const happyK = P.happy, sleepK = P.sleep;
+      if (sleepK > 0.5) { this.arc(ex, ey + 0.05 * u, rxE * 1.15, 0.2 * u, -1, ink, 117); }
+      else if (happyK > 0.5) { this.arc(ex, ey + 0.1 * u, rxE * 1.1, Math.max(0.26 * u, chh * 0.7), 1, ink, 94); }
+      else if (ryE < chh * 0.34) { // closed slit
+        for (let c = Math.floor((ex - rxE) / cw); c <= Math.floor((ex + rxE) / cw); c++) L.put(c, Math.floor(ey / chh), 45, ink[0], ink[1], ink[2], 255);
+      } else {
+        ryE = Math.max(ryE, chh * 0.5);
+        const lidCut = P.lid;
+        const cMin = Math.floor((ex - rxE - cw) / cw), cMax = Math.floor((ex + rxE + cw) / cw), rMin = Math.floor((ey - ryE - chh) / chh), rMax = Math.floor((ey + ryE + chh) / chh);
+        for (let r = rMin; r <= rMax; r++) for (let c = cMin; c <= cMax; c++) {
+          const dx = (c + 0.5) * cw - ex, dy = (r + 0.5) * chh - ey; const e = (dx * dx) / (rxE * rxE) + (dy * dy) / (ryE * ryE);
+          if (e >= 1.05) continue;
+          const cut = -ryE + 2 * ryE * lidCut + P.sad * 0.6 * ryE * ((dx * side) / rxE);
+          if (dy < cut) continue;
+          const ch = e < 0.3 ? 64 : e < 0.7 ? 35 : 37;
+          L.put(c, r, ch, ink[0], ink[1], ink[2], e > 0.9 ? 190 : 255);
+        }
+        // glint
+        if (rxE > 1.1 * cw && ryE > 0.9 * chh) L.putXY(ex - rxE * 0.35, ey - ryE * 0.35, 46, 255, 250, 235, 235);
+      }
+      // brows
+      const raise = side < 0 ? P.bl : P.br; const bs = P.sad;
+      if (Math.abs(bs) > 0.2 || raise > 0.2) {
+        const by0 = ey - Math.max(ryE, chh * 0.6) - chh * 0.9 - raise * 0.16 * u;
+        const len = rxE * 0.75; const n = Math.max(2, Math.round(len * 2 / cw));
+        for (let i = 0; i < n; i++) {
+          const t = n > 1 ? (i / (n - 1)) * 2 - 1 : 0;
+          const inner = -side * t; // +1 means inner end
+          const yy = by0 - bs * 0.1 * u * inner;
+          const a = clamp(Math.max(Math.abs(bs), raise) * 1.3, 0, 1);
+          const sl = -bs * inner; const chb = Math.abs(bs) > 0.5 ? (side * bs * (t > 0 ? 1 : 1) > 0 ? 92 : 47) : 45;
+          L.putXY(ex + t * len, yy, Math.abs(bs) > 0.55 ? (((side < 0) === (bs > 0)) ? 47 : 92) : 45, ink[0], ink[1], ink[2], 255 * a);
+        }
+      }
+    }
+    // mouth
+    const mc = P.mc, mo = P.mo; const mx = x + faceShift * 1.15 + tilt * H * 0.4, myc = bottom - H * 0.3 + faceUp * 0.6;
+    const mw = Math.max(0.17 * u * P.mw * (1 + 0.3 * sm), cw * 1.2);
+    const n = Math.max(1, Math.round(mw * 2 / cw));
+    const oa = clamp((mo - 0.06) / 0.28, 0, 1);
+    const sa = clamp((mc - 0.08) / 0.4, 0, 1) * (1 - oa), fa = clamp((-mc - 0.08) / 0.4, 0, 1) * (1 - oa);
+    const na = Math.max(0, 1 - sa - fa) * (1 - oa);
+    const wob = P.sh > 0.15;
+    const row = (chf, a, wid) => { if (a < 0.04) return; for (let i = 0; i < n; i++) { const t = n > 1 ? i / (n - 1) * 2 - 1 : 0; L.putXY(mx + t * mw * wid, myc, chf(i, t), ink[0], ink[1], ink[2], 255 * a); } };
+    row((i) => wob ? 126 : 45, na, 0.8);
+    row((i) => n >= 3 ? (i === 0 ? 92 : i === n - 1 ? 47 : 95) : 117, sa, 1);
+    row((i) => n >= 3 ? (i === 0 ? 47 : i === n - 1 ? 92 : 94) : 94, fa, 1);
+    if (oa > 0.03) {
+      const rx = Math.max(0.15 * u * (0.6 + P.mw * 0.5) * (1 + 0.3 * sm), cw * 1.0), ry = Math.max(0.26 * u * mo, chh * 0.5);
+      const cMin = Math.floor((mx - rx - cw) / cw), cMax = Math.floor((mx + rx + cw) / cw), rMin = Math.floor((myc - ry - chh) / chh), rMax = Math.floor((myc + ry + chh) / chh);
+      for (let r = rMin; r <= rMax; r++) for (let c = cMin; c <= cMax; c++) {
+        const dx = (c + 0.5) * cw - mx, dy = (r + 0.5) * chh - myc; const e = dx * dx / (rx * rx) + dy * dy / (ry * ry);
+        if (e > 1.1) continue;
+        if (mc > 0.4 && dy < -ry * 0.2 && mo < 0.9) continue;
+        const inner = dy > ry * 0.2 && e < 0.9;
+        L.put(c, r, inner ? 126 : 64, inner ? 255 : ink[0], inner ? 120 : ink[1], inner ? 140 : ink[2], 250 * oa);
+      }
+    }
+    // day dial (belly): a row of tick marks, the current hour glows
+    if (this.o.dial && cw >= 5.5 && !this.held) {
+      const hrs = hourNow(); const ticks = 9; const dyy = bottom - H * 0.12;
+      for (let i = 0; i < ticks; i++) {
+        const hh = 8 + i * 1.0; const lit = Math.abs(hrs - hh) < 0.55; const tx = x + (i - (ticks - 1) / 2) * 0.27 * u + tilt * H * 0.17;
+        L.putXY(tx, dyy, lit ? 124 : 46, lit ? 255 : base[0] * 0.5, lit ? 120 : base[1] * 0.45, lit ? 60 : base[2] * 0.4, lit ? 255 : 200);
+      }
+    }
+  }
+  arc(cx, cy, rx, ry, dir, ink, ch1) {
+    // dir 1: upper arc (happy ^), dir -1: lower arc (closed u)
+    const L = this.L, cw = L.cw, chh = L.chh;
+    const small = rx < cw * 1.05;
+    if (small) { L.putXY(cx, cy, ch1, ink[0], ink[1], ink[2], 255); return; }
+    const cMin = Math.floor((cx - rx - cw) / cw), cMax = Math.floor((cx + rx + cw) / cw);
+    for (let c = cMin; c <= cMax; c++) {
+      const dx = ((c + 0.5) * cw - cx) / rx; if (Math.abs(dx) > 1.05) continue;
+      const yy = cy - dir * ry * Math.sqrt(Math.max(0, 1 - dx * dx)) + dir * ry * 0.35;
+      const ch = dx < -0.45 ? (dir > 0 ? 47 : 92) : dx > 0.45 ? (dir > 0 ? 92 : 47) : (dir > 0 ? 94 : 95);
+      L.putXY((c + 0.5) * cw, yy, ch, ink[0], ink[1], ink[2], 255);
+    }
+  }
+  drawPin() {
+    const L = this.L, { cw, chh } = L, u = this.u, P = this.P, T = G.T;
+    const x = this.bx, top = this.bottom - this.Hh * 0.99, pl = this.pinLen();
+    const tipX = x + this.pa + this.tilt * this.Hh, tipY = top - pl;
+    const bx0 = x + this.tilt * this.Hh;
+    const glow = P.glow * (0.82 + 0.18 * Math.sin(T * 2.2 + 1)) * (this.emo === 'asleep' ? 0.75 + 0.25 * Math.sin(T * 1.2) : 1);
+    // halo
+    const hr = (1.3 + 1.1 * glow) * u; const c0 = Math.floor((tipX - hr) / cw), c1 = Math.floor((tipX + hr) / cw), r0 = Math.floor((tipY - hr) / chh), r1 = Math.floor((tipY + hr) / chh);
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const dx = (c + 0.5) * cw - tipX, dy = ((r + 0.5) * chh - tipY) * 1.8; const d = Math.sqrt(dx * dx + dy * dy) / hr; if (d >= 1) continue;
+      const a = (1 - d) * (1 - d) * glow; if (a < 0.06) continue;
+      if (L.Bc[r * L.cols + c] && r >= 0) { const i = r * L.cols + c; if (L.Ba[i] > 40) continue; }
+      L.put(c, r, d < 0.45 ? 58 : 46, 255, 214, 140, a * 150);
+    }
+    // blade: a small triangular gnomon fin, wide at the head and sharp at the tip
+    {
+      const rows0 = Math.floor(tipY / chh), rows1 = Math.floor(top / chh) + 1;
+      const wBase = (0.2 - 0.04 * clamp((62 - u) / 30, 0, 1)) * u * (0.9 + 0.1 * P.pinUp);
+      for (let r = rows0; r <= rows1; r++) {
+        const y = (r + 0.5) * chh; const t = clamp((y - tipY) / Math.max(1, top - tipY), 0, 1);
+        const cx = bx0 + (tipX - bx0) * (1 - t) * (1 - t);
+        const hw = Math.max(0.5 * cw, wBase * Math.pow(t, 0.85));
+        const slope = (tipX - bx0) * 2 * (1 - t) / Math.max(1, top - tipY) * -1;
+        const cMin = Math.floor((cx - hw) / cw), cMax = Math.floor((cx + hw) / cw);
+        for (let c = cMin; c <= cMax; c++) {
+          const dx = ((c + 0.5) * cw - cx) / hw; const e = Math.abs(dx);
+          const warm = 1 - t * 0.55;
+          const edge = e > 0.62;
+          const chv = edge ? (dx < 0 ? (slope < -0.15 ? 124 : 47) : (slope > 0.15 ? 124 : 92)) : (e < 0.25 ? 124 : 58);
+          const lit = (dx < 0 ? 1 : 0.8) * (0.6 + 0.4 * warm);
+          L.put(c, r, t < 0.06 ? 33 : chv, lerp(200, 255, lit), lerp(150, 224, lit), lerp(120, 160, warm * lit), 255);
+        }
+      }
+    }
+    // tip
+    L.putXY(tipX, tipY, 42, 255, 244, 214, 255);
+    L.putXY(tipX, tipY - chh * 0.8, 43, 255, 230, 170, 220 * glow);
+    this.tipX = tipX; this.tipY = tipY;
+    if (this.o.main === true && !G.scrubbed && T > 2 && !this.held) { const pu = 0.5 + 0.5 * Math.sin(T * 3.2); const al = 70 + 160 * pu; L.putXY(tipX - cw * (2.2 + pu), tipY, 40, 255, 224, 150, al); L.putXY(tipX + cw * (2.2 + pu), tipY, 41, 255, 224, 150, al); }
+    // orbit (focused)
+    if (P.orbit > 0.15) {
+      const R = 0.62 * u * P.orbit;
+      for (let i = 0; i < 6; i++) {
+        const a = T * 5.5 + i * 1.0472; const ox = tipX + Math.cos(a) * R * 1.3, oy = tipY + Math.sin(a) * R * 0.62;
+        L.putXY(ox, oy, i === 0 ? 42 : i < 3 ? 111 : 46, 255, 236, 180, 255 * (1 - i * 0.14) * P.orbit);
+      }
+    }
+  }
+  drawParts() {
+    const L = this.L;
+    for (const p of this.parts) {
+      if (!p.on) continue; const k = 1 - p.t / p.m; let a = 255 * Math.min(1, k * 2.2);
+      if (p.k === PK.food) { const tw = 0.7 + 0.3 * Math.sin(G.T * 8); L.putXY(p.x, p.y, 42, 255, 224, 150, 255 * tw); L.putXY(p.x - L.cw, p.y, 43, 255, 200, 120, 130); L.putXY(p.x + L.cw, p.y, 43, 255, 200, 120, 130); L.putXY(p.x, p.y - L.chh, 94, 255, 214, 130, 150); continue; }
+      if (p.k === PK.glint) { L.putXY(p.x, p.y, 42, 220, 245, 255, 255); L.putXY(p.x - Math.sign(p.vx) * L.cw * 1.2, p.y, 46, 190, 235, 255, 170); L.putXY(p.x - Math.sign(p.vx) * L.cw * 2.4, p.y, 46, 190, 235, 255, 90); continue; }
+      let ch = p.ch;
+      if (p.k === PK.zed) { ch = p.t > p.m * 0.5 ? cc('Z') : cc('z'); }
+      L.putXY(p.x, p.y, ch, p.r, p.g, p.b, a);
+    }
+  }
+}
+function u0(n) { return n.u; }
+const CH_RAMP = [32, 46, 58, 45, 61, 43, 42, 35, 37, 64];
+
+/* ================= loop ================= */
+function refreshRects() {
+  for (const a of actors) if (a.vis) { a.rect = a.cv.getBoundingClientRect(); }
+}
+let last = 0, acc = 0, lastDraw = 0, rectT = 0;
+function frame(ts) {
+  requestAnimationFrame(frame);
+  if (document.hidden) { last = ts; return; }
+  let dt = (ts - last) / 1000; last = ts; if (dt > 0.1) dt = 0.1; if (dt <= 0) return;
+  acc += dt; let n = 0;
+  G.T += dt;
+  const sy = window.scrollY; const v = (sy - G.lastScrollY) / Math.max(dt, 0.001); G.lastScrollY = sy; G.scrollV += (v - G.scrollV) * Math.min(1, dt * 8);
+  if (G.hourOv != null && !G.hourScrub && !G.hourPin) {
+    if (G.hourHold > 0) G.hourHold -= dt; else { const rh = realHour(); let d = rh - G.hourOv; if (d > 12) d -= 24; if (d < -12) d += 24; G.hourOv += d * Math.min(1, dt * 1.6); G.hourOv = (G.hourOv + 24) % 24; if (Math.abs(d) < 0.03) G.hourOv = null; }
+  }
+  rectT -= dt; if (rectT <= 0) { rectT = 0.12; refreshRects(); }
+  let vis = 0; for (const a of actors) if (a.vis) vis++;
+  if (!vis) { acc = 0; return; }
+  while (acc >= 1 / 60 && n < 4) { acc -= 1 / 60; n++; for (const a of actors) if (a.vis) a.step(1 / 60); }
+  if (acc > 0.1) acc = 0;
+  if (ts - lastDraw < 31) return; lastDraw = ts;
+  for (const a of actors) if (a.vis && a.L.ready) { if (a.o.static) continue; const fp = a.o.fps || 30; if (fp < 30 && ts < (a.nd || 0)) continue; a.nd = ts + 1000 / fp - 9; a.applyBg(false); a.draw(); }
+  flushAnnounce();
+}
+window.NOMI = { actors, Nomi, Layer, G, E, ORDER, LABEL, SAY, announce, reduce, $, $$, clamp, lerp, smooth, rnd, skyAt, stageBg, hourNow, PK, cc, startLoop() { if (!reduce) requestAnimationFrame((t) => { last = t; frame(t); }); }, hash2, vnoise, mix3, refreshRects, live };
+})();
+
+</script>
+<script>
+(() => {
+'use strict';
+const N = window.NOMI; const { $, $$, clamp, lerp, rnd, G, Nomi, Layer, E, ORDER, LABEL, SAY, reduce, hourNow } = N;
+N.live.el = $('#live');
+
+/* ---------- build instances ---------- */
+const all = [];
+function mk(id, o) { const cv = document.getElementById(id); if (!cv) return null; const n = new Nomi(cv, o); all.push(n); return n; }
+const hero = mk('cvHero', { fs: 11, main: true, dial: true, uw: 7.6, uh: 4.9, umax: 92, ground: 0.8, pn: 40 });
+const play = mk('cvPlay', { fs: 10.5, main: true, dial: true, uw: 7.6, uh: 4.9, umax: 80, ground: 0.8, pn: 40 });
+const dock = mk('cvDock', { fs: 6, fps: 20, main: 'dock', uw: 6, uh: 4.3, ground: 0.82, cx: 0.5 });
+const cards = ORDER.map((e) => mk('cv-' + e, { fs: 8, emo: e, uw: 5.2, uh: 4.9, ground: 0.84, bloom: 0.25, fps: 12 }));
+const wild = {
+  nav: mk('cvNav', { fps: 20, fs: 5, emo: 'content', uw: 4.6, uh: 3.5, ground: 0.95, bloom: 0.25, bg: false, hopForced: true }),
+  e404: mk('cv404', { fps: 20, fs: 8, emo: 'concerned', cycle: ['concerned', 'curious', 'concerned', 'shy'], cycleT: 2.6, uw: 7.4, uh: 4.6, ground: 0.84, free: false,
+    extra: (n) => { const L = n.L; const t = N.G.T; const q = '?'.charCodeAt(0); const y = n.tipY - L.chh * 2.4 - Math.sin(t * 2) * 3; L.putXY(n.tipX + L.cw * 3, y, q, 255, 220, 150, 255); if (Math.sin(t * 2 + 1) > 0.2) L.putXY(n.tipX - L.cw * 4, y + L.chh * 1.4, q, 200, 220, 255, 200); } }),
+  load: mk('cvLoad', { fps: 20, fs: 8, emo: 'focused', uw: 7.4, uh: 4.6, ground: 0.8,
+    extra: (n) => { const L = n.L; const w = Math.floor(L.cols * 0.7), c0 = Math.floor((L.cols - w) / 2), r = Math.min(L.rows - 1, n.gr + 2); const p = (N.G.T * 0.22) % 1; for (let i = 0; i < w; i++) { const on = i / w < p; L.put(c0 + i, r, on ? 61 : 45, on ? 255 : 160, on ? 214 : 170, on ? 130 : 200, on ? 255 : 120); } L.put(c0 - 1, r, 91, 200, 210, 240, 255); L.put(c0 + w, r, 93, 200, 210, 240, 255); } }),
+  win: mk('cvWin', { fps: 20, fs: 8, emo: 'delighted', cycle: ['delighted', 'proud'], cycleT: 3.2, uw: 7.4, uh: 4.6, ground: 0.84, pn: 60, hopForced: true,
+    onStep: (n, dt) => { if (n.confetti <= 0) n.confetti = 1; } }),
+  foot: mk('cvFoot', { fps: 20, fs: 8, emo: 'asleep', uw: 7.4, uh: 4.6, ground: 0.84 })
+};
+const dockEls = { box: $('#dock'), sleep: $('#dockSleep'), hide: $('#dockHide'), show: $('#dockShow') };
+
+/* ---------- sketches (rejected concepts) ---------- */
+class Sketch {
+  constructor(id, fn, fs) {
+    this.cv = document.getElementById(id); this.fn = fn; this.vis = false; this.o = {};
+    this.o.fps = 20; this.L = new Layer(this.cv, { fs: fs || 8, bloom: 0.35, onLayout: () => { if (reduce || !this.vis) this.draw(); } }); this.t = 0; this.rect = null;
+    N.actors.push(this); this.px = null; this.py = null;
+    this.cv.addEventListener('pointermove', (e) => { const r = this.cv.getBoundingClientRect(); this.px = e.clientX - r.left; this.py = e.clientY - r.top; if (reduce) this.draw(); });
+    this.cv.addEventListener('pointerleave', () => { this.px = null; });
+    this.cv.addEventListener('pointerdown', () => { this.down = true; if (reduce) this.draw(); }); window.addEventListener('pointerup', () => { this.down = false; });
+  }
+  applyBg() {} step(dt) { this.t += dt; }
+  draw() { const L = this.L; if (!L.ready) return; L.clearBuf(); this.fn(L, this); L.paint(); L.bloomPass(); }
+}
+const P = (L, x, y, ch, r, g, b, a) => L.putXY(x, y, ch.charCodeAt(0), r, g, b, a == null ? 255 : a);
+const sk1 = new Sketch('sk1', (L, s) => { // Wick the moth: orbits the pointer lamp
+  const w = L.vw, h = L.vh, t = s.t; const lx = s.px != null ? s.px : w * 0.5 + Math.sin(t * 0.5) * w * 0.25, ly = s.py != null ? s.py : h * 0.45;
+  for (let r = 0; r < L.rows; r++) for (let c = 0; c < L.cols; c++) { const dx = c * L.cw - lx, dy = (r * L.chh - ly) * 1.8; const d = Math.sqrt(dx * dx + dy * dy); if (d < 120) { const a = (1 - d / 120); L.put(c, r, a > 0.6 ? 58 : 46, 255, 214, 140, a * 210); } }
+  P(L, lx, ly, '*', 255, 244, 214);
+  const a = t * 3.1 + Math.sin(t * 1.3) * 2, R = 48 + Math.sin(t * 2.2) * 20; const mx = lx + Math.cos(a) * R * 1.6, my = ly + Math.sin(a * 1.3) * R * 0.6 - 6;
+  const fl = Math.sin(t * 34) > 0 ? 1 : 0, cw = L.cw;
+  P(L, mx, my, '8', 215, 205, 235); P(L, mx - cw, my - fl * 6, fl ? '/' : '-', 240, 230, 250); P(L, mx + cw, my - fl * 6, fl ? '\\' : '-', 240, 230, 250);
+  P(L, mx - cw * 2, my + 2 - fl * 5, '(', 215, 215, 245, 200); P(L, mx + cw * 2, my + 2 - fl * 5, ')', 215, 215, 245, 200);
+  P(L, mx - cw * 3, my + 3 - fl * 4, '(', 200, 200, 235, 140); P(L, mx + cw * 3, my + 3 - fl * 4, ')', 200, 200, 235, 140);
+}, 8);
+const sk2 = new Sketch('sk2', (L, s) => { // Cumulo, a literal cloud
+  const w = L.vw, h = L.vh, t = s.t; const cx = w * 0.5 + Math.sin(t * 0.8) * 24, cy = h * 0.4 + Math.sin(t * 1.6) * 4;
+  const blobs = [[0, 0, 56], [-52, 14, 38], [52, 14, 40], [18, -26, 38]];
+  for (let r = 0; r < L.rows; r++) for (let c = 0; c < L.cols; c++) { const x = c * L.cw - cx, y = r * L.chh - cy; let m = 0; for (const b of blobs) { const dx = x - b[0], dy = (y - b[1]) * 1.5; m = Math.max(m, 1 - Math.sqrt(dx * dx + dy * dy) / b[2]); } if (m > 0) L.put(c, r, m > 0.5 ? 64 : m > 0.25 ? 37 : 35, 220 - (1 - m) * 60, 228 - (1 - m) * 50, 245, 255 * Math.min(1, m * 3)); }
+  P(L, cx - 18, cy - 2, 'o', 40, 40, 80); P(L, cx + 18, cy - 2, 'o', 40, 40, 80); P(L, cx, cy + 12, s.down ? 'n' : 'u', 40, 40, 80);
+  if (s.down || s.px != null && Math.abs(s.px - cx) < 60) for (let i = 0; i < 12; i++) P(L, cx - 56 + i * 10 + (i % 2) * 3, cy + 40 + ((t * 80 + i * 17) % 50), '|', 140, 190, 255, 200);
+}, 8);
+const sk3 = new Sketch('sk3', (L, s) => { // Tick, a clock-hand bird
+  const w = L.vw, h = L.vh, t = s.t; const cx = w * 0.5, cy = h * 0.55;
+  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; P(L, cx + Math.cos(a) * 88 * 1.3, cy + Math.sin(a) * 56, i % 3 ? '.' : '+', 170, 190, 230, 210); }
+  const tx = s.px != null ? s.px : cx + Math.cos(t * 0.7) * 100, ty = s.py != null ? s.py : cy + Math.sin(t * 0.7) * 50;
+  s.ang = (s.ang == null ? 0 : s.ang) + (Math.atan2((ty - cy) * 1.5, tx - cx) - (s.ang || 0)) * 0.08;
+  for (let i = 1; i < 10; i++) P(L, cx + Math.cos(s.ang) * i * 9, cy + Math.sin(s.ang) * i * 9 / 1.5, i < 9 ? '=' : '>', 255, 200, 120);
+  const ex = cx + Math.cos(s.ang) * 100, ey = cy + Math.sin(s.ang) * 100 / 1.5; P(L, ex - 5, ey - 6, 'o', 255, 255, 255); P(L, ex + 5, ey - 6, 'o', 255, 255, 255);
+  P(L, cx, cy, '@', 255, 230, 190);
+}, 8);
+
+/* ---------- visibility, layout ---------- */
+const io = new IntersectionObserver((es) => {
+  for (const e of es) { const a = N.actors.find((x) => x.cv === e.target); if (a) { a.vis = e.isIntersecting && !(a === dock && dockEls.box.hidden); if (a.vis && a.L.ready && (reduce)) a.draw(); } }
+  syncDock();
+}, { rootMargin: '60px' });
+const ro = new ResizeObserver((es) => { for (const e of es) { const a = N.actors.find((x) => x.cv === e.target); if (a) { a.L.layout(); if (a.rect !== undefined) a.rect = a.cv.getBoundingClientRect(); if (a.vis || reduce) { if (a.settle) a.settle(); else a.draw(); } } } });
+for (const a of N.actors) { io.observe(a.cv); ro.observe(a.cv); a.vis = false; }
+document.fonts && document.fonts.ready && document.fonts.ready.then(() => { for (const a of N.actors) { a.L.layout(); if (a.settle) a.settle(); else a.draw(); } });
+
+/* ---------- dock: shows only when the big stages are off screen ---------- */
+let dockHidden = false; try { dockHidden = localStorage.getItem('nomiDockHidden') === '1'; } catch (e) {}
+function mainVisible() { return hero.vis || play.vis; }
+function syncDock() {
+  const want = !mainVisible() && !dockHidden;
+  dockEls.box.hidden = !want; dockEls.show.hidden = !(dockHidden && !mainVisible());
+  dock.vis = want;
+  if (want && reduce && dock.L.ready) { dock.L.layout(); dock.settle(); }
+}
+dockEls.hide.addEventListener('click', () => { dockHidden = true; try { localStorage.setItem('nomiDockHidden', '1'); } catch (e) {} syncDock(); dockEls.show.focus(); });
+dockEls.show.addEventListener('click', () => { dockHidden = false; try { localStorage.setItem('nomiDockHidden', '0'); } catch (e) {} syncDock(); dock.wake(); dockEls.sleep.focus(); });
+dockEls.sleep.addEventListener('click', () => { const on = dockEls.sleep.getAttribute('aria-pressed') !== 'true'; dockEls.sleep.setAttribute('aria-pressed', on); dockEls.sleep.textContent = on ? 'Wake' : 'Sleep'; dock.setSleep(on); });
+const scrollReact = (n, dt) => {
+  const v = G.scrollV;
+  if (n.emo !== 'asleep' && !n.sleepFlag) {
+    if (Math.abs(v) > 2600 && n.emoT <= 0 && n.emo !== 'surprised') { n.idle = 0; n.feel('surprised', 0.9, 'curious', 1.5); n.shake = 0.3; }
+    else if (Math.abs(v) > 260) { n.idle = 0; n.gx = 0.1; n.gy2 = v > 0 ? -0.9 : 0.9; n.glanceT = 0.6; n.pav += (v > 0 ? -1 : 1) * 0.02 * n.u; }
+  }
+};
+dock.o.onStep = scrollReact; hero.o.onStep = scrollReact; play.o.onStep = scrollReact;
+
+/* ---------- global events: pointer, key, scroll ---------- */
+window.addEventListener('pointermove', (e) => { G.px = e.clientX; G.py = e.clientY; G.pt = G.T; if (dock.vis) { dock.idle = 0; if (dock.emo === 'asleep' && !dock.sleepFlag) dock.wake(); } }, { passive: true });
+window.addEventListener('keydown', (e) => {
+  if (['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'Escape'].includes(e.key)) return;
+  G.typeT = G.T; G.typeLen = (e.target && e.target.value) ? e.target.value.length : G.typeLen;
+  for (const n of [hero, play, dock]) if (n.vis) { n.idle = 0; if (n.emo === 'content') n.feel('curious', 1.8); }
+});
+window.addEventListener('scroll', () => { G.pt = G.pt; if (reduce && dock.vis) { dock.settle(); } }, { passive: true });
+document.addEventListener('visibilitychange', () => {});
+
+/* ---------- stage wiring (hero + playground) ---------- */
+function wireStage(n, box) {
+  const cv = n.cv; let down = null;
+  const loc = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  cv.addEventListener('pointermove', (e) => {
+    const [x, y] = loc(e); const dx = x - n.px, dy = y - n.py; const sp = Math.hypot(dx, dy);
+    if (n.px < -9000) { if (!n.sleepFlag && n.emo !== 'asleep') n.feel('curious', 1.2); }
+    n.pointerAt(x, y); n.idle = n.sleepFlag ? n.idle : 0;
+    if (n.emo === 'asleep' && !n.sleepFlag && sp > 3) n.wake();
+    if (down) {
+      if (down.type === 'scrub') {
+        const hr = 4.8 + 14.4 * clamp(x / n.L.vw, 0, 1); G.hourOv = hr; G.hourScrub = true; n.scrub = true; n.idle = 0;
+        const band = hr < 6.4 ? 'sleepy' : hr < 17 ? (hr > 10.5 && hr < 14.5 ? 'proud' : 'delighted') : hr < 19.2 ? 'curious' : 'sleepy';
+        if (hr > 19.4 || hr < 5.4) { if (n.emo !== 'asleep') n.feel('asleep', 0); } else if (n.emo !== band) { n.emo = band; n.emoT = 0.0001; n.nextEmo = null; N.announce(SAY[band]); }
+        n.emoT = 0.8; n.nextEmo = null;
+        if (reduce) n.settle();
+      } else if (down.type === 'body') {
+        if (!down.moved && Math.hypot(x - down.x, y - down.y) > 7) { down.moved = true; n.held = true; n.hopS = 0; n.feel('surprised', 0.8, 'shy', 0); n.emoT = 0.8; n.nextEmo = 'shy'; n.nextDur = 0; }
+        if (down.moved) { n.heldX = x; n.heldY = Math.max(0, n.gy - y - n.Hh * 0.42); n.idle = 0; if (n.emoT <= 0 && n.held) { n.emoT = 5; n.emo = 'shy'; } if (reduce) n.settle(); }
+      }
+    } else {
+      if (n.hitBody(x, y)) n.petMove(sp, 1 / 60);
+      cv.style.cursor = n.hitPin(x, y) ? 'grab' : n.hitBody(x, y) ? 'pointer' : 'crosshair';
+      if (reduce) { n.settle(); }
+    }
+  });
+  cv.addEventListener('pointerleave', () => { if (!down) n.pointerOut(); });
+  cv.addEventListener('pointerdown', (e) => {
+    const [x, y] = loc(e); cv.setPointerCapture && cv.setPointerCapture(e.pointerId); n.pointerAt(x, y); n.idle = 0;
+    box.focus({ preventScroll: true });
+    if (n.hitPin(x, y)) { down = { type: 'scrub' }; G.scrubbed = true; n.scrub = true; G.hourScrub = true; G.hourOv = hourNow(); cv.style.cursor = 'grabbing'; n.pav += 6 * n.u; n.feel('surprised', 0.6, 'delighted'); if (reduce) n.settle(); }
+    else if (n.hitBody(x, y)) { down = { type: 'body', x, y, moved: false }; }
+    else { down = { type: 'food' }; n.dropFood(x); if (reduce) n.settle(); }
+  });
+  const up = (e) => {
+    if (!down) return; const d = down; down = null;
+    if (d.type === 'scrub') { n.scrub = false; G.hourScrub = false; G.hourHold = 2.2; n.emoT = 1.4; n.nextEmo = null; cv.style.cursor = ''; if (n.emo === 'asleep') { n.idle = 80; } else n.feel(n.emo, 1.2, null); }
+    else if (d.type === 'body') {
+      if (d.moved) { n.held = false; n.hopS = 0; n.vy = 0; n.feel('delighted', 1.6, 'content'); n.emoT = 1.8; n.nextEmo = 'content'; n.nextDur = 0; n.x = clamp(n.x, n.u * 1.5, n.L.vw - n.u * 1.5); if (reduce) { n.hy = 0; n.settle(); } }
+      else n.poke();
+    }
+    if (reduce) { setTimeout(() => { n.settle(); }, 1800); }
+  };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  // keyboard
+  box.addEventListener('keydown', (e) => {
+    const L = n.L; let used = true;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { n.inside = true; n.px = clamp((n.px < -9000 ? n.x : n.px) + (e.key === 'ArrowLeft' ? -50 : 50), 10, L.vw - 10); n.py = n.gy * 0.35; n.idle = 0; if (n.emo === 'asleep') n.wake(); if (reduce) n.settle(); }
+    else if (e.key === 'Escape') { n.inside = false; n.px = -9999; if (reduce) n.settle(); used = false; }
+    else if (e.key === 'Enter' || e.key === ' ') n.poke();
+    else if (e.key === 'p' || e.key === 'P') { n.pet = 5; n.petMove(n.u * 4, 1 / 60); }
+    else if (e.key === 'f' || e.key === 'F') { n.dropFood(n.x + (Math.random() < 0.5 ? -1 : 1) * n.u * rnd(3, 5)); if (reduce) n.settle(); }
+    else if (e.key === 's' || e.key === 'S') toggleSleep(n);
+    else used = false;
+    if (used) e.preventDefault();
+  });
+  box.addEventListener('blur', () => { if (!down) { n.inside = false; n.px = -9999; } });
+}
+wireStage(hero, $('#stageHero')); wireStage(play, $('#stagePlay'));
+function toggleSleep(n) { const on = !n.sleepFlag; n.setSleep(on); const sel = n === play ? '[data-sleep][data-stage=play]' : '[data-sleep]:not([data-stage])'; $$(sel).forEach((b) => { b.setAttribute('aria-pressed', on); b.textContent = on ? 'Wake up' : 'Send to sleep'; }); if (on) N.announce('Nomi is asleep.'); }
+
+/* ---------- buttons ---------- */
+const act = (n, fn) => { fn(n); if (reduce) n.settle(); };
+$$('[data-act]').forEach((b) => b.addEventListener('click', () => {
+  const a = b.dataset.act; const tgt = b.dataset.stage === 'play' ? play : hero;
+  if (a === 'pet') act(tgt, (n) => { n.pet = 5; n.petMove(n.u * 4, 1 / 60); n.purr = 2.5; n.idle = 0; if (n.sleepFlag) toggleSleep(n); });
+  else if (a === 'poke') act(tgt, (n) => n.poke());
+  else if (a === 'feed') act(tgt, (n) => n.dropFood(n.x + (Math.random() < 0.5 ? -1 : 1) * n.u * rnd(3.2, 5.2)));
+  else if (a === 'shrink') { const st = $('#stageHero'); const on = st.classList.toggle('min'); b.setAttribute('aria-pressed', on); b.textContent = on ? 'Make big again' : 'Make small'; }
+}));
+$$('[data-sleep]').forEach((b) => b.addEventListener('click', () => toggleSleep(b.dataset.stage === 'play' ? play : hero)));
+
+/* ---------- page events (playground) ---------- */
+const mood = $$('.mood');
+function setMoodText() { const n = play.vis ? play : hero; const t = LABEL[n.emo] || n.emo; mood.forEach((m) => { if (m.textContent !== t) m.textContent = t; }); }
+setInterval(setMoodText, 250);
+const clk = $('#clockline');
+function clockText() {
+  const h = hourNow(); const S = N.skyAt(h); const hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+  const t = ((hh + 11) % 12 + 1) + ':' + String(mm).padStart(2, '0') + (hh < 12 ? ' AM' : ' PM');
+  const alt = S.alt; const d = S.day;
+  const txt = d < 0.15 ? 'the sun is down, so the pin glows and the shadow stays small' : alt > 0.8 ? 'the sun is high, so the shadow is a short puddle' : alt > 0.45 ? 'the sun is climbing, so the shadow is medium' : 'the sun is low, so the shadow is long';
+  const s = (G.hourOv != null ? 'Sun position set to ' : 'It is ') + t + ': ' + txt + '.';
+  if (clk && clk.textContent !== s) clk.textContent = s;
+}
+setInterval(clockText, 400); clockText();
+function targets() { return [hero, play, dock].filter((n) => n && n.vis); }
+function ev(type) {
+  const ts = targets(); if (!ts.length) return;
+  for (const n of ts) {
+    n.idle = 0; if (n.sleepFlag) { n.sleepFlag = false; }
+    if (type === 'error') { n.feel('concerned', 3.8, 'content'); n.shake = 0.45; n.addQ(1.4); n.confetti = 0; }
+    else if (type === 'success') { n.feel('delighted', 2.6, 'proud', 3.4); n.confetti = 2.8; n.burst(18, 255, 214, 130, true); n.addQ(-1.2); if (n.hopS === 0 && !reduce) { n.hopS = 1; n.hopT = 0.1; n.hopG = 8 * n.u * 1.1 / (0.5 * 0.5); n.hopV = n.hopG * 0.5 / 2; n.hopVx = 0; } }
+    else if (type === 'loading') { n.feel('focused', 14, 'content'); n.target = null; }
+    else if (type === 'loaded') { n.feel('proud', 2.8, 'content'); n.burst(10, 255, 214, 130, true); }
+    else if (type === 'night') { n.idle = 120; n.feel('sleepy', 0); }
+    else if (type === 'idle') { n.idle = 30; n.feel('sleepy', 0); setTimeout(() => { if (n.idle > 29) { n.idle = 90; n.emo = 'asleep'; if (reduce) n.settle(); } }, 3200); }
+    if (reduce) n.settle();
+  }
+  if (type === 'night') { G.hourPin = true; G.hourOv = 23.4; setTimeout(() => { G.hourPin = false; G.hourHold = 0.5; for (const n of targets()) { n.idle = 0; n.feel('surprised', 0.7, 'content'); if (reduce) n.settle(); } if (reduce) { G.hourOv = null; for (const a of all) a.applyBg(true); } }, 9000); if (reduce) for (const a of all) { a.applyBg(true); a.settle && a.settle(); } }
+  if (type === 'day') { G.hourPin = false; G.hourHold = 0; G.hourOv = null; }
+}
+window.NOMI.event = ev;
+$$('[data-ev]').forEach((b) => b.addEventListener('click', () => {
+  const t = b.dataset.ev;
+  if (t === 'loading') { ev('loading'); b.disabled = true; const old = b.textContent; b.textContent = 'Loading...'; setTimeout(() => { ev('loaded'); b.disabled = false; b.textContent = old; }, 3400); }
+  else ev(t);
+}));
+// real form
+const form = $('#demoForm'), email = $('#demoEmail'), formMsg = $('#formMsg');
+if (form) {
+  form.addEventListener('submit', (e) => { e.preventDefault(); if (!email.checkValidity()) { email.reportValidity && 0; formMsg.textContent = 'That does not look like an email yet. Try name@example.com.'; formMsg.className = 'msg bad'; ev('error'); form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake'); email.focus(); }
+    else { formMsg.textContent = 'You are on the list. Nomi is thrilled.'; formMsg.className = 'msg ok'; ev('success'); } });
+  email.addEventListener('input', () => { formMsg.textContent = ''; G.typeLen = email.value.length; G.typeT = G.T; });
+  email.addEventListener('focus', () => { for (const n of [play]) if (n.vis) { n.idle = 0; n.feel('curious', 2); } });
+  document.addEventListener('invalid', (e) => { e.preventDefault(); }, true);
+}
+/* ---------- emotion sheet: click to make the main Nomi feel it ---------- */
+const toast = $('#sheetToast');
+$$('.ecard').forEach((b) => b.addEventListener('click', () => {
+  const e = b.dataset.emo; const ts = targets(); const n = ts.find((x) => x === hero || x === play) || dock;
+  const ts2 = ts.length ? ts : [dock];
+  for (const t of ts2) { t.idle = 0; t.sleepFlag = false; t.feel(e, 6, null); if (e === 'asleep') t.idle = 60; }
+  toast.textContent = LABEL[e] + ': the live Nomi on this page feels it for six seconds.' ; if (reduce) for (const t of ts2) t.settle();
+}));
+const navBox = $('.fakenav');
+if (navBox && wild.nav) { const hopNav = () => { const n = wild.nav; if (reduce || n.hopS !== 0) return; n.hopS = 1; n.hopT = 0.08; n.hopG = 8 * n.u * 0.9 / (0.45 * 0.45); n.hopV = n.hopG * 0.45 / 2; n.hopVx = 0; n.addQ(1.2); n.pav += 3 * n.u; }; navBox.addEventListener('pointerenter', hopNav); navBox.addEventListener('pointerdown', hopNav); }
+N.startLoop();
+syncDock();
+// first-visit gentle wake
+setTimeout(() => { if (hero.vis) hero.feel('curious', 1.8); }, 900);
+window.addEventListener('load', () => { for (const a of N.actors) { a.L.layout(); if (reduce) { if (a.settle) a.settle(); else a.draw(); } } });
+})();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,1314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Carrier, a design language for signal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#05070b; --panel:#0a1018; --panel2:#0d1520;
+  --line:rgba(110,190,235,.2); --line2:rgba(110,190,235,.38);
+  --txt:#eaf0f4; --mut:#93a3b2; --dim:#5d6e7e;
+  --cy:#54d6ff; --am:#ffb040; --mg:#ff5482; --wh:#f6f2e4;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --ui:"Space Grotesk","Helvetica Neue",Arial,system-ui,sans-serif;
+  --gut:16px; --hdr:64px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;overflow-x:clip;background:var(--ink)}
+body{margin:0;background:var(--ink);color:var(--txt);font:400 16px/1.6 var(--ui);overflow-x:clip;-webkit-font-smoothing:antialiased}
+body.lock{overflow:hidden}
+a{color:inherit}
+canvas{display:block}
+.vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:focus-visible{outline:2px solid var(--am);outline-offset:4px;border-radius:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 var(--gut)}
+section{scroll-margin-top:calc(var(--hdr) + 8px)}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--cy);margin:0 0 14px}
+h2{font:500 clamp(26px,4.2vw,42px)/1.1 var(--ui);letter-spacing:-.01em;margin:0 0 14px;text-wrap:balance}
+.lede{color:var(--mut);max-width:60ch;margin:0 0 28px}
+
+/* ---------- header ---------- */
+.hdr{position:fixed;inset:0 0 auto 0;height:var(--hdr);z-index:60;background:linear-gradient(to bottom,rgba(5,7,11,.92),rgba(5,7,11,.78));
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.hdr canvas.wire{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.hdr-in{position:relative;height:100%;display:flex;align-items:center;gap:20px;padding:0 var(--gut);max-width:1280px;margin:0 auto}
+.logo{display:block;width:236px;height:44px;flex:none;position:relative;border-radius:2px}
+.logo canvas{width:100%;height:100%}
+.nav{margin:0 auto;padding:0;list-style:none;display:flex;gap:4px;align-items:center}
+.nav>li{position:relative}
+.nl{appearance:none;background:none;border:0;color:var(--mut);font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+  padding:14px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;position:relative;z-index:1;transition:color .2s}
+.nl:hover,.nl:focus-visible,.has-menu.open>.nl{color:var(--wh);text-shadow:0 0 12px rgba(84,214,255,.7)}
+.nl .car{font-size:9px;transition:transform .3s}
+.has-menu.open .car{transform:rotate(180deg)}
+.hdr-r{display:flex;align-items:center;gap:6px;margin-left:auto}
+.nav + .hdr-r{margin-left:0}
+.drop{position:absolute;top:calc(100% + 6px);left:50%;width:min(580px,92vw);transform:translateX(-50%);visibility:hidden;opacity:0;
+  transition:opacity .18s,visibility 0s .3s;z-index:70}
+.has-menu.open .drop{visibility:visible;opacity:1;transition:opacity .12s,visibility 0s}
+.drop canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.drop-bg{position:absolute;inset:0;background:rgba(6,10,16,.9);border-radius:2px}
+.drop ul{position:relative;list-style:none;margin:0;padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.drop li a{display:block;padding:12px 14px;text-decoration:none;color:var(--txt);position:relative;border-radius:2px}
+.drop li a .nm{display:block;font:700 12px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--wh)}
+.drop li a .ds{display:block;font-size:13px;line-height:1.4;color:var(--mut);margin-top:6px}
+.drop li a:hover .nm,.drop li a:focus-visible .nm{color:var(--am)}
+.drop li a:focus-visible{outline-offset:-2px}
+
+.burger{display:none}
+.mnav{display:none}
+
+/* ---------- buttons ---------- */
+.btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:10px;height:46px;padding:0 26px;margin:0;border:0;background:transparent;
+  color:var(--txt);font:700 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;cursor:pointer;text-decoration:none;-webkit-tap-highlight-color:transparent}
+.btn canvas{position:absolute;left:-22px;top:-14px;width:calc(100% + 44px);height:calc(100% + 28px);pointer-events:none}
+.btn .lbl{position:relative;z-index:1;text-shadow:0 0 6px #000,0 0 14px #000}
+.btn:focus-visible{outline:2px solid var(--am);outline-offset:7px;border-radius:2px}
+.btn.sm{height:36px;padding:0 18px;font-size:11px}
+.btn.xm canvas{width:calc(100% + 22px + 210px)}
+.btn.icon{width:48px;height:48px;padding:0;border-radius:50%}
+.btn.icon:focus-visible{border-radius:50%}
+.btn.ghost{padding:0 6px}
+.btn.ghost .lbl{color:var(--cy)}
+.btn.tog{padding:0 20px 0 22px;min-width:240px;justify-content:flex-start}
+.btn.tog canvas{}
+.btn.tog.off .lbl{color:var(--mg)}
+.btn.burger{width:44px;height:44px;padding:0}
+.btn.burger canvas{left:-6px;top:-6px;width:calc(100% + 12px);height:calc(100% + 12px)}
+
+/* ---------- hero ---------- */
+.hero{position:relative;height:min(100svh,860px);min-height:620px;background:var(--ink);border-bottom:1px solid var(--line);overflow:hidden;touch-action:pan-y;-webkit-user-select:none;user-select:none}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%}
+.hero-scrim{position:absolute;inset:auto 0 0 0;height:60%;background:linear-gradient(to right,rgba(5,7,11,.9),rgba(5,7,11,.62) 42%,rgba(5,7,11,0) 78%),linear-gradient(to bottom,rgba(5,7,11,0),rgba(5,7,11,.55));pointer-events:none}
+@media (max-width:700px){.hero-scrim{background:linear-gradient(to bottom,rgba(5,7,11,0),rgba(5,7,11,.8) 40%,rgba(5,7,11,.92))}}
+.hero-copy{position:absolute;left:0;right:0;bottom:36px;max-width:1180px;margin:0 auto;padding:0 var(--gut)}
+.hero h1{font:500 clamp(30px,5.4vw,60px)/1.04 var(--ui);letter-spacing:-.02em;margin:0 0 14px;max-width:16ch;text-wrap:balance;text-shadow:0 2px 24px rgba(0,0,0,.9)}
+.hero p.sub{color:#b4c2cf;max-width:46ch;margin:0 0 24px;text-shadow:0 1px 14px rgba(0,0,0,.95)}
+.cta{display:flex;flex-wrap:wrap;gap:22px 30px;align-items:center;margin-bottom:20px}
+.hint{font:400 12px/1.5 var(--mono);color:var(--dim);margin:0;letter-spacing:.04em}
+.hint kbd{font:700 11px var(--mono);color:var(--am);border:1px solid rgba(255,176,64,.4);padding:2px 6px;border-radius:2px}
+
+/* ---------- sections ---------- */
+.sec{padding:96px 0 40px}
+.stage{border:1px solid var(--line);background:linear-gradient(180deg,var(--panel),var(--ink));position:relative;border-radius:3px;overflow:hidden}
+.mark-stage{height:min(46vw,330px);min-height:220px}
+.mark-stage canvas{position:absolute;inset:0;width:100%;height:100%}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.chip{appearance:none;background:transparent;border:1px solid var(--line2);color:var(--mut);font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;padding:11px 14px;border-radius:2px;cursor:pointer;transition:all .15s}
+.chip:hover{color:var(--wh);border-color:var(--cy);box-shadow:0 0 14px rgba(84,214,255,.25)}
+.chip[aria-pressed="true"]{color:var(--ink);background:var(--am);border-color:var(--am)}
+.states{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:18px;border:1px solid var(--line);border-radius:3px}
+.states div{padding:16px 18px;border-left:1px solid var(--line)}
+.states div:first-child{border-left:0}
+.states b{display:block;font:700 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--cy);margin-bottom:6px}
+.states span{font-size:14px;color:var(--mut);line-height:1.5}
+.navsize{display:flex;align-items:center;gap:14px;margin-top:18px;color:var(--dim);font:400 12px var(--mono)}
+.navsize .logo{width:236px;height:44px}
+
+.bgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.bcell{background:var(--ink);padding:30px 28px 26px;display:flex;flex-direction:column;gap:22px;min-height:178px;overflow:clip}
+.bcell .row{flex:1;display:flex;align-items:center;min-height:60px}
+.bcell h3{margin:0;font:700 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--cy)}
+.bcell p{margin:0;font-size:13px;color:var(--mut);line-height:1.5}
+.bcell.wide{grid-column:span 2}
+.bcell.full{grid-column:1/-1}
+
+.menu-note{display:grid;grid-template-columns:1.1fr 1fr;gap:30px;align-items:center}
+.menu-note .stage{padding:26px}
+.menu-note ul{margin:0;padding:0;list-style:none;display:grid;gap:12px;color:var(--mut);font-size:15px}
+.menu-note li{padding-left:22px;position:relative}
+.menu-note li:before{content:">";position:absolute;left:0;color:var(--am);font:700 13px var(--mono)}
+
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.rule{background:var(--ink);padding:26px 22px}
+.rule .n{font:700 11px var(--mono);color:var(--dim);letter-spacing:.14em}
+.rule h3{font:500 20px/1.2 var(--ui);margin:10px 0 8px}
+.rule p{margin:0 0 16px;font-size:14px;color:var(--mut);line-height:1.55}
+.sw{display:flex;gap:6px;flex-wrap:wrap}
+.sw i{display:block;width:26px;height:26px;border-radius:2px;border:1px solid rgba(255,255,255,.12)}
+.ramp{font:700 20px/1 var(--mono);letter-spacing:.14em;white-space:pre;overflow:hidden}
+.ramp span{display:inline-block}
+
+/* ---------- footer ---------- */
+.foot{margin-top:120px;border-top:1px solid var(--line);background:#04060a;position:relative}
+.map-wrap{position:relative;height:clamp(340px,60vh,640px);overflow:hidden;background:radial-gradient(ellipse 70% 70% at 50% 50%,#08121c,#04060a)}
+.map-wrap canvas{position:absolute;inset:0;width:100%;height:100%}
+.map-bar{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:14px var(--gut);font:600 11px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mut);pointer-events:none;z-index:2}
+.map-bar b{color:var(--am);font-weight:700}
+.foot-ui{max-width:1180px;margin:0 auto;padding:44px var(--gut) 40px;display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:34px}
+.foot-ui h2{font-size:clamp(30px,4.6vw,54px);margin:0 0 10px;max-width:11ch}
+.foot-ui p{color:var(--mut);margin:0;max-width:34ch;font-size:15px}
+.foot-ui h3{margin:0 0 14px;font:700 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--cy)}
+.foot-ui ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.foot-ui a{color:var(--mut);text-decoration:none;font-size:15px;transition:color .15s}
+.foot-ui a:hover{color:var(--wh)}
+.foot-end{max-width:1180px;margin:0 auto;padding:18px var(--gut) 36px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font:400 12px var(--mono);color:var(--dim)}
+
+#toast{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index:90;pointer-events:none;text-align:center;font:700 clamp(14px,3.2vw,22px)/1.3 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--wh);
+  text-shadow:0 0 18px rgba(255,176,64,.9),0 0 40px rgba(255,176,64,.5);opacity:0;transition:opacity .4s;width:min(92vw,720px)}
+#toast.on{opacity:1}
+#toast small{display:block;margin-top:10px;font-size:.55em;letter-spacing:.16em;color:var(--am)}
+canvas#cur{position:fixed;inset:0;width:100vw;height:100vh;z-index:80;pointer-events:none}
+
+@media (max-width:900px){
+  .nav,.hdr-r .btn.sm{display:none}
+  .btn.burger{display:inline-flex}
+  .logo{width:200px;height:40px}
+  .hdr-r{margin-left:auto}
+  .mnav{display:block;position:fixed;top:var(--hdr);left:0;right:0;bottom:0;z-index:55;visibility:hidden;opacity:0;transition:opacity .2s,visibility 0s .4s;background:rgba(5,7,11,.96)}
+  .mnav.open{visibility:visible;opacity:1;transition:opacity .15s,visibility 0s}
+  .mnav canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .mnav ul{position:relative;list-style:none;margin:0;padding:22px var(--gut);display:grid;gap:4px}
+  .mnav a{display:block;padding:16px 8px;text-decoration:none;font:500 32px/1.1 var(--ui);color:var(--txt);letter-spacing:-.01em}
+  .mnav a small{display:block;font:400 12px var(--mono);letter-spacing:.1em;color:var(--mut);margin-top:6px;text-transform:uppercase}
+  .mnav a:hover,.mnav a:focus-visible{color:var(--am)}
+  .bgrid{grid-template-columns:1fr 1fr}
+  .bcell.wide,.bcell.full{grid-column:span 2}
+  .menu-note{grid-template-columns:1fr}
+  .foot-ui{grid-template-columns:1fr 1fr}
+  .foot-ui>div:first-child{grid-column:span 2}
+  .states{grid-template-columns:1fr}
+  .states div{border-left:0;border-top:1px solid var(--line)}
+  .states div:first-child{border-top:0}
+}
+@media (max-width:560px){
+  .bgrid{grid-template-columns:1fr}
+  .bcell.wide,.bcell.full{grid-column:auto}
+  .bcell{padding:26px 22px 22px}
+  .btn.tog{min-width:0;width:100%}
+  .hero{min-height:660px}
+  .navsize{flex-wrap:wrap}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .drop,.mnav,#toast,.nl,.chip{transition:none}
+}
+</style>
+</head>
+<body>
+
+<header class="hdr" id="top">
+  <canvas class="wire" id="wire" aria-hidden="true"></canvas>
+  <div class="hdr-in">
+    <a class="logo" href="#top" id="navlogo" aria-label="Carrier, home"><canvas id="logoNav" aria-hidden="true"></canvas></a>
+    <nav aria-label="Main">
+      <ul class="nav" id="nav">
+        <li class="has-menu" id="hm">
+          <button class="nl" id="menuBtn" type="button" aria-expanded="false" aria-controls="drop">Platform <span class="car" aria-hidden="true">v</span></button>
+          <div class="drop" id="drop">
+            <div class="drop-bg"></div>
+            <canvas id="dropCv" aria-hidden="true"></canvas>
+            <ul>
+              <li><a href="#mark"><span class="nm" data-t="Relay">Relay</span><span class="ds">Send one message to every phone, inbox and screen.</span></a></li>
+              <li><a href="#buttons"><span class="nm" data-t="Receipts">Receipts</span><span class="ds">See who received it, and who still has not.</span></a></li>
+              <li><a href="#menu"><span class="nm" data-t="Beacon">Beacon</span><span class="ds">A status page that updates itself in seconds.</span></a></li>
+              <li><a href="#notes"><span class="nm" data-t="Echo">Echo</span><span class="ds">Collect replies in one calm, sorted thread.</span></a></li>
+            </ul>
+          </div>
+        </li>
+        <li><a class="nl" href="#buttons">Buttons</a></li>
+        <li><a class="nl" href="#notes">Language</a></li>
+        <li><a class="nl" href="#footer">Network</a></li>
+      </ul>
+    </nav>
+    <div class="hdr-r">
+      <a class="btn sm" id="navCta" href="#hero" data-kind="primary"><canvas aria-hidden="true"></canvas><span class="lbl">Tune in</span></a>
+      <button class="btn burger" id="burger" type="button" aria-expanded="false" aria-controls="mnav" aria-label="Open menu" data-kind="burger"><canvas aria-hidden="true"></canvas></button>
+    </div>
+  </div>
+</header>
+
+<div class="mnav" id="mnav">
+  <canvas id="mnavCv" aria-hidden="true"></canvas>
+  <ul>
+    <li><a href="#hero"><span class="nm" data-t="Tune in">Tune in</span><small>Start here</small></a></li>
+    <li><a href="#mark"><span class="nm" data-t="The mark">The mark</span><small>Logo, idle and attention</small></a></li>
+    <li><a href="#buttons"><span class="nm" data-t="Buttons">Buttons</span><small>Six ways to press</small></a></li>
+    <li><a href="#notes"><span class="nm" data-t="Language">Language</span><small>Five rules</small></a></li>
+    <li><a href="#footer"><span class="nm" data-t="Network">Network</span><small>Live transmission map</small></a></li>
+  </ul>
+</div>
+
+<main>
+<section class="hero" id="hero" aria-label="Carrier hero">
+  <canvas id="heroCv" role="img" aria-label="The word CARRIER forms from a carrier wave on a phosphor oscilloscope. Below it, a waterfall of radio signals keyed by each letter scrolls downward."></canvas>
+  <div class="hero-scrim"></div>
+  <div class="hero-copy">
+    <p class="eyebrow" id="eb">CH 01 / signal locked</p>
+    <h1 id="h1">Say it once. Know it arrived.</h1>
+    <p class="sub">Carrier sends the message that matters to every phone, inbox and screen on your list, then shows you who got it.</p>
+    <div class="cta">
+      <button class="btn" type="button" data-kind="primary" id="heroCta"><canvas aria-hidden="true"></canvas><span class="lbl">Tune in</span></button>
+      <a class="btn" href="#notes" data-kind="secondary"><canvas aria-hidden="true"></canvas><span class="lbl">Read the language</span></a>
+    </div>
+    <p class="hint"><kbd>Hold Space</kbd> or press and hold the hero to charge a broadcast. Move to tune. Click to ping.</p>
+  </div>
+</section>
+
+<section class="sec" id="mark">
+  <div class="wrap">
+    <p class="eyebrow">01 / The mark</p>
+    <h2>A wordmark that is a carrier wave, carrying itself.</h2>
+    <p class="lede">The mark is born as a bare sine wave. The wave then modulates up into the letters, row by row from the center line, and each character flashes amber the moment it locks.</p>
+    <div class="stage mark-stage"><canvas id="logoBig" role="img" aria-label="Carrier wordmark with a broadcast dot and arcs, drawn with animated characters."></canvas></div>
+    <div class="chips" role="group" aria-label="Logo states">
+      <button class="chip" type="button" id="chipIdle" aria-pressed="true">Idle</button>
+      <button class="chip" type="button" id="chipAtt" aria-pressed="false">Attention</button>
+      <button class="chip" type="button" id="chipForm">Replay the form moment</button>
+    </div>
+    <div class="states">
+      <div><b>Idle</b><span>A raster line drifts down the letters. A few cells flicker and recover.</span></div>
+      <div><b>Attention</b><span>Hover or focus splits the color channels one cell apart and speeds the sweep.</span></div>
+      <div><b>Form</b><span>Carrier wave, then modulation, then lock. About three seconds on load.</span></div>
+    </div>
+    <div class="navsize"><a class="logo" href="#top" id="navlogo2" aria-label="Carrier wordmark at navigation size"><canvas id="logoSmall" aria-hidden="true"></canvas></a><span>Navigation size. Hover it.</span></div>
+  </div>
+</section>
+
+<section class="sec" id="buttons">
+  <div class="wrap">
+    <p class="eyebrow">02 / Buttons</p>
+    <h2>Six ways to press. One of them you will press again.</h2>
+    <p class="lede">Every state is drawn in characters. Hover tunes, press injects energy, keyboard focus locks on with the same gesture as hover plus an amber outline.</p>
+    <div class="bgrid">
+      <div class="bcell"><h3>Primary</h3><div class="row"><button class="btn" type="button" data-kind="primary"><canvas aria-hidden="true"></canvas><span class="lbl">Tune in</span></button></div><p>Hover sweeps a dial cursor across and locks the fill. Press flashes it hot.</p></div>
+      <div class="bcell"><h3>Secondary</h3><div class="row"><button class="btn" type="button" data-kind="secondary"><canvas aria-hidden="true"></canvas><span class="lbl">Listen first</span></button></div><p>A pulse circles the border. Hover sends two. Press pulls the frame inward.</p></div>
+      <div class="bcell"><h3>Ghost</h3><div class="row"><button class="btn ghost" type="button" data-kind="ghost"><canvas aria-hidden="true"></canvas><span class="lbl">Read the spec</span></button></div><p>The underline is a flat line until you arrive, then it becomes a live wave.</p></div>
+      <div class="bcell"><h3>Icon</h3><div class="row"><button class="btn icon" type="button" data-kind="icon" aria-label="Broadcast a ping"><canvas aria-hidden="true"></canvas></button></div><p>Rings radiate while hovered. A press sends one big ring outward.</p></div>
+      <div class="bcell wide"><h3>Toggle, destructive</h3><div class="row"><button class="btn tog" type="button" data-kind="toggle" id="carrierTog" aria-pressed="true"><canvas aria-hidden="true"></canvas><span class="lbl">Carrier on</span></button></div><p>Cuts the carrier for the whole page. The hero goes flat, the letters dissolve into static. Press again to restore it.</p></div>
+      <div class="bcell full"><h3>Transmit, the one you press again</h3><div class="row"><button class="btn xm" type="button" data-kind="xmit" id="xm"><canvas aria-hidden="true"></canvas><span class="lbl">Send test ping <span id="xmN">000</span></span></button></div><p>Every press launches a packet with its own hex address, and each one rides a different channel color. Mash it.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="menu">
+  <div class="wrap menu-note">
+    <div>
+      <p class="eyebrow">03 / Menu</p>
+      <h2>The menu is a spectrum analyzer.</h2>
+      <p class="lede">Each nav item owns a band. Hover raises its bars and sends a packet down the wire from wherever you were last. The Platform dropdown opens with a raster retrace, then a tuner needle slides between items.</p>
+      <button class="btn" type="button" data-kind="secondary" id="openMenu"><canvas aria-hidden="true"></canvas><span class="lbl">Open the menu</span></button>
+    </div>
+    <div class="stage"><ul>
+      <li>Hover a nav item: bars rise, a packet runs the wire.</li>
+      <li>Open Platform: raster line, noise clears, needle tracks you.</li>
+      <li>Arrow keys move through items. Escape closes.</li>
+      <li>On a phone the burger becomes an X and the whole screen retunes.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="sec" id="notes">
+  <div class="wrap">
+    <p class="eyebrow">04 / Language notes</p>
+    <h2>Five rules for anything that wants to be Carrier.</h2>
+    <p class="lede">Short on purpose. If a new component breaks one of these, it is not Carrier yet.</p>
+    <div class="rules">
+      <article class="rule"><span class="n">RULE 1</span><h3>Phosphor, not paint.</h3><p>Everything lit decays over about half a second. Nothing blinks off. Moving things leave a trail.</p>
+        <div class="sw" aria-label="Palette"><i style="background:#05070b" title="Ink"></i><i style="background:#54d6ff" title="Cyan"></i><i style="background:#f6f2e4" title="White"></i><i style="background:#ffb040" title="Amber"></i><i style="background:#ff5482" title="Magenta"></i></div></article>
+      <article class="rule"><span class="n">RULE 2</span><h3>Ten steps of signal.</h3><p>One ramp for every intensity, from silence to full power. Letters live on the top four.</p>
+        <div class="ramp" aria-label="Character ramp"><span style="color:#1d3a56"> </span><span style="color:#244a6c">.</span><span style="color:#2c6488">:</span><span style="color:#3689ab">-</span><span style="color:#44aed0">=</span><span style="color:#54d6ff">+</span><span style="color:#a5ecff">*</span><span style="color:#d9f6ff">#</span><span style="color:#f6f2e4">%</span><span style="color:#fff">@</span></div></article>
+      <article class="rule"><span class="n">RULE 3</span><h3>Carrier first.</h3><p>Motion begins as a wave. Letters, bars and packets are what the wave carries, so they arrive riding it.</p>
+        <div class="ramp" style="color:#54d6ff;font-size:16px">~-~-/\/\-~-~-</div></article>
+      <article class="rule"><span class="n">RULE 4</span><h3>Decode, never fade in.</h3><p>Text resolves from noise, left to right, and flashes amber once as each character locks.</p>
+        <div class="ramp" style="font-size:16px"><span style="color:#ffb040">%#x+</span><span style="color:#f6f2e4"> locked</span></div></article>
+      <article class="rule"><span class="n">RULE 5</span><h3>Color is status.</h3><p>Cyan is searching. White is hot. Amber is locked or confirmed. Magenta is lost. No other meanings.</p>
+        <div class="ramp" style="font-size:15px"><span style="color:#54d6ff">scan </span><span style="color:#f6f2e4">hot </span><span style="color:#ffb040">lock </span><span style="color:#ff5482">lost</span></div></article>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="foot" id="footer">
+  <div class="map-wrap">
+    <canvas id="mapCv" role="img" aria-label="A world map drawn in characters. Sixteen ground stations pass glowing packets along arcs, a satellite sweeps across, and the night side of the Earth slowly turns."></canvas>
+    <div class="map-bar" aria-hidden="false"><span>Network <b>16 stations</b> / all links nominal</span><span>UTC <b id="utc">00:00:00</b></span></div>
+  </div>
+  <div class="foot-ui">
+    <div><h2>Keep the line open.</h2><p>Carrier is a fictional product used to show a design language. Nothing here sends a real message.</p></div>
+    <div><h3>Product</h3><ul><li><a href="#mark">Relay</a></li><li><a href="#buttons">Receipts</a></li><li><a href="#menu">Beacon</a></li><li><a href="#notes">Echo</a></li></ul></div>
+    <div><h3>Company</h3><ul><li><a href="#top">About</a></li><li><a href="#top">Careers</a></li><li><a href="#top">Press kit</a></li></ul></div>
+    <div><h3>Status</h3><ul><li><a href="#footer">All stations nominal</a></li><li><a href="#hero">Hold Space to broadcast</a></li></ul></div>
+  </div>
+  <div class="foot-end"><span>2026 Carrier Labs. Fictional example content.</span><span>Drawn in characters, 30 frames a second.</span></div>
+</footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<canvas id="cur" aria-hidden="true"></canvas>
+
+<script>
+(() => {
+'use strict';
+const REDUCE = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const FAMILY = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const STEP = 1 / 60;
+const RAMP = ' .:-=+*#%@';
+const NOISE = '01+=x:/<>%#&$';
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function hash2(x, y) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function lineChar(x, y) {
+  let a = Math.atan2(y, x); if (a < 0) a += Math.PI; if (a >= Math.PI) a -= Math.PI;
+  if (a < Math.PI / 8 || a > 7 * Math.PI / 8) return '-';
+  if (a < 3 * Math.PI / 8) return '\\';
+  if (a < 5 * Math.PI / 8) return '|';
+  return '/';
+}
+let mr_ = 0, mg_ = 0, mb_ = 0;
+function mixTo(r, g, b, r2, g2, b2, t) { mr_ = r + (r2 - r) * t; mg_ = g + (g2 - g) * t; mb_ = b + (b2 - b) * t; }
+
+// ---------- shared state ----------
+let NOW = 0;
+const P = { x: -999, y: -999, has: false, touch: false, down: false, over: false, t: 0 };
+const ST = { muted: false, bt: -99 };
+const CH = { v: 0, on: false };
+const pings = [];
+const listeners = { ping: [], broadcast: [] };
+function ping(x, y, pw, kind) {
+  pings.push({ x, y, t0: NOW, pw, kind }); if (pings.length > 8) pings.shift();
+  listeners.ping.forEach(f => f(x, y, pw, kind));
+  pokeAll();
+}
+
+// ---------- Grid: characters with phosphor persistence ----------
+const cssCache = new Map();
+function cssRGB(q) {
+  let s = cssCache.get(q);
+  if (!s) { s = 'rgb(' + (((q >> 10) & 31) << 3) + ',' + (((q >> 5) & 31) << 3) + ',' + ((q & 31) << 3) + ')'; if (cssCache.size > 9000) cssCache.clear(); cssCache.set(q, s); }
+  return s;
+}
+const cssA = new Map();
+function cssRGBA(q, a) {
+  const k = q * 16 + a; let s = cssA.get(k);
+  if (!s) { s = 'rgba(' + (((q >> 10) & 31) << 3) + ',' + (((q >> 5) & 31) << 3) + ',' + ((q & 31) << 3) + ',' + (a / 15).toFixed(2) + ')'; if (cssA.size > 9000) cssA.clear(); cssA.set(k, s); }
+  return s;
+}
+class Grid {
+  constructor(cv, o) {
+    this.cv = cv; this.o = o; this.ctx = cv.getContext('2d', { alpha: !o.bg });
+    this.bc = document.createElement('canvas'); this.bx = this.bc.getContext('2d');
+    this.cols = 0; this.rows = 0; this.live = true; this.pe = o.persist || .8;
+  }
+  layout(w, h, fs) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2); this.dpr = dpr; const cv = this.cv;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    this.w = w; this.h = h; this.fs = fs; this.font = '600 ' + fs.toFixed(2) + 'px ' + FAMILY;
+    const x = this.ctx; x.setTransform(dpr, 0, 0, dpr, 0, 0); x.font = this.font;
+    this.cw = x.measureText('M').width || fs * .6; this.chh = fs * 1.25;
+    this.cols = Math.ceil(w / this.cw); this.rows = Math.ceil(h / this.chh); this.asp = this.chh / this.cw;
+    const N = this.N = this.cols * this.rows;
+    this.E = new Float32Array(N); this.ch = new Array(N).fill(' ');
+    this.R = new Uint8Array(N); this.G = new Uint8Array(N); this.B = new Uint8Array(N);
+    this.bc.width = Math.max(1, Math.round(cv.width / 5)); this.bc.height = Math.max(1, Math.round(cv.height / 5));
+    this.live = true;
+  }
+  ex(i, ch, r, g, b, e) {
+    if (e <= 0.02) return;
+    const E = this.E;
+    if (e >= E[i] * .9) { this.ch[i] = ch; this.R[i] = r; this.G[i] = g; this.B[i] = b; }
+    if (e > E[i]) E[i] = e;
+    this.live = true;
+  }
+  exc(c, r, ch, R, G, B, e) {
+    c = Math.round(c); r = Math.round(r);
+    if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return;
+    this.ex(r * this.cols + c, ch, R, G, B, e);
+  }
+  str(c, r, s, R, G, B, e) { for (let k = 0; k < s.length; k++) if (s[k] !== ' ') this.exc(c + k, r, s[k], R, G, B, e); }
+  ring(cx, cy, Rc, e, R, G, B, dash, spin) {
+    const n = Math.max(10, Math.round(6.283 * Rc * .95)), asp = this.asp;
+    for (let k = 0; k < n; k++) {
+      if (dash && ((k + spin) % dash) > dash * .55) continue;
+      const a = 6.2832 * k / n, s = Math.sin(a), c = Math.cos(a);
+      this.exc(cx + Rc * c, cy + Rc * s / asp, lineChar(-s, c), R, G, B, e);
+    }
+  }
+  present() {
+    if (!this.live) return;
+    const x = this.ctx, cv = this.cv, dpr = this.dpr, cols = this.cols, rows = this.rows, E = this.E, cw = this.cw, chh = this.chh;
+    const rgba = !!this.o.rgba;
+    x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1;
+    if (this.o.bg) { x.fillStyle = this.o.bg; x.fillRect(0, 0, cv.width, cv.height); } else x.clearRect(0, 0, cv.width, cv.height);
+    x.setTransform(dpr, 0, 0, dpr, 0, 0); x.font = this.font; x.textBaseline = 'middle';
+    let alive = false, lastq = -1, laste = -1;
+    const pe = this.pe, ch = this.ch, R = this.R, G = this.G, B = this.B;
+    for (let r = 0; r < rows; r++) {
+      const y = (r + .5) * chh, o = r * cols;
+      for (let c = 0; c < cols; c++) {
+        const i = o + c, e = E[i];
+        if (e < .035) { E[i] = 0; continue; }
+        alive = true; E[i] = e * pe;
+        const g = ch[i]; if (g === ' ') continue;
+        let rr, gg, bb, a = 15;
+        if (rgba) {
+          const hot = e > 1 ? Math.min(1, (e - 1) * 3) : 0;
+          rr = R[i] + (255 - R[i]) * hot; gg = G[i] + (255 - G[i]) * hot; bb = B[i] + (255 - B[i]) * hot; a = Math.min(15, (Math.min(e, 1) * 15 + .5) | 0);
+        } else {
+          const k = e > 1 ? 1 : e, hot = e > 1 ? Math.min(1, (e - 1) * 3.3) : 0;
+          rr = R[i] * k; gg = G[i] * k; bb = B[i] * k;
+          if (hot) { rr += (255 - rr) * hot; gg += (255 - gg) * hot; bb += (255 - bb) * hot; }
+        }
+        const q = ((rr >> 3) << 10) | ((gg >> 3) << 5) | (bb >> 3);
+        const qq = rgba ? q * 16 + a : q;
+        if (qq !== lastq) { x.fillStyle = rgba ? cssRGBA(q, a) : cssRGB(q); lastq = qq; }
+        x.fillText(g, c * cw, y);
+      }
+    }
+    this.live = alive;
+    const bl = this.o.bloom;
+    if (bl && alive) {
+      const bx = this.bx; bx.globalCompositeOperation = 'copy'; bx.drawImage(cv, 0, 0, this.bc.width, this.bc.height);
+      x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'lighter'; x.globalAlpha = bl; x.imageSmoothingEnabled = true;
+      x.drawImage(this.bc, 0, 0, cv.width, cv.height); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+    }
+  }
+}
+
+// ---------- Surf: a canvas that lives in the shared loop ----------
+const surfs = [];
+const io = new IntersectionObserver(es => { for (const e of es) { const s = e.target.__s; if (s) { const was = s.vis; s.vis = e.isIntersecting; if (s.vis && !was) { s.g.live = true; s.onShow && s.onShow(); } } } }, { rootMargin: '80px' });
+const ro = new ResizeObserver(es => { for (const e of es) { const s = e.target.__s; if (s) s.relayout(); } });
+class Surf {
+  constructor(cv, o) {
+    this.cv = cv; this.o = o; this.g = new Grid(cv, o); this.vis = false; this.t = 0; this.ready = false;
+    cv.__s = this; surfs.push(this); io.observe(cv); ro.observe(cv);
+  }
+  get on() { return this.vis && this.ready; }
+  relayout() {
+    const r = this.cv.getBoundingClientRect(); if (r.width < 4 || r.height < 4) { this.ready = false; return; }
+    this.g.layout(r.width, r.height, this.o.fs(r.width, r.height));
+    this.ready = true; this.onLayout && this.onLayout();
+    if (REDUCE) this.still(260);
+  }
+  sim(dt) { this.t += dt; }
+  rect() { return this.cv.getBoundingClientRect(); }
+  still(n) { if (!this.ready) return; for (let i = 0; i < n; i++) this.sim(STEP); this.g.live = true; this.draw(); this.g.present(); }
+  poke() { if (REDUCE) { this.snap && this.snap(); this.still(40); } }
+}
+function pokeAll() { if (REDUCE) for (const s of surfs) if (s.vis && s.ready && s.pokable) s.poke(); }
+
+// ---------- DOM text decoding ----------
+const DEC = [];
+const GL = '01+=:/#%<>*';
+function decode(el, txt, dur, delay) {
+  for (let i = DEC.length - 1; i >= 0; i--) if (DEC[i].el === el) DEC.splice(i, 1);
+  if (REDUCE) { el.textContent = txt; return; }
+  DEC.push({ el, txt, t0: performance.now() + (delay || 0), dur: dur || 700 });
+}
+function updDec(now) {
+  for (let i = DEC.length - 1; i >= 0; i--) {
+    const d = DEC[i], p = (now - d.t0) / d.dur; if (p < 0) continue;
+    if (p >= 1) { d.el.textContent = d.txt; DEC.splice(i, 1); continue; }
+    const n = d.txt.length, k = p * n * 1.15; let s = '';
+    for (let j = 0; j < n; j++) { const c = d.txt[j]; s += (j < k || c === ' ') ? c : GL[(Math.random() * GL.length) | 0]; }
+    d.el.textContent = s;
+  }
+}
+
+// ---------- Word: a mask that decodes out of a carrier wave ----------
+const mc = document.createElement('canvas'), mcx = mc.getContext('2d', { willReadFrequently: true });
+class Word {
+  build(g, text, o) {
+    const cols = g.cols, rows = g.rows, asp = g.asp;
+    if (mc.width !== cols || mc.height !== rows) { mc.width = cols; mc.height = rows; }
+    const x = mcx; x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cols, rows); x.setTransform(1, 0, 0, 1 / asp, 0, 0);
+    const F = s => '700 ' + s.toFixed(1) + 'px "Space Grotesk","Helvetica Neue",Arial,sans-serif';
+    x.font = F(100); if ('letterSpacing' in x) x.letterSpacing = '0px';
+    const tw100 = x.measureText(text).width * 1.05;
+    const markW = o.mark ? o.hmax * 1.2 : 0;
+    let fsz = 100 * (o.w - markW) / tw100; fsz = Math.min(fsz, o.hmax / .72);
+    x.font = F(fsz); if ('letterSpacing' in x) x.letterSpacing = (fsz * .05) + 'px';
+    const tw = x.measureText(text).width, total = tw + markW, tx = o.cx - total / 2 + markW, cyS = o.cy * asp, by = cyS + fsz * .36;
+    x.fillStyle = '#fff'; x.textAlign = 'left'; x.textBaseline = 'alphabetic'; x.fillText(text, tx, by);
+    this.centers = [];
+    for (let j = 0; j < text.length; j++) { const pre = x.measureText(text.slice(0, j)).width, wj = x.measureText(text[j]).width; this.centers.push(tx + pre + wj / 2); }
+    if (o.mark) {
+      const r0 = fsz * .085, mx = tx - markW + r0 * 1.6;
+      x.beginPath(); x.arc(mx, cyS, r0, 0, 6.283); x.fill();
+      x.lineWidth = fsz * .07; x.strokeStyle = '#fff';
+      for (let k = 1; k <= 2; k++) { x.beginPath(); x.arc(mx, cyS, r0 * (1 + k * 1.9), -.8, .8); x.stroke(); }
+    }
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    const d = x.getImageData(0, 0, cols, rows).data, N = cols * rows;
+    if (!this.m || this.m.length !== N) { this.m = new Float32Array(N); this.lt = new Float32Array(N); }
+    let c0 = cols, c1 = 0, r0_ = rows, r1_ = 0;
+    for (let i = 0; i < N; i++) {
+      const v = d[i * 4 + 3] / 255; this.m[i] = v;
+      if (v > .1) { const c = i % cols, r = (i / cols) | 0; if (c < c0) c0 = c; if (c > c1) c1 = c; if (r < r0_) r0_ = r; if (r > r1_) r1_ = r; }
+    }
+    this.c0 = Math.max(0, c0 - 3); this.c1 = Math.min(cols - 1, c1 + 3); this.r0 = r0_; this.r1 = r1_; this.cy = o.cy;
+    const t0 = o.t0 || 1.0;
+    for (let i = 0; i < N; i++) { const c = i % cols, r = (i / cols) | 0; this.lt[i] = t0 + Math.abs(r - o.cy) * (o.rs || .05) + (c / cols) * .8 + hash2(c, r) * .45; }
+    this.endT = t0 + (this.r1 - this.r0) * .03 + 1.5;
+  }
+  draw(g, t, ft, att, power, charge) {
+    const cols = g.cols, m = this.m, lt = this.lt;
+    const off = Math.round(att * 2) + (hash2(Math.floor(t * 5), 7) > .97 ? 1 : 0);
+    const sweep = this.r0 - 4 + ((t * (.55 + att * .9)) % 1.5) * (this.r1 - this.r0 + 10);
+    const jit = att * .5;
+    for (let r = this.r0; r <= this.r1; r++) {
+      const band = Math.exp(-((r - sweep) * (r - sweep)) / 3);
+      for (let c = this.c0; c <= this.c1; c++) {
+        const i = r * cols + c;
+        const mG = m[i], mR = c - off >= 0 ? m[i - off] : 0, mB = c + off < cols ? m[i + off] : 0;
+        const mx = Math.max(mG, mR, mB); if (mx < .1) continue;
+        if (power < 1 && hash2(c, r) > power * 1.1) {
+          if (Math.random() < .06 + .2 * (1 - power)) g.ex(i, NOISE[(Math.random() * NOISE.length) | 0], 255, 84, 130, .45);
+          continue;
+        }
+        const l = lt[i];
+        if (ft < l) {
+          if (ft > l - .6 || Math.random() < .5) g.ex(i, NOISE[(Math.random() * NOISE.length) | 0], 255, 176, 64, .5);
+          continue;
+        }
+        const age = ft - l, flash = age < .3 ? 1 - age / .3 : 0;
+        let v = (.6 + .4 * mx) * (.86 + .14 * Math.sin(r * 1.7 + t * 2.3 + c * .05)) + band * (.45 + att * .3) + flash * .55 + charge * .35 * Math.sin(t * 31 + c * 1.3);
+        if (hash2(c, r + Math.floor(t * (8 + att * 20))) > .985 - att * .05) v *= .45;
+        const wR = .3 + .7 * mR / mx, wG = .3 + .7 * mG / mx, wB = .3 + .7 * mB / mx;
+        let cr = 246 * wR, cg = 238 * wG, cb = 220 * wB;
+        if (flash > 0) { cr += (255 - cr) * flash * .5; cg += (176 - cg) * flash * .6; cb += (64 - cb) * flash * .8; }
+        if (att > .05 && mx > .1 && jit > 0) { /* attention warms the core */ cg *= 1 - att * .08; }
+        g.ex(i, RAMP[clamp(3 + Math.floor(Math.min(mx, 1) * v * 6.4), 4, 9)], cr, cg, cb, Math.min(1.3, .15 + v));
+      }
+    }
+  }
+  trace(g, t, amp, k, reveal, speed, R, G, B) {
+    const cols = g.cols, y0 = this.cy, n = Math.min(cols, Math.floor(cols * reveal));
+    let prev = y0;
+    for (let c = 0; c < n; c++) {
+      const y = y0 + amp * Math.sin(c * k - t * speed) * (.65 + .35 * Math.sin(c * .021 + t * .7));
+      const r = Math.round(y), dy = y - prev;
+      const ch = Math.abs(dy) < .3 ? '-' : Math.abs(dy) < 1 ? (dy > 0 ? '\\' : '/') : '|';
+      const head = c > n - 4 && reveal < 1 ? 1.5 : 1.05;
+      g.exc(c, r, ch, R, G, B, head);
+      const a = Math.round(prev), b = r;
+      if (Math.abs(a - b) > 1) { const lo = Math.min(a, b), hi = Math.max(a, b); for (let q = lo + 1; q < hi; q++) g.exc(c, q, '|', R, G, B, .85); }
+      prev = y;
+    }
+  }
+}
+
+// ---------- Logo (nav, specimen) ----------
+class Logo extends Surf {
+  constructor(cv, v, host) {
+    super(cv, { fs: v === 'big' ? ((w) => clamp(w / 120, 6.5, 10)) : (() => 4.7), persist: .8, bloom: .55 });
+    this.v = v; this.word = new Word(); this.att = 0; this.tAtt = 0; this.ft = 0; this.pw = 1; this.pokable = true; this.force = false;
+    if (host) {
+      const on = () => { this.tAtt = 1; this.poke(); }, offf = () => { this.tAtt = 0; this.poke(); };
+      host.addEventListener('pointerenter', on); host.addEventListener('pointerleave', offf);
+      host.addEventListener('focus', on); host.addEventListener('blur', offf);
+    }
+  }
+  onLayout() {
+    const g = this.g, big = this.v === 'big';
+    this.word.build(g, 'CARRIER', { cx: g.cols / 2, cy: g.rows / 2, w: g.cols * (big ? .88 : .97), hmax: g.rows * g.asp * (big ? .5 : .86), mark: big, t0: big ? 1.1 : .7, rs: big ? .05 : .08 });
+  }
+  onShow() { if (!this.formed) { this.formed = true; this.ft = 0; } }
+  replay() { this.ft = 0; this.g.live = true; if (REDUCE) this.poke(); }
+  snap() { this.att = this.tAtt; }
+  sim(dt) { this.t += dt; this.ft += dt; this.att += ((this.force ? 1 : this.tAtt) - this.att) * .12; this.pw += ((ST.muted ? .3 : 1) - this.pw) * .06; }
+  draw() {
+    const g = this.g, big = this.v === 'big', w = this.word;
+    const ft = REDUCE ? 99 : this.ft;
+    const reveal = clamp(ft / (big ? 1.2 : .6), 0, 1);
+    if (ft < w.endT + (big ? 99 : 0) || big) {
+      const amp = big ? (ft < 1.2 ? 2.2 : 1.1 + this.att * 1.2) : 1.1 * (1 - smooth(w.endT - .6, w.endT, ft));
+      if (big || ft < w.endT) w.trace(g, this.t, amp, big ? .33 : .5, big ? (ft < 1.2 ? reveal : 1) : reveal, big ? 7 + this.att * 9 : 9, 100, 215, 255);
+    }
+    w.draw(g, this.t, ft, this.att, this.pw, 0);
+  }
+}
+
+// ---------- NavWire: the menu bar as a spectrum analyzer ----------
+class NavWire extends Surf {
+  constructor(cv, links) {
+    super(cv, { fs: () => 7, persist: .72, bloom: .5 }); this.links = links; this.hv = -1; this.act = -1; this.last = -1; this.pokable = true;
+    this.lvl = new Float32Array(links.length); this.pk = null; this.pkx = 0; this.lastX = 40;
+    links.forEach((l, i) => {
+      l.addEventListener('pointerenter', () => this.setHover(i)); l.addEventListener('pointerleave', () => this.setHover(-1));
+      l.addEventListener('focus', () => this.setHover(i)); l.addEventListener('blur', () => this.setHover(-1));
+    });
+  }
+  setHover(i) {
+    this.hv = i;
+    if (i >= 0 && this.ready) { const x = this.center(i); this.pk = { x0: this.lastX, x1: x, s: 0 }; this.lastX = x; }
+    this.poke();
+  }
+  center(i) { const r = this.links[i].getBoundingClientRect(), cr = this.cv.getBoundingClientRect(); return (r.left + r.width / 2 - cr.left) / this.g.cw; }
+  onLayout() { const g = this.g; this.amp = new Float32Array(g.cols); this.peak = new Float32Array(g.cols); this.cn = this.links.map((l, i) => this.center(i)); this.wd = this.links.map(l => l.getBoundingClientRect().width / this.g.cw * .5); }
+  snap() { for (let i = 0; i < this.lvl.length; i++) this.lvl[i] = (this.hv === i || this.act === i) ? 1 : 0; }
+  sim(dt) {
+    this.t += dt;
+    for (let i = 0; i < this.lvl.length; i++) this.lvl[i] += (((this.hv === i || this.act === i) ? 1 : 0) - this.lvl[i]) * .16;
+    if (this.pk) { this.pk.s += dt * 2.2; if (this.pk.s >= 1) { this.pk = null; } }
+  }
+  draw() {
+    const g = this.g, cols = g.cols, rows = g.rows, t = this.t, base = rows - 2, amp = this.amp, peak = this.peak;
+    if (!amp || amp.length !== cols) return;
+    for (let c = 0; c < cols; c++) {
+      let tg = .05 + .08 * vnoise(c * .25, t * 1.7);
+      for (let j = 0; j < this.lvl.length; j++) {
+        const L = this.lvl[j]; if (L < .01) continue;
+        const d = (c - this.cn[j]) / this.wd[j], gs = Math.exp(-d * d * 1.4);
+        tg += L * gs * (.5 + .5 * vnoise(c * .7, t * 9 + j * 5));
+      }
+      amp[c] += (tg - amp[c]) * .38; peak[c] = Math.max(peak[c] - .012, amp[c]);
+      const hgt = amp[c] * (rows - 1) * .95;
+      const f = Math.min(1, amp[c] * 1.6);
+      for (let k = 0; k <= Math.ceil(hgt); k++) {
+        const v = clamp(hgt - k, 0, 1); if (v < .1) break;
+        const ch = v > .85 ? '#' : v > .6 ? '|' : v > .3 ? ':' : '.';
+        const top = k / (rows - 1);
+        mixTo(40, 130, 180, 246, 242, 228, top * f * 1.3);
+        g.exc(c, base - k, ch, mr_, mg_, mb_, .3 + .7 * v * (.4 + f));
+      }
+      if (peak[c] > .16) g.exc(c, base - Math.round(peak[c] * (rows - 1) * .95) - 1, '-', 255, 176, 64, .8);
+    }
+    for (let c = 0; c < cols; c++) g.exc(c, rows - 1, c % 3 ? '=' : '-', 50, 110, 150, .22);
+    if (this.pk) {
+      const p = this.pk, s = 1 - Math.pow(1 - p.s, 3), x = lerp(p.x0, p.x1, s);
+      g.exc(x, rows - 1, '@', 255, 255, 255, 1.4);
+      for (let k = 1; k < 7; k++) g.exc(x - k * Math.sign(p.x1 - p.x0), rows - 1, k < 3 ? '>' : '=', 255, 176, 64, 1 - k / 8);
+      g.exc(x, rows - 2, '*', 255, 176, 64, .7);
+    }
+  }
+}
+
+// ---------- DropSurf: dropdown and mobile menu panels ----------
+class DropSurf extends Surf {
+  constructor(cv, panel, full) {
+    super(cv, { fs: () => 7, persist: .78, bloom: .45 }); this.panel = panel; this.full = full; this.p = 0; this.tgt = 0; this.pokable = true;
+    this.hr = null; this.tr = null; this.band = 0; this.items = [...panel.querySelectorAll('a')];
+    this.items.forEach(a => {
+      const on = () => { this.setItem(a); }, offf = () => { this.tr = null; this.poke(); };
+      a.addEventListener('pointerenter', on); a.addEventListener('focus', on); a.addEventListener('pointerleave', offf); a.addEventListener('blur', offf);
+    });
+  }
+  get on() { return this.vis && this.ready && (this.tgt > 0 || this.p > .002); }
+  setItem(a) {
+    const r = a.getBoundingClientRect(), cr = this.cv.getBoundingClientRect(), g = this.g;
+    this.tr = { y0: (r.top - cr.top) / g.chh, y1: (r.bottom - cr.top) / g.chh, x0: (r.left - cr.left) / g.cw, x1: (r.right - cr.left) / g.cw };
+    if (!this.hr) this.hr = Object.assign({}, this.tr);
+    this.poke();
+  }
+  setOpen(o) {
+    this.tgt = o ? 1 : 0; if (o) { this.hr = null; this.tr = null; this.g.live = true; }
+    if (REDUCE) { this.p = this.tgt; this.still(2); }
+  }
+  snap() { this.p = this.tgt; if (this.tr) this.hr = Object.assign({}, this.tr); }
+  sim(dt) {
+    this.t += dt; this.p += (this.tgt - this.p) * (this.tgt ? .075 : .2);
+    if (this.p > .995 && this.tgt) this.p = 1;
+    if (this.tr && this.hr) { for (const k in this.tr) this.hr[k] += (this.tr[k] - this.hr[k]) * .22; this.band += (1 - this.band) * .15; } else this.band *= .85;
+  }
+  draw() {
+    const g = this.g, cols = g.cols, rows = g.rows, p = this.p, t = this.t;
+    if (p < .002) return;
+    const rr = p * (rows + 6);
+    for (let r = 0; r < rows; r++) {
+      const d = rr - r;
+      if (d < 0) { if (d > -rows * .5) for (let k = 0; k < 4; k++) { const c = (Math.random() * cols) | 0; g.exc(c, r, NOISE[(Math.random() * NOISE.length) | 0], 84, 214, 255, .3 * (1 - -d / (rows * .5))); } continue; }
+      if (d < 2.5) { for (let c = 0; c < cols; c++) g.exc(c, r, c % 2 ? '=' : '-', 240, 250, 255, 1.2 - d * .3); }
+      else if (!this.full) for (let c = (r % 2); c < cols; c += 4) g.exc(c, r, '.', 70, 130, 170, .16);
+    }
+    if (p > .1) {
+      const e = .55 * Math.min(1, p * 2), top = 0, bot = Math.min(rows - 1, Math.floor(rr));
+      if (!this.full) {
+        for (let c = 0; c < cols; c++) { g.exc(c, top, c === 0 || c === cols - 1 ? '+' : '=', 84, 214, 255, e); if (bot === rows - 1) g.exc(c, rows - 1, c === 0 || c === cols - 1 ? '+' : '=', 84, 214, 255, e); }
+        for (let r = 1; r < bot; r++) { g.exc(0, r, '|', 84, 214, 255, e); g.exc(cols - 1, r, '|', 84, 214, 255, e); }
+      }
+    }
+    if (this.full && p > .5) {
+      for (let c = 0; c < cols; c++) { const hh = (.12 + .5 * vnoise(c * .12, t * 1.4)) * rows * .22 * p; for (let q = 0; q < hh; q++) g.exc(c, rows - 1 - q, q > hh - 1 ? '-' : ':', 40, 120 + q * 6, 170, .28 + q / 40); }
+      for (let r = 4; r < rows - 8; r += 11) for (let c = 0; c < cols; c++) g.exc(c, r, '.', 70, 130, 170, .14);
+    }
+    const h = this.hr;
+    if (h && this.band > .05 && p > .6) {
+      const b = this.band, y0 = Math.round(h.y0), y1 = Math.round(h.y1) - 1, x0 = Math.round(h.x0), x1 = Math.round(h.x1) - 1;
+      for (let c = x0; c <= x1; c++) { g.exc(c, y0, '-', 255, 176, 64, .7 * b); g.exc(c, y1, '-', 255, 176, 64, .7 * b); }
+      for (let r = y0; r <= y1; r++) { g.exc(x0, r, r === y0 || r === y1 ? '+' : '|', 255, 176, 64, .85 * b); g.exc(x1, r, r === y0 || r === y1 ? '+' : '|', 255, 176, 64, .85 * b); }
+      const bars = this.full ? 12 : 6, bx = x1 - bars * 2 - 1;
+      for (let k = 0; k < bars; k++) {
+        const hh = Math.min(3, (y1 - y0 - 2) * .35) * (.25 + .75 * vnoise(k * 1.7, t * 8)) * b;
+        for (let q = 0; q < hh; q++) g.exc(bx + k * 2, y0 + 3 - q, q > hh - 1 ? '#' : '|', 255, 200 - q * 6, 90, .9);
+      }
+      g.exc(x0 + 2, (y0 + y1) / 2, '>', 255, 255, 255, 1.2);
+    }
+  }
+}
+
+// ---------- BtnSurf ----------
+const HEX = '0123456789ABCDEF';
+const CHAN = [[84, 214, 255], [255, 176, 64], [255, 84, 130], [246, 242, 228]];
+class BtnSurf extends Surf {
+  constructor(btn) {
+    const kind = btn.dataset.kind;
+    super(btn.querySelector('canvas'), { fs: () => 7, persist: kind === 'burger' ? .7 : .78, bloom: .55 });
+    this.btn = btn; this.kind = kind; this.hT = 0; this.hov = 0; this.pT = 0; this.prs = 0; this.kick = 0; this.sp = 0; this.pokable = true;
+    this.on_ = true; this.ap = 1; this.cnt = 0; this.pk = []; this.open = 0; this.openT = 0; this.per = null;
+    const m = btn.matches.bind(btn);
+    btn.addEventListener('pointerenter', () => { this.hT = 1; this.poke(); });
+    btn.addEventListener('pointerleave', () => { this.hT = m(':focus-visible') ? 1 : 0; this.pT = 0; this.poke(); });
+    btn.addEventListener('pointerdown', () => { this.pT = 1; this.poke(); });
+    ['pointerup', 'pointercancel'].forEach(ev => btn.addEventListener(ev, () => { this.pT = 0; this.poke(); }));
+    btn.addEventListener('focus', () => { if (m(':focus-visible')) { this.hT = 1; this.poke(); } });
+    btn.addEventListener('blur', () => { this.hT = 0; this.pT = 0; this.poke(); });
+    btn.addEventListener('click', () => this.onClick());
+  }
+  onClick() {
+    this.kick = 1;
+    if (this.kind === 'xmit') {
+      this.cnt++; const n = document.getElementById('xmN'); if (n) n.textContent = String(this.cnt).padStart(3, '0');
+      const adr = HEX[(Math.random() * 16) | 0] + HEX[(Math.random() * 16) | 0];
+      this.pk.push({ c: this.bx1, t0: this.t, adr, col: CHAN[this.cnt % 4] }); if (this.pk.length > 7) this.pk.shift();
+    }
+    if (this.kind === 'icon' || this.kind === 'primary') { const r = this.btn.getBoundingClientRect(); ping(r.left + r.width / 2, r.top + r.height / 2, .6, 'tap'); }
+    this.poke();
+  }
+  setToggle(on) { this.on_ = on; this.poke(); }
+  setOpen(o) { this.openT = o ? 1 : 0; this.poke(); }
+  onLayout() {
+    const g = this.g, cr = this.cv.getBoundingClientRect(), br = this.btn.getBoundingClientRect();
+    this.bx0 = Math.round((br.left - cr.left) / g.cw); this.bx1 = Math.round((br.right - cr.left) / g.cw) - 1;
+    this.by0 = Math.round((br.top - cr.top) / g.chh); this.by1 = Math.round((br.bottom - cr.top) / g.chh) - 1;
+    const px = [], pr = [], pc = [];
+    const { bx0, bx1, by0, by1 } = this;
+    for (let c = bx0; c <= bx1; c++) { px.push(c); pr.push(by0); pc.push(c === bx0 || c === bx1 ? '+' : '-'); }
+    for (let r = by0 + 1; r <= by1; r++) { px.push(bx1); pr.push(r); pc.push(r === by1 ? '+' : '|'); }
+    for (let c = bx1 - 1; c >= bx0; c--) { px.push(c); pr.push(by1); pc.push(c === bx0 ? '+' : '-'); }
+    for (let r = by1 - 1; r > by0; r--) { px.push(bx0); pr.push(r); pc.push('|'); }
+    this.per = { x: px, r: pr, ch: pc, L: px.length };
+  }
+  snap() { this.hov = this.hT; this.prs = this.pT; this.sp = this.hT; this.open = this.openT; this.ap = this.on_ ? 1 : 0; }
+  sim(dt) {
+    this.t += dt; this.hov += (this.hT - this.hov) * .16; this.prs += (this.pT - this.prs) * .3; this.kick *= .94;
+    this.sp += (this.hT - this.sp) * (this.hT ? .1 : .14); this.open += (this.openT - this.open) * .14; this.ap += ((this.on_ ? 1 : 0) - this.ap) * .1;
+  }
+  border(g, R, G, B, e, sp, wid, hot) {
+    const p = this.per; if (!p) return;
+    const pos = (this.t * sp) % p.L;
+    for (let j = 0; j < p.L; j++) {
+      let d = pos - j; if (d < 0) d += p.L;
+      const w = Math.exp(-d / wid) * hot;
+      mixTo(R, G, B, 255, 255, 255, Math.min(1, w));
+      g.exc(p.x[j], p.r[j], p.ch[j], mr_, mg_, mb_, e + w);
+    }
+  }
+  draw() {
+    const g = this.g, t = this.t, hov = this.hov, k = this.kind;
+    const { bx0, bx1, by0, by1 } = this; if (this.per == null) return;
+    const w = bx1 - bx0, mid = (by0 + by1) / 2;
+    if (k === 'primary') {
+      this.border(g, 84, 214, 255, .45, 22, 7, .5 + hov);
+      const sp = this.sp, edge = bx0 + 1 + sp * (w - 1);
+      for (let r = by0 + 1; r < by1; r++) for (let c = bx0 + 1; c < bx1; c++) {
+        if (c < edge) {
+          const v = .5 + .5 * Math.sin(c * .7 - t * 9 + r * 1.3);
+          g.exc(c, r, v > .6 ? '+' : v > .3 ? '=' : '-', 255, 150 + v * 40, 40, .26 + .22 * v + this.prs * .5 + this.kick * .6);
+        } else if ((c + r) % 3 === 0) g.exc(c, r, '.', 84, 214, 255, .14);
+      }
+      if (sp > .03 && sp < .985) { for (let r = by0 - 1; r <= by1 + 1; r++) g.exc(edge, r, '|', 255, 255, 255, 1.3); }
+      for (let c = bx0; c <= bx1; c += 2) { const near = Math.abs(c - edge) < 3 && sp > .03; g.exc(c, by0 - 2, near ? '|' : '.', 84, 214, 255, near ? .8 : .22); g.exc(c, by1 + 2, near ? '|' : '.', 84, 214, 255, near ? .8 : .22); }
+      if (sp > .03) { g.exc(edge, by0 - 3, 'v', 255, 176, 64, .9); g.exc(edge, by1 + 3, '^', 255, 176, 64, .9); }
+      if (this.kick > .05) g.ring(edge, mid, (1 - this.kick) * 12 + 1, this.kick, 255, 220, 140, 0, 0);
+    } else if (k === 'secondary') {
+      const sp = 18 + hov * 22, hot = .4 + hov;
+      this.border(g, 84, 214, 255, .3 + hov * .3, sp, 8, hot);
+      if (this.per.L) { const t2 = this.t + this.per.L / 2 / sp; const pos = (t2 * sp) % this.per.L; if (hov > .05) for (let q = 0; q < 12; q++) { const j = Math.floor(pos - q + this.per.L) % this.per.L; g.exc(this.per.x[j], this.per.r[j], '*', 255, 255, 255, hov * (1 - q / 12)); } }
+      if (this.prs > .1 || this.kick > .1) {
+        const f = Math.max(this.prs, this.kick);
+        for (let c = bx0 + 2; c < bx1 - 1; c++) { g.exc(c, by0 + 1, '-', 255, 176, 64, f * .9); g.exc(c, by1 - 1, '-', 255, 176, 64, f * .9); }
+        for (let r = by0 + 2; r < by1 - 1; r++) { g.exc(bx0 + 2, r, '|', 255, 176, 64, f * .9); g.exc(bx1 - 2, r, '|', 255, 176, 64, f * .9); }
+      }
+    } else if (k === 'ghost') {
+      const ur = by1 - 1, amp = .15 + hov * 1.1, flat = hov < .05;
+      let prev = ur;
+      for (let c = bx0; c <= bx1; c++) {
+        const y = ur + amp * Math.sin(c * .5 - t * (3 + hov * 10)), r = Math.round(y), dy = y - prev;
+        g.exc(c, r, flat ? '_' : Math.abs(dy) < .25 ? '-' : dy > 0 ? '\\' : '/', 84, 214, 255, .35 + .55 * hov);
+        prev = y;
+      }
+      if (hov > .05 || this.kick > .05) {
+        const ph = ((t * 34) % (w + 18)) - 6;
+        for (let q = 0; q < 6; q++) g.exc(bx0 + ph - q, ur, q ? '=' : '@', 255, 200, 110, (1 - q / 6) * Math.max(hov, this.kick) * 1.2);
+      }
+    } else if (k === 'icon') {
+      const cx = (bx0 + bx1) / 2, cy = mid, R0 = Math.min(w / 2, (by1 - by0) * g.asp / 2) - .3;
+      g.ring(cx, cy, R0, .45 + hov * .4, 84, 214, 255, hov > .05 ? 4 : 0, Math.floor(t * 8));
+      g.str(cx - 1, cy, '(.)', 246, 242, 228, .9 + this.prs);
+      if (hov > .04) for (let j = 0; j < 3; j++) { const f = (t * (.7 + .5 * hov) + j / 3) % 1; g.ring(cx, cy, R0 * (1 + f * .9), (1 - f) * .7 * hov, 84, 214, 255, 0, 0); }
+      if (this.kick > .04) g.ring(cx, cy, R0 + (1 - this.kick) * 16, this.kick, 255, 176, 64, 0, 0);
+    } else if (k === 'toggle') {
+      const on = this.ap, sx0 = bx1 - Math.round(92 / g.cw), sx1 = bx1 - 3, sm = mid;
+      const R = on > .5 ? 84 : 255, G = on > .5 ? 214 : 84, B = on > .5 ? 255 : 130;
+      this.border(g, R, G, B, .4 + hov * .3, 16, 8, .3 + hov * .5);
+      for (let c = sx0; c <= sx1; c++) {
+        const y = sm + on * 1.7 * Math.sin(c * .6 - t * 8) * (.7 + .3 * Math.sin(c * .13 + t)), r = Math.round(y);
+        if (on > .15) g.exc(c, r, Math.abs(y - r) < .3 ? '-' : '~', 130, 225, 255, .9);
+        else if (hash2(c, Math.floor(t * 4)) > .35) g.exc(c, sm, '-', 255, 84, 130, .6); else if (Math.random() < .15) g.exc(c, sm + Math.round((Math.random() - .5) * 2), NOISE[(Math.random() * NOISE.length) | 0], 255, 84, 130, .6);
+      }
+      g.exc(sx0 - 2, sm, on > .5 ? '(' : ')', R, G, B, .9);
+      if (this.kick > .05) g.ring((sx0 + sx1) / 2, sm, (1 - this.kick) * 14, this.kick, R, G, B, 0, 0);
+    } else if (k === 'xmit') {
+      this.border(g, 84, 214, 255, .4, 20, 8, .4 + hov);
+      for (let r = by0 + 1; r < by1; r++) for (let c = bx0 + 1; c < bx1; c++) if (this.prs > .1) g.exc(c, r, '=', 255, 176, 64, this.prs * .35);
+      for (let j = this.pk.length - 1; j >= 0; j--) {
+        const q = this.pk[j], age = t - q.t0, x = q.c + age * 46 * (1 - Math.exp(-age * 5) * .5) + 1;
+        if (x > g.cols + 8) { this.pk.splice(j, 1); continue; }
+        const col = q.col; g.exc(x - 5, mid, '0', col[0], col[1], col[2], .85); g.exc(x - 4, mid, 'x', col[0], col[1], col[2], .85);
+        g.exc(x - 3, mid, q.adr[0], col[0], col[1], col[2], 1.0); g.exc(x - 2, mid, q.adr[1], col[0], col[1], col[2], 1.0);
+        g.exc(x - 1, mid, '>', 255, 255, 255, 1.3); g.exc(x, mid, '>', 255, 255, 255, 1.3);
+        for (let z = 6; z < 22; z++) g.exc(x - z, mid, z % 2 ? '=' : '-', col[0], col[1], col[2], Math.max(0, .6 - z * .028));
+        g.exc(x + 1, mid - 1, '.', col[0], col[1], col[2], .5); g.exc(x + 1, mid + 1, '.', col[0], col[1], col[2], .5);
+      }
+      if (this.kick > .05) g.ring(bx1, mid, (1 - this.kick) * 9 + 1, this.kick, 255, 255, 255, 0, 0);
+    } else if (k === 'burger') {
+      const o = this.open, cx = g.cols / 2, cy = g.rows / 2, hw = g.cols * .36, hh = g.rows * g.asp * .26 / g.asp;
+      const segs = [[-1, -1, 1, -1, -1, -1, 1, 1], [-1, 0, 1, 0, 0, 0, 0, 0], [-1, 1, 1, 1, -1, 1, 1, -1]];
+      for (let s = 0; s < 3; s++) {
+        const S = segs[s], ax = lerp(S[0], S[4], o), ay = lerp(S[1], S[5], o), bx = lerp(S[2], S[6], o), by = lerp(S[3], S[7], o);
+        const keep = s === 1 ? 1 - o : 1;
+        if (keep < .05) continue;
+        const n = 22;
+        for (let q = 0; q <= n; q++) {
+          const f = q / n, x = cx + lerp(ax, bx, f) * hw, y = cy + lerp(ay, by, f) * hh + (1 - o) * .45 * Math.sin(f * 9 - t * (4 + hov * 8) + s) * (.3 + hov);
+          const ch = o > .6 ? ((s === 0) ? '\\' : '/') : '-';
+          g.exc(x, y, ch, 246, 242, 228, (.7 + hov * .5) * keep);
+        }
+      }
+      if (o > .5) { g.exc(cx, cy, 'x', 255, 176, 64, .9); }
+    }
+  }
+}
+
+// ---------- Hero ----------
+const WF_T = 0.58;
+class Hero extends Surf {
+  constructor(cv) {
+    super(cv, { fs: (w) => clamp(w / 115, 7, 10), persist: .84, bloom: .55, bg: '#05070b' });
+    this.word = new Word(); this.att = 0; this.ft = 0; this.pw = 1; this.pokable = true; this.chirps = [];
+    this.lock = new Float32Array(7); this.lockCol = null; this.acc = 0; this.formed = false; this.px = -1; this.py = -1;
+    listeners.ping.push((x, y) => {
+      const r = this.rect(); if (x < r.left || x > r.right || y < r.top || y > r.bottom || !this.ready) return;
+      this.chirps.push({ c0: (x - r.left) / this.g.cw, t0: this.t }); if (this.chirps.length > 5) this.chirps.shift();
+    });
+  }
+  onLayout() {
+    const g = this.g;
+    this.word.build(g, 'CARRIER', { cx: g.cols / 2, cy: g.rows * .31, w: g.cols * (g.cols < 130 ? .95 : .8), hmax: g.rows * g.asp * .26, t0: 1.3, rs: .06 });
+    this.wfTop = Math.floor(g.rows * WF_T); this.depth = Math.max(4, g.rows - this.wfTop);
+    this.wf = new Float32Array(this.depth * g.cols); this.head = 0; this.lockCol = new Float32Array(g.cols);
+  }
+  onShow() { if (!this.formed) { this.formed = true; this.ft = 0; } }
+  snap() {}
+  newLine() {
+    const g = this.g, cols = g.cols, t = this.t, o = this.head * cols, wf = this.wf, cen = this.word.centers;
+    this.head = (this.head + 1) % this.depth; const o2 = this.head * cols;
+    const emit = clamp((this.ft - 2.2) / 1, 0, 1) * this.pw;
+    for (let c = 0; c < cols; c++) wf[o2 + c] = .09 + .16 * Math.random() * (ST.muted ? 2 : 1);
+    if (emit > 0.01) for (let k = 0; k < cen.length; k++) {
+      const key = hash2(k * 17, Math.floor(t * 3.3)) > .38 || this.lock[k] > .5 ? 1 : .32;
+      const cc = cen[k] + Math.sin(t * .6 + k * 1.7) * 1.2 + Math.sin(t * 2.3 + k) * .25, sg = 1.0 + this.lock[k] * 1.1;
+      const lo = Math.max(0, Math.floor(cc - 6)), hi = Math.min(cols - 1, Math.ceil(cc + 6));
+      for (let c = lo; c <= hi; c++) { const d = (c - cc) / sg; wf[o2 + c] += key * emit * (.75 + .25 * this.lock[k]) * Math.exp(-d * d * .5) * (.8 + .4 * Math.random()); }
+    }
+    for (let q = this.chirps.length - 1; q >= 0; q--) {
+      const ch = this.chirps[q], age = t - ch.t0; if (age > .9) { this.chirps.splice(q, 1); continue; }
+      const cc = ch.c0 + age * 38, f = 1 - age / .9;
+      for (let c = Math.max(0, Math.floor(cc - 5)); c <= Math.min(cols - 1, Math.ceil(cc + 5)); c++) { const d = (c - cc) / 1.3; wf[o2 + c] += 1.1 * f * Math.exp(-d * d * .5); }
+    }
+  }
+  sim(dt) {
+    this.t += dt; this.ft += dt;
+    this.pw += ((ST.muted ? 0 : 1) - this.pw) * .05;
+    const g = this.g, r = this.rect();
+    let pc = -99, pr = -99, inside = false;
+    if (P.has && P.x >= r.left && P.x <= r.right && P.y >= r.top && P.y <= r.bottom) { inside = true; pc = (P.x - r.left) / g.cw; pr = (P.y - r.top) / g.chh; }
+    this.pc = pc; this.pr = pr; this.inside = inside;
+    const w = this.word, wt = (NOW - ST.bt) < 3.2;
+    const attT = inside && pr > w.r0 - 3 && pr < w.r1 + 3 && pc > w.c0 && pc < w.c1 ? 1 : 0;
+    this.att += (Math.max(attT, wt ? 1 : 0) - this.att) * .1;
+    const cen = w.centers; if (cen) for (let k = 0; k < 7; k++) {
+      const near = (inside && pr > this.wfTop - 4 && Math.abs(pc - cen[k]) < 5) || wt ? 1 : 0;
+      this.lock[k] += (near - this.lock[k]) * .14;
+    }
+    this.acc += dt; if (this.acc >= 1 / 16) { this.acc -= 1 / 16; if (this.wf) this.newLine(); }
+  }
+  draw() {
+    const g = this.g, cols = g.cols, rows = g.rows, t = this.t, w = this.word, wfTop = this.wfTop;
+    if (!this.wf || !w.centers) return;
+    const ft = REDUCE ? 99 : this.ft, charge = CH.v, wt = (NOW - ST.bt) < 3.2;
+    // graticule and snow
+    for (let r = 2; r < wfTop - 1; r += 6) for (let c = 6; c < cols; c += 12) g.exc(c, r, '+', 60, 110, 150, .16);
+    for (let c = 0; c < cols; c += 2) g.exc(c, w.cy, '.', 60, 110, 150, .12);
+    const sn = Math.floor(cols * wfTop * (ST.muted ? .014 : .0025));
+    for (let k = 0; k < sn; k++) g.exc((Math.random() * cols) | 0, (Math.random() * (wfTop - 1)) | 0, Math.random() < .5 ? '.' : ':', 70, 110, 150, ST.muted ? .5 : .22);
+    // word
+    w.draw(g, t, ft, this.att, this.pw, charge);
+    // carrier trace
+    const reveal = clamp(ft / 1.3, 0, 1);
+    const amp = (ST.muted ? 0.05 : (ft < 1.3 ? 3.2 : 1.8 + this.att * 1.2) + charge * 6 + (wt ? 2.5 * Math.max(0, 1 - (NOW - ST.bt) / 3.2) : 0)) * (.25 + .75 * this.pw);
+    const R = ST.muted ? 255 : 110, G = ST.muted ? 84 : 220, B = ST.muted ? 130 : 255;
+    w.trace(g, t, amp, .24 + this.att * .05 + charge * .1, reveal, 6 + this.att * 8 + charge * 18, R, G, B);
+    // waterfall
+    const depth = this.depth, wf = this.wf, lockCol = this.lockCol;
+    lockCol.fill(0);
+    const cen = w.centers;
+    for (let k = 0; k < cen.length; k++) { const L = this.lock[k]; if (L < .02) continue; for (let c = Math.max(0, Math.floor(cen[k] - 7)); c <= Math.min(cols - 1, Math.ceil(cen[k] + 7)); c++) { const d = (c - cen[k]) / 3.2; lockCol[c] = Math.max(lockCol[c], L * Math.exp(-d * d * .5)); } }
+    for (let a = 0; a < depth; a++) {
+      const r = wfTop + a, base = (((this.head - a) % depth) + depth) % depth * cols, fade = Math.pow(1 - a / depth, .7);
+      for (let c = 0; c < cols; c++) {
+        let v = wf[base + c] * fade; if (v < .08) continue;
+        v = Math.min(1.2, v);
+        const lk = lockCol[c];
+        mixTo(24, 56, 98, 84, 214, 255, smooth(.05, .65, v));
+        if (v > .7) { const q = Math.min(1, (v - .7) / .5); mixTo(mr_, mg_, mb_, 246, 242, 228, q); }
+        if (lk > .02) { const q = lk * smooth(.12, .45, v); mixTo(mr_, mg_, mb_, 255, 176, 64, q); }
+        g.ex(r * cols + c, RAMP[Math.min(9, (v * 8.4) | 0)], mr_, mg_, mb_, .3 + v * .9);
+      }
+    }
+    // tuning hairline and readout
+    if (this.inside && !P.touch) {
+      const pc = Math.round(this.pc);
+      for (let r = wfTop; r < rows; r++) g.exc(pc, r, '|', 255, 176, 64, .35 + .25 * Math.sin(r * .8 - t * 10));
+      let nk = -1, nd = 9; for (let k = 0; k < cen.length; k++) { const d = Math.abs(cen[k] - this.pc); if (d < nd) { nd = d; nk = k; } }
+      const locked = nd < 4;
+      const f = 87.5 + (this.pc / cols) * 20.5;
+      const txt = locked ? 'CH 0' + (nk + 1) + '  ' + f.toFixed(1) + ' MHZ  LOCKED' : 'SCAN  ' + f.toFixed(1) + ' MHZ';
+      const x0 = Math.min(cols - txt.length - 1, pc + 2);
+      g.str(x0, wfTop - 1, txt, locked ? 255 : 84, locked ? 176 : 214, locked ? 64 : 255, .95);
+    }
+  }
+}
+
+// ---------- Cursor / charge / shock overlay ----------
+class Cur extends Surf {
+  constructor(cv) {
+    super(cv, { fs: () => 11, persist: .78, bloom: 0, rgba: true });
+    this.rx = 0; this.ry = 0; this.lk = 0; this.trail = []; this.vis = true; this.spin = 0; this.pokable = false;
+  }
+  get on() { return this.ready && !REDUCE; }
+  sim(dt) { this.t += dt; this.spin += dt * 24; }
+  draw() {
+    const g = this.g, cw = g.cw, chh = g.chh;
+    if (P.has && !(P.touch && !P.down)) {
+      this.rx += (P.x - this.rx) * .5; this.ry += (P.y - this.ry) * .5;
+      this.lk += ((P.over ? 1 : 0) - this.lk) * .25;
+      const c = this.rx / cw, r = this.ry / chh, d = 2.6 - this.lk * 1.4;
+      const sp = Math.hypot(P.x - this.rx, P.y - this.ry);
+      const col = this.lk > .5 ? [255, 176, 64] : [84, 214, 255];
+      if (!P.touch) {
+        g.exc(c - d - 1, r, '[', col[0], col[1], col[2], 1.1); g.exc(c + d + 1, r, ']', col[0], col[1], col[2], 1.1);
+        g.exc(c, r - 1.6, '.', col[0], col[1], col[2], .7); g.exc(c, r + 1.6, '.', col[0], col[1], col[2], .7);
+        const f = 87.5 + (P.x / innerWidth) * 20.5;
+        g.str(c + d + 3, r + 1, f.toFixed(1) + (this.lk > .5 ? ' LOCK' : ''), col[0], col[1], col[2], .7);
+      }
+      const n = sp > 14 ? 3 : sp > 4 ? 2 : 1;
+      for (let k = 0; k < n; k++) { const f = Math.random(); g.exc(c + (this.rx - P.x) / cw * f * 0 + (Math.random() - .5) * 1.5, r + (Math.random() - .5) * 1.2, sp > 10 ? '*' : ':', 84, 214, 255, .55); }
+      this.trail.push(c, r); if (this.trail.length > 16) this.trail.splice(0, 2);
+      for (let i = 0; i < this.trail.length; i += 2) g.exc(this.trail[i], this.trail[i + 1], '.', 130, 225, 255, .25 + i / 40);
+      if (CH.v > .02) {
+        const Rc = 2 + CH.v * 7, m = CH.v > .97 ? 1 : 0;
+        const q = (CH.v);
+        mixTo(84, 214, 255, 255, 176, 64, smooth(.5, 1, q));
+        g.ring(c + (m ? (Math.random() - .5) * .5 : 0), r, Rc, .6 + CH.v * .7, mr_, mg_, mb_, 4, Math.floor(this.spin));
+        g.ring(c, r, Rc * .5, .5, mr_, mg_, mb_, 3, -Math.floor(this.spin * .7));
+        g.str(c - 2, r + Rc / g.asp + 1.5, Math.round(CH.v * 100) + '%', mr_, mg_, mb_, .95);
+      }
+    }
+    for (let i = pings.length - 1; i >= 0; i--) {
+      const p = pings[i], age = NOW - p.t0, shock = p.kind === 'shock', life = shock ? 2.8 : 1.0;
+      if (age > life) { pings.splice(i, 1); continue; }
+      const sp = (shock ? 70 : 20) * (.55 + .45 * p.pw), Rc = age * sp, e = (1 - age / life) * (.5 + p.pw * .7), cx = p.x / cw, cy = p.y / chh;
+      g.ring(cx, cy, Rc, e, 255, 230, 180, 0, 0);
+      if (shock) { g.ring(cx, cy, Rc * .8, e * .7, 255, 176, 64, 0, 0); g.ring(cx, cy, Rc * .6, e * .5, 84, 214, 255, 0, 0); }
+      else g.ring(cx, cy, Rc * .7, e * .6, 84, 214, 255, 0, 0);
+    }
+  }
+}
+
+// ---------- World map footer ----------
+const POLY = [
+ [[-168,66],[-162,70],[-141,70],[-125,70],[-110,73],[-95,72],[-82,68],[-85,64],[-93,60],[-93,57],[-80,52],[-79,57],[-77,62],[-70,60],[-64,60],[-61,56],[-56,52],[-60,47],[-66,45],[-70,42],[-74,40],[-76,35],[-81,31],[-80,26],[-82,26],[-84,30],[-90,30],[-94,29],[-97,26],[-97,22],[-95,18],[-91,19],[-90,21],[-87,21],[-88,16],[-84,15],[-83,10],[-80,8],[-83,8],[-86,11],[-92,14],[-96,16],[-105,20],[-110,24],[-114,29],[-117,32],[-120,34],[-124,40],[-124,47],[-128,51],[-133,56],[-140,60],[-148,61],[-152,58],[-158,56],[-165,54],[-160,59],[-165,62]],
+ [[-73,78],[-60,82],[-30,83],[-20,80],[-20,70],[-35,65],[-43,60],[-50,64],[-55,70],[-67,76]],
+ [[-78,9],[-72,12],[-62,10],[-52,5],[-50,0],[-44,-2],[-35,-6],[-39,-14],[-41,-22],[-48,-26],[-53,-34],[-58,-38],[-62,-41],[-65,-46],[-68,-52],[-70,-54],[-74,-50],[-73,-40],[-71,-30],[-70,-18],[-76,-14],[-81,-6],[-80,-1],[-77,4]],
+ [[-9,37],[-9,43],[-1,43.5],[-2,47],[-5,48.5],[2,51],[5,53],[8,54],[14,54],[20,55],[24,57],[28,60],[32,66],[40,67],[44,68],[55,68],[68,69],[80,73],[100,77],[112,74],[130,72],[142,72],[160,70],[170,70],[180,67],[180,65],[178,62],[165,60],[160,54],[156,51],[155,58],[142,59],[137,54],[140,48],[135,43],[130,42],[129,36],[126,35],[126,38],[122,40],[121,37],[119,35],[121,31],[122,29],[119,25],[114,22],[108,21],[106,18],[109,12],[105,9],[103,10],[100,13],[99,8],[103,2],[101,3],[98,8],[98,16],[94,17],[92,22],[88,22],[86,20],[80,15],[78,8],[76,10],[73,17],[72,21],[67,24],[62,25],[57,26],[57,25],[59,22],[55,17],[52,16],[45,13],[43,13],[39,21],[35,28],[34,31],[36,36],[30,36],[27,37],[26,40],[23,40],[22,37],[19,41],[14,45],[12,44],[15,41],[16,38],[12,41],[9,44],[3,43],[0,39],[-2,37],[-6,36.5]],
+ [[5,58],[5,62],[14,68],[22,71],[30,70],[28,66],[24,65],[21,63],[18,60],[17,57],[12,56],[8,58]],
+ [[-17,21],[-16,28],[-10,30],[-6,36],[0,36],[10,37],[11,33],[20,31],[30,31],[33,31],[34,28],[37,22],[43,12],[51,12],[48,5],[40,-3],[40,-10],[35,-20],[35,-25],[32,-29],[28,-33],[20,-35],[18,-32],[15,-26],[12,-17],[13,-9],[9,-1],[10,4],[5,5],[-4,5],[-8,4],[-13,8],[-17,14]],
+ [[114,-22],[122,-18],[130,-12],[137,-12],[136,-15],[141,-11],[143,-14],[146,-19],[153,-26],[151,-34],[146,-39],[140,-38],[135,-35],[131,-31],[124,-34],[115,-34],[114,-26]],
+ [[130,32],[135,34],[140,35],[142,40],[141,45],[145,44],[140,41],[139,37],[135,36],[131,34]],
+ [[-6,50],[1,51],[2,53],[-2,56],[-3,58.5],[-6,58],[-5,55],[-3,54],[-5,52]],
+ [[95,5],[98,4],[104,-2],[106,-6],[102,-4],[96,2]],
+ [[109,1],[111,-3],[116,-4],[118,1],[116,7],[110,2]],
+ [[131,-1],[141,-3],[150,-10],[142,-9],[138,-8],[132,-3]],
+ [[44,-25],[49,-15],[50,-13],[47,-14],[44,-17]],
+ [[172,-34],[178,-38],[175,-41],[173,-35]],
+ [[167,-46],[174,-41],[171,-44]],
+ [[-24,65],[-14,64],[-14,66],[-22,66]]
+];
+const STN = [
+ ['SFO', -122, 37.8], ['NYC', -74, 40.7], ['MEX', -99, 19.4], ['ANC', -150, 61.2], ['SAO', -46.6, -23.5], ['LON', -.1, 51.5], ['REK', -21.9, 64.1], ['LOS', 3.4, 6.5],
+ ['CAI', 31, 30], ['NBO', 36.8, -1.3], ['CPT', 18.4, -33.9], ['DXB', 55.3, 25.3], ['BOM', 72.9, 19], ['SIN', 103.8, 1.3], ['TYO', 139.7, 35.7], ['SYD', 151.2, -33.9]
+];
+const LAT_T = 80, LAT_B = -58;
+function inPoly(poly, x, y) {
+  let ins = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) ins = !ins;
+  }
+  return ins;
+}
+class MapS extends Surf {
+  constructor(cv) {
+    super(cv, { fs: (w) => clamp(w / 150, 6.2, 9), persist: .9, bloom: .55 });
+    this.pk = []; this.pulse = new Float32Array(STN.length); this.nextSend = 0; this.hov = -1; this.pokable = true;
+    listeners.broadcast.push(() => this.broadcast());
+    cv.addEventListener('pointerdown', () => { if (this.hov >= 0) this.fan(this.hov, 3); });
+  }
+  onLayout() {
+    const g = this.g, cols = g.cols, rows = g.rows, asp = g.asp;
+    let mw = cols * .98, mrows = mw * ((LAT_T - LAT_B) / 360) / asp;
+    if (mrows > rows * .92) { mrows = rows * .92; mw = mrows * asp * 360 / (LAT_T - LAT_B); }
+    this.mw = mw; this.mrows = mrows; this.ox = (cols - mw) / 2; this.oy = (rows - mrows) / 2 + 1;
+    this.land = new Uint8Array(g.N); this.coast = new Uint8Array(g.N);
+    this.lonC = new Float32Array(cols);
+    for (let c = 0; c < cols; c++) this.lonC[c] = (c + .5 - this.ox) / mw * 360 - 180;
+    const bb = POLY.map(p => { let a = 999, b = -999, c2 = 999, d = -999; for (const q of p) { a = Math.min(a, q[0]); b = Math.max(b, q[0]); c2 = Math.min(c2, q[1]); d = Math.max(d, q[1]); } return [a, b, c2, d]; });
+    for (let r = 0; r < rows; r++) {
+      const lat = LAT_T - (r + .5 - this.oy) / mrows * (LAT_T - LAT_B); if (lat > LAT_T || lat < LAT_B) continue;
+      for (let c = 0; c < cols; c++) {
+        const lon = this.lonC[c]; if (lon < -180 || lon > 180) continue;
+        for (let p = 0; p < POLY.length; p++) { const b = bb[p]; if (lon < b[0] || lon > b[1] || lat < b[2] || lat > b[3]) continue; if (inPoly(POLY[p], lon, lat)) { this.land[r * cols + c] = 1; break; } }
+      }
+    }
+    for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) { const i = r * cols + c; if (this.land[i] && (!this.land[i - 1] || !this.land[i + 1] || !this.land[i - cols] || !this.land[i + cols])) this.coast[i] = 1; }
+    this.sc = STN.map(s => this.proj(s[1], s[2]));
+  }
+  proj(lon, lat) { return [this.ox + (lon + 180) / 360 * this.mw, this.oy + (LAT_T - lat) / (LAT_T - LAT_B) * this.mrows]; }
+  send(a, b, amber) {
+    if (this.pk.length > 44) return;
+    const A = this.sc[a], B = this.sc[b], dist = Math.hypot(B[0] - A[0], (B[1] - A[1]) * this.g.asp);
+    this.pk.push({ a, b, s: 0, v: .55 + Math.random() * .35 + 40 / (dist + 40), hh: Math.min(dist * .2, this.mrows * .6) / this.g.asp, amber: !!amber });
+  }
+  fan(a, n) { for (let k = 0; k < n; k++) { let b = (Math.random() * STN.length) | 0; if (b === a) b = (b + 1) % STN.length; this.send(a, b, true); } this.pulse[a] = 1; }
+  broadcast() { for (let a = 0; a < STN.length; a++) { this.send(a, (a + 3) % STN.length, true); this.send(a, (a + 7) % STN.length, true); this.pulse[a] = 1; } }
+  snap() {}
+  sim(dt) {
+    this.t += dt;
+    this.nextSend -= dt; if (this.nextSend <= 0) { this.nextSend = .35 + Math.random() * .6; const a = (Math.random() * STN.length) | 0; let b = (Math.random() * STN.length) | 0; if (a === b) b = (b + 5) % STN.length; this.send(a, b, false); }
+    for (let i = this.pk.length - 1; i >= 0; i--) { const p = this.pk[i]; p.s += dt * p.v; if (p.s >= 1) { this.pulse[p.b] = 1; this.pk.splice(i, 1); } }
+    for (let k = 0; k < this.pulse.length; k++) this.pulse[k] *= .965;
+  }
+  arc(p, s) { const A = this.sc[p.a], B = this.sc[p.b]; return [lerp(A[0], B[0], s), lerp(A[1], B[1], s) - Math.sin(Math.PI * s) * p.hh]; }
+  draw() {
+    const g = this.g, cols = g.cols, rows = g.rows, t = this.t + (REDUCE ? 0 : 0), land = this.land, coast = this.coast;
+    if (!land) return;
+    const sunLon = 180 - ((t * 3 + 40) % 360), r2d = Math.PI / 180;
+    // graticule
+    for (let lon = -180; lon <= 180; lon += 30) for (let lat = -30; lat <= 60; lat += 30) { const q = this.proj(lon, lat); g.exc(q[0], q[1], '+', 60, 110, 150, .22); }
+    const r0 = Math.max(0, Math.floor(this.oy)), r1 = Math.min(rows - 1, Math.ceil(this.oy + this.mrows));
+    for (let r = r0; r <= r1; r++) for (let c = 0; c < cols; c++) {
+      const i = r * cols + c; if (!land[i]) continue;
+      const day = smooth(-.25, .25, Math.cos((this.lonC[c] - sunLon) * r2d));
+      const cs = coast[i];
+      mixTo(60, 110, 160, 96, 192, 220, day);
+      const e = (.34 + .3 * day) * (cs ? 1.6 : 1);
+      g.ex(i, cs ? ':' : (hash2(c, r) > .5 ? '.' : ','), mr_, mg_, mb_, e);
+      if (day < .35 && hash2(c * 3, r * 7) > .965) g.ex(i, '.', 255, 190, 100, .6 * (1 - day));
+    }
+    // satellite and downlinks
+    const sl = ((t * 11 + 90) % 360) - 180, sa = 34 * Math.sin(sl * r2d * 2 + .6), sp = this.proj(sl, sa);
+    for (let k = 1; k < 26; k++) { const l2 = sl - k * 1.6; if (l2 < -180) break; const q = this.proj(l2, 34 * Math.sin(l2 * r2d * 2 + .6)); g.exc(q[0], q[1], '.', 255, 255, 255, .3 * (1 - k / 26)); }
+    g.exc(sp[0], sp[1], '+', 255, 255, 255, 1.3); g.exc(sp[0] - 1, sp[1], '-', 255, 255, 255, .8); g.exc(sp[0] + 1, sp[1], '-', 255, 255, 255, .8);
+    for (let k = 0; k < STN.length; k++) {
+      const s = this.sc[k], dx = s[0] - sp[0], dy = (s[1] - sp[1]) * g.asp;
+      if (Math.hypot(dx, dy) < this.mw * .17) {
+        const n = 18; for (let q = 1; q < n; q++) { const f = q / n; const on = Math.sin(t * 12 - f * 14) > .2; g.exc(lerp(sp[0], s[0], f), lerp(sp[1], s[1], f), on ? ':' : '.', 255, 255, 255, on ? .55 : .2); }
+        this.pulse[k] = Math.max(this.pulse[k], .25);
+      }
+    }
+    // packets
+    for (const p of this.pk) {
+      const col = p.amber ? [255, 176, 64] : [84, 214, 255];
+      for (let q = 0; q < 9; q++) {
+        const s = p.s - q * .012; if (s < 0) break;
+        const pt = this.arc(p, s), pt2 = this.arc(p, s + .01);
+        g.exc(pt[0], pt[1], q ? lineChar(pt2[0] - pt[0], (pt2[1] - pt[1]) * g.asp) : '@', q ? col[0] : 255, q ? col[1] : 255, q ? col[2] : 255, q ? .9 - q * .09 : 1.4);
+      }
+      if (p.s < .03 || true) { const pt = this.arc(p, Math.min(1, p.s + .03)); }
+    }
+    // faint arcs of the active packets
+    for (const p of this.pk) for (let s = p.s; s < 1; s += .045) { const pt = this.arc(p, s); g.exc(pt[0], pt[1], '.', 84, 214, 255, .16); }
+    // stations
+    const rct = this.rect(); let hov = -1, hd = 6;
+    if (P.has && !P.touch || P.down) for (let k = 0; k < STN.length; k++) { const s = this.sc[k], d = Math.hypot((P.x - rct.left) / g.cw - s[0], ((P.y - rct.top) / g.chh - s[1]) * g.asp); if (d < hd) { hd = d; hov = k; } }
+    this.hov = hov;
+    for (let k = 0; k < STN.length; k++) {
+      const s = this.sc[k], pu = this.pulse[k];
+      g.exc(s[0], s[1], pu > .3 ? '@' : 'o', 255, 200 - pu * 40, 120 - pu * 50, .85 + pu);
+      if (pu > .05) g.ring(s[0], s[1], (1 - pu) * 7 + .8, pu * .8, 255, 190, 100, 0, 0);
+      if (k === hov) {
+        g.exc(s[0] - 2, s[1], '[', 255, 176, 64, 1.2); g.exc(s[0] + 2, s[1], ']', 255, 176, 64, 1.2);
+        const lab = STN[k][0] + '  ' + (12 + (k * 37) % 80) + ' MS  TAP TO SEND';
+        g.str(Math.min(cols - lab.length - 1, s[0] + 4), s[1] - 1, lab, 255, 176, 64, 1.1);
+      } else g.str(s[0] + 2, s[1], STN[k][0], 130, 160, 185, .5);
+    }
+  }
+}
+
+// ---------- boot ----------
+const $ = id => document.getElementById(id);
+const hero = new Hero($('heroCv'));
+const navLogo = new Logo($('logoNav'), 'nav', $('navlogo'));
+const smallLogo = new Logo($('logoSmall'), 'nav', $('navlogo2'));
+const bigLogo = new Logo($('logoBig'), 'big', $('logoBig').parentElement);
+const navLinks = [...document.querySelectorAll('#nav .nl')];
+const wire = new NavWire($('wire'), navLinks);
+const drop = new DropSurf($('dropCv'), $('drop'), false);
+const mdrop = new DropSurf($('mnavCv'), $('mnav'), true);
+const btns = [...document.querySelectorAll('.btn[data-kind]')].map(b => new BtnSurf(b));
+const bySel = id => btns.find(b => b.btn.id === id);
+const map = new MapS($('mapCv'));
+const cur = new Cur($('cur'));
+
+// fonts: rebuild masks once the display face is ready
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { [hero, navLogo, smallLogo, bigLogo, ...btns, wire].forEach(s => s.ready && s.relayout()); });
+
+// ---------- dropdown ----------
+const hm = $('hm'), menuBtn = $('menuBtn'), dropEl = $('drop');
+let closeT = 0;
+function openMenu() {
+  clearTimeout(closeT); if (hm.classList.contains('open')) return;
+  hm.classList.add('open'); menuBtn.setAttribute('aria-expanded', 'true'); drop.setOpen(true); wire.act = 0; wire.poke();
+  dropEl.querySelectorAll('.nm').forEach((n, i) => decode(n, n.dataset.t, 420 + i * 60, 160 + i * 70));
+}
+function closeMenu() { if (!hm.classList.contains('open')) return; hm.classList.remove('open'); menuBtn.setAttribute('aria-expanded', 'false'); drop.setOpen(false); wire.act = -1; wire.poke(); }
+hm.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') openMenu(); });
+hm.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { clearTimeout(closeT); closeT = setTimeout(closeMenu, 180); } });
+menuBtn.addEventListener('click', () => hm.classList.contains('open') ? closeMenu() : openMenu());
+menuBtn.addEventListener('keydown', e => { if (e.key === 'ArrowDown') { e.preventDefault(); openMenu(); const a = dropEl.querySelector('a'); a && a.focus(); } });
+dropEl.addEventListener('keydown', e => {
+  const as = [...dropEl.querySelectorAll('a')], i = as.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); as[(i + 1) % as.length].focus(); }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); as[(i + as.length - 1) % as.length].focus(); }
+});
+hm.addEventListener('focusout', e => { if (!hm.contains(e.relatedTarget)) closeT = setTimeout(closeMenu, 60); });
+dropEl.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMenu));
+document.addEventListener('pointerdown', e => { if (!hm.contains(e.target)) closeMenu(); });
+
+// ---------- mobile menu ----------
+const burger = $('burger'), mnav = $('mnav'), bsurf = bySel('burger');
+function setMobile(o) {
+  mnav.classList.toggle('open', o); burger.setAttribute('aria-expanded', String(o)); burger.setAttribute('aria-label', o ? 'Close menu' : 'Open menu');
+  document.body.classList.toggle('lock', o); mdrop.setOpen(o); if (bsurf) bsurf.setOpen(o);
+  if (o) mnav.querySelectorAll('.nm').forEach((n, i) => decode(n, n.dataset.t, 500, 120 + i * 80));
+}
+burger.addEventListener('click', () => setMobile(!mnav.classList.contains('open')));
+mnav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => setMobile(false)));
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if (mnav.classList.contains('open')) { setMobile(false); burger.focus(); } if (hm.classList.contains('open')) { closeMenu(); menuBtn.focus(); } }
+});
+matchMedia('(min-width:901px)').addEventListener('change', e => { if (e.matches) setMobile(false); });
+$('openMenu').addEventListener('click', () => { window.scrollTo({ top: 0, behavior: REDUCE ? 'auto' : 'smooth' }); setTimeout(() => { if (innerWidth > 900) openMenu(); else setMobile(true); }, REDUCE ? 0 : 450); });
+
+// ---------- toggle ----------
+const tog = $('carrierTog'), togS = bySel('carrierTog');
+tog.addEventListener('click', () => {
+  ST.muted = !ST.muted; tog.setAttribute('aria-pressed', String(!ST.muted)); tog.classList.toggle('off', ST.muted);
+  tog.querySelector('.lbl').textContent = ST.muted ? 'Carrier off' : 'Carrier on'; togS.setToggle(!ST.muted);
+  [hero, navLogo, smallLogo, bigLogo].forEach(s => s.poke());
+});
+
+// ---------- logo chips ----------
+const chipIdle = $('chipIdle'), chipAtt = $('chipAtt');
+chipAtt.addEventListener('click', () => { bigLogo.force = true; chipAtt.setAttribute('aria-pressed', 'true'); chipIdle.setAttribute('aria-pressed', 'false'); bigLogo.tAtt = 1; bigLogo.poke(); });
+chipIdle.addEventListener('click', () => { bigLogo.force = false; bigLogo.tAtt = 0; chipIdle.setAttribute('aria-pressed', 'true'); chipAtt.setAttribute('aria-pressed', 'false'); bigLogo.poke(); });
+$('chipForm').addEventListener('click', () => { bigLogo.replay(); });
+
+// ---------- hero copy ----------
+const h1 = $('h1'), eb = $('eb');
+if (!REDUCE) { h1.textContent = ''; eb.textContent = ''; setTimeout(() => { decode(eb, 'CH 01 / signal locked', 800); decode(h1, 'Say it once. Know it arrived.', 1300); }, 2600); }
+$('heroCta').addEventListener('click', () => { document.getElementById('mark').scrollIntoView({ behavior: REDUCE ? 'auto' : 'smooth' }); });
+
+// ---------- pointer ----------
+const heroEl = $('hero');
+const inter = el => el && el.closest && el.closest('a,button,[role=button],input');
+addEventListener('pointermove', e => { P.x = e.clientX; P.y = e.clientY; P.has = true; P.touch = e.pointerType === 'touch'; P.over = !!inter(e.target); if (REDUCE) { clearTimeout(P.rt); P.rt = setTimeout(() => { if (hero.vis) hero.poke(); }, 60); } }, { passive: true });
+addEventListener('pointerdown', e => {
+  P.x = e.clientX; P.y = e.clientY; P.has = true; P.touch = e.pointerType === 'touch'; P.down = true; P.over = !!inter(e.target);
+  if (!P.over) ping(e.clientX, e.clientY, .55, 'tap');
+  if (heroEl.contains(e.target) && !P.over) CH.on = true;
+}, { passive: true });
+function release() {
+  P.down = false; if (!CH.on) return; CH.on = false;
+  const v = CH.v, x = P.has ? P.x : innerWidth / 2, y = P.has ? P.y : innerHeight / 2;
+  if (v > .97 && NOW - ST.bt > 3) broadcast(x, y); else if (v > .3) ping(x, y, v, 'shock');
+  CH.v = 0;
+}
+addEventListener('pointerup', release); addEventListener('pointercancel', () => { P.down = false; CH.on = false; CH.v = 0; });
+addEventListener('pointerleave', () => { P.has = false; }); document.documentElement.addEventListener('pointerleave', () => { P.has = false; });
+addEventListener('keydown', e => {
+  if (e.code === 'Space' && !e.repeat && (document.activeElement === document.body || document.activeElement === document.documentElement)) { e.preventDefault(); CH.on = true; }
+});
+addEventListener('keyup', e => { if (e.code === 'Space' && CH.on) release(); });
+addEventListener('blur', () => { CH.on = false; CH.v = 0; });
+const toast = $('toast');
+function broadcast(x, y) {
+  ST.bt = NOW; ping(x, y, 1, 'shock');
+  listeners.broadcast.forEach(f => f());
+  const n = 41000 + ((Math.random() * 900) | 0);
+  toast.innerHTML = '<span id="tm"></span><small>' + n.toLocaleString('en-US') + ' stations heard you</small>';
+  toast.classList.add('on'); decode($('tm'), 'Broadcast sent', 900);
+  clearTimeout(broadcast.t); broadcast.t = setTimeout(() => toast.classList.remove('on'), 3600);
+  if (REDUCE) { hero.poke(); }
+}
+
+// ---------- footer clock ----------
+const utc = $('utc'); let lastS = -1;
+function clock() { const d = new Date(), s = d.getUTCSeconds(); if (s === lastS) return; lastS = s; utc.textContent = String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0') + ':' + String(s).padStart(2, '0'); }
+clock();
+
+// ---------- the one shared loop ----------
+if (!REDUCE) {
+  let last = performance.now(), acc = 0, lastR = 0;
+  const frame = now => {
+    requestAnimationFrame(frame);
+    if (document.hidden) { last = now; return; }
+    const dt = Math.min(.1, (now - last) / 1000); last = now; acc += dt;
+    if (now - lastR < 30) return; lastR = now;
+    NOW = now / 1000;
+    const n = Math.min(4, Math.floor(acc / STEP)); acc -= n * STEP; if (acc > STEP * 4) acc = 0;
+    if (CH.on) CH.v = Math.min(1, CH.v + n * STEP / 1.5); else CH.v = Math.max(0, CH.v - n * STEP * 3);
+    for (let i = 0; i < surfs.length; i++) {
+      const s = surfs[i]; if (!s.on) continue;
+      for (let k = 0; k < n; k++) s.sim(STEP);
+      s.draw(); s.g.present();
+    }
+    updDec(now); clock();
+  };
+  requestAnimationFrame(frame);
+} else {
+  NOW = 1;
+}
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Vesper, the Carrier mascot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#05070b; --panel:#0a1018; --panel2:#0d1520;
+  --line:rgba(110,190,235,.2); --line2:rgba(110,190,235,.4);
+  --txt:#eaf0f4; --mut:#9aabba; --dim:#64778a;
+  --cy:#54d6ff; --am:#ffb040; --mg:#ff5482; --wh:#f6f2e4;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --ui:"Space Grotesk","Helvetica Neue",Arial,system-ui,sans-serif;
+  --gut:16px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--ink);overflow-x:clip;scroll-behavior:smooth}
+body{margin:0;background:var(--ink);color:var(--txt);font:400 16px/1.65 var(--ui);overflow-x:clip;-webkit-font-smoothing:antialiased}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+canvas{display:block}
+a{color:var(--cy)}
+.vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:focus-visible{outline:2px solid var(--am);outline-offset:3px;border-radius:3px}
+.wrap{max-width:1240px;margin:0 auto;padding:0 var(--gut)}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--cy);margin:0 0 14px}
+h1{font:700 clamp(44px,7vw,84px)/.98 var(--ui);letter-spacing:-.025em;margin:0 0 16px}
+h2{font:500 clamp(26px,3.6vw,38px)/1.12 var(--ui);letter-spacing:-.01em;margin:0 0 14px;text-wrap:balance}
+h3{font:700 13px/1.2 var(--mono);letter-spacing:.12em;text-transform:uppercase;margin:0 0 6px;color:var(--wh)}
+p{margin:0 0 14px}
+.lede{font-size:clamp(17px,2vw,20px);color:var(--txt);max-width:44ch}
+.mut{color:var(--mut)}
+code,kbd{font:600 .85em var(--mono);background:rgba(110,190,235,.1);border:1px solid var(--line);border-radius:3px;padding:1px 6px;color:var(--wh)}
+
+/* top bar */
+.top{border-bottom:1px solid var(--line);background:rgba(5,7,11,.9)}
+.top .wrap{display:flex;align-items:center;gap:16px;height:54px}
+.brand{font:700 14px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--wh);text-decoration:none}
+.brand b{color:var(--cy)}
+.top .tag{margin-left:auto;font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.top nav{display:flex;gap:4px;flex-wrap:wrap}
+.top nav a{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mut);text-decoration:none;padding:10px 8px}
+.top nav a:hover{color:var(--wh)}
+@media (max-width:900px){.top nav{display:none}}
+
+/* lab: sticky stage + scrolling story */
+.lab{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);gap:40px;align-items:start;padding-top:28px}
+.stagecol{position:sticky;top:12px}
+.stage{position:relative;border:1px solid var(--line2);background:#05070b;border-radius:4px;overflow:hidden;height:clamp(440px,calc(100vh - 150px),680px)}
+.stage canvas{width:100%;height:100%;touch-action:pan-y}
+.stage.min{height:auto;min-height:0}
+.stage.min canvas{display:none}
+.chipbar{position:absolute;left:12px;top:12px;display:flex;gap:8px;align-items:center;pointer-events:none}
+.mood-chip{font:700 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink);background:var(--cy);padding:6px 9px;border-radius:2px}
+.mood-chip[data-m="concerned"]{background:#8fa3c0}
+.mood-chip[data-m="delighted"],.mood-chip[data-m="proud"]{background:var(--am)}
+.mood-chip[data-m="shy"]{background:var(--mg)}
+.mood-chip[data-m="asleep"],.mood-chip[data-m="sleepy"]{background:#6b7fc8}
+.stage .cap{position:absolute;right:12px;top:12px;font:600 10px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:right;pointer-events:none}
+.stage.min .chipbar,.stage.min .cap{display:none}
+.resting{padding:18px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;color:var(--mut)}
+.resting[hidden]{display:none}
+.nameplate{position:absolute;left:14px;bottom:12px;pointer-events:none;display:flex;flex-direction:column;gap:3px}
+.nameplate b{font:700 22px/1 var(--ui);letter-spacing:-.01em;color:var(--wh)}
+.nameplate span{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.stage.min .nameplate{display:none}
+.secret{position:absolute;left:0;right:0;bottom:14px;text-align:center;font:700 12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--am);opacity:0;transition:opacity .4s;pointer-events:none;text-shadow:0 0 12px rgba(255,176,64,.6)}
+.secret.on{opacity:1}
+.tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.btn{appearance:none;font:600 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--wh);background:var(--panel2);border:1px solid var(--line2);border-radius:3px;padding:12px 14px;cursor:pointer;min-height:44px;transition:background .15s,border-color .15s,transform .1s}
+.btn:hover{background:#12202f;border-color:var(--cy)}
+.btn:active{transform:translateY(1px)}
+.btn[aria-pressed="true"]{background:rgba(84,214,255,.16);border-color:var(--cy);color:var(--cy)}
+.btn.pri{background:var(--cy);color:var(--ink);border-color:var(--cy)}
+.btn.pri:hover{background:#8be6ff}
+.hintline{font:400 13px/1.5 var(--mono);color:var(--mut);margin:12px 0 0}
+.hintline b{color:var(--am);font-weight:600}
+
+.story section{padding:0 0 64px;scroll-margin-top:16px}
+.facts{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 22px;padding:0;list-style:none}
+.facts li{font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line2);color:var(--cy);padding:8px 10px;border-radius:2px}
+.try{border-left:2px solid var(--am);padding:4px 0 4px 14px;margin:20px 0 0;color:var(--mut)}
+.try b{color:var(--wh)}
+.why-item{border-top:1px solid var(--line);padding:18px 0 4px}
+.why-item h3{color:var(--cy)}
+.why-item p{color:var(--mut)}
+.why-item p strong{color:var(--txt);font-weight:500}
+
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.tile{border:1px solid var(--line);background:var(--panel);border-radius:3px;overflow:hidden;display:flex;flex-direction:column}
+.tile canvas{width:100%;height:230px;background:#05070b}
+.tile .tb{padding:12px 12px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
+.tile h3{margin:0;color:var(--wh)}
+.tile p{margin:0;font-size:13px;line-height:1.45;color:var(--mut);flex:1}
+.tile .btn{padding:9px 10px;min-height:40px;font-size:11px;margin-top:6px}
+
+.play{border:1px solid var(--line);background:var(--panel);border-radius:3px;padding:18px}
+.play h3{color:var(--cy)}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 16px}
+.field{display:flex;gap:8px;flex-wrap:wrap}
+.field input{flex:1 1 200px;min-width:0;font:400 15px/1 var(--ui);color:var(--txt);background:#060a10;border:1px solid var(--line2);border-radius:3px;padding:13px 12px;min-height:44px}
+.field input[aria-invalid="true"]{border-color:var(--mg)}
+#fmsg{min-height:1.5em;margin:8px 0 0;font:600 13px/1.5 var(--mono);color:var(--mut)}
+#fmsg[data-k="err"]{color:#ff8fab}
+#fmsg[data-k="ok"]{color:var(--cy)}
+.note{font:400 13px/1.5 var(--mono);color:var(--mut);margin:0}
+.secret-hint{margin-top:16px;font:400 13px/1.5 var(--mono);color:var(--am)}
+
+/* full-width sections */
+.full{padding:72px 0 8px;border-top:1px solid var(--line);margin-top:8px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:3px;overflow:hidden;display:flex;flex-direction:column}
+.card .cb{padding:14px 16px 18px}
+.card .cb p{font-size:14px;color:var(--mut);margin:0}
+.card .cb h3{color:var(--cy)}
+.mock{position:relative;background:#080c14;border-bottom:1px solid var(--line)}
+.mock canvas{width:100%;display:block}
+.mock .navbar{display:flex;align-items:center;gap:14px;padding:0 16px;height:112px;align-items:flex-start;padding-top:22px;border-bottom:1px solid transparent;font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.mock .navbar .lg{color:var(--wh);letter-spacing:.2em;margin-right:auto}
+.mock .navbar span.l{display:none}
+@media (min-width:560px){.mock .navbar span.l{display:inline}}
+#wNav{position:absolute;left:0;top:0;height:112px;pointer-events:none}
+#w404{height:290px}
+#wLoad{height:290px}
+#wWin{height:290px}
+#wFoot{height:120px}
+.overlay{position:absolute;left:0;right:0;text-align:center;pointer-events:none}
+.overlay.b{bottom:14px}
+.overlay .big{font:700 clamp(30px,5vw,44px)/1 var(--mono);color:var(--wh);letter-spacing:.06em}
+.overlay .sm{font:600 12px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin-top:6px}
+#bar{font:700 13px/1 var(--mono);color:var(--cy);letter-spacing:.02em}
+.sendline{display:flex;gap:10px;justify-content:center;align-items:baseline;font:600 12px/1 var(--mono);color:var(--mut);letter-spacing:.08em;text-transform:uppercase}
+.winmsg{font:700 15px/1.2 var(--mono);color:var(--wh);letter-spacing:.08em;text-transform:uppercase;padding:9px 14px;border:1px solid var(--line2);background:rgba(8,12,20,.8);display:inline-block}
+.winmsg.on{color:var(--ink);background:var(--am);border-color:var(--am)}
+.foot{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:0 16px 14px;color:var(--dim);font:400 12px/1.4 var(--mono)}
+.mock.footmock{background:#04060a;cursor:pointer}
+.mock.footmock .overlay{bottom:12px}
+.card .actions{padding:12px 16px 0}
+
+.rules{counter-reset:r;list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.rules li{counter-increment:r;border:1px solid var(--line);background:var(--panel);padding:18px 16px;border-radius:3px;color:var(--mut);font-size:15px}
+.rules li::before{content:"0" counter(r);display:block;font:700 12px/1 var(--mono);letter-spacing:.14em;color:var(--am);margin-bottom:10px}
+.rules li strong{display:block;color:var(--wh);font:500 18px/1.25 var(--ui);margin-bottom:6px}
+.sk{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.sk figure{margin:0;border:1px solid var(--line);background:var(--panel);border-radius:3px;overflow:hidden}
+.sk canvas{width:100%;height:190px}
+.sk figcaption{padding:12px 14px 16px;font-size:14px;color:var(--mut)}
+.sk figcaption h3{color:var(--wh)}
+.sk figcaption em{font-style:normal;color:var(--am)}
+footer.end{margin-top:72px;border-top:1px solid var(--line);padding:28px 0 56px;color:var(--dim);font:400 12px/1.6 var(--mono)}
+.palette{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 0}
+.palette span{display:inline-flex;align-items:center;gap:8px;font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.palette i{width:14px;height:14px;border-radius:2px;display:inline-block}
+
+@media (max-width:1000px){
+  .lab{grid-template-columns:minmax(0,1fr);gap:28px}
+  .stagecol{position:static}
+  .stage{height:min(480px,calc(100vh - 220px));min-height:420px}
+  .rules,.sk{grid-template-columns:minmax(0,1fr)}
+  .rules{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:640px){
+  .tiles,.grid2,.rules{grid-template-columns:minmax(0,1fr)}
+  .tile canvas{height:200px}
+  h1{font-size:46px}
+  .stage .cap{display:none}
+}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="#meet">Car<b>rier</b></a>
+  <nav aria-label="Sections"><a href="#why">Why</a><a href="#emotions">Emotions</a><a href="#play">Playground</a><a href="#wild">In the wild</a><a href="#rules">Rules</a><a href="#sketches">Sketches</a></nav>
+  <span class="tag">Mascot pitch</span>
+</div></header>
+
+<main class="wrap">
+<div class="lab">
+  <div class="stagecol">
+    <div class="stage" id="stageBox">
+      <canvas id="stage" aria-hidden="true"></canvas>
+      <div class="chipbar" aria-hidden="true"><span class="mood-chip" id="moodChip" data-m="content">content</span></div>
+      <div class="cap" aria-hidden="true">Click the stage to toss a blip<br>Drag her. Pet her. Try an ear.</div>
+      <div class="nameplate" aria-hidden="true"><b>Vesper</b><span>the Carrier bat</span></div>
+      <div class="secret" id="secretNote" aria-hidden="true">You found the dishes</div>
+      <div class="resting" id="resting" hidden><span>Vesper is resting out of the way.</span><button class="btn pri" id="bBack" type="button">Bring her back</button></div>
+    </div>
+    <div class="tools" role="toolbar" aria-label="Play with Vesper">
+      <button class="btn" id="bPet" type="button">Pet</button>
+      <button class="btn" id="bPoke" type="button">Poke</button>
+      <button class="btn" id="bPing" type="button">Ping</button>
+      <button class="btn" id="bToss" type="button">Toss a blip</button>
+      <button class="btn" id="bSleep" type="button" aria-pressed="false">Send to sleep</button>
+      <button class="btn" id="bMin" type="button">Minimize</button>
+    </div>
+    <p class="hintline" id="ctl-motion" hidden>Reduced motion is on, so Vesper holds calm poses and changes pose when she feels something new.</p>
+    <p id="live" class="vh" role="status" aria-live="polite"></p>
+  </div>
+
+  <div class="story">
+    <section id="meet">
+      <p class="eyebrow">01 / Meet her</p>
+      <h1>Vesper</h1>
+      <p class="lede">A small bat who hangs from the signal wire, pings before she speaks, and always waits to hear that you got the message.</p>
+      <ul class="facts"><li>Gentle</li><li>A little shy</li><li>Nocturnal</li><li>Big ears</li><li>Obsessed with delivery</li></ul>
+      <p class="mut">Her name is the evening hour, when bats wake up. She is made of the same characters as the rest of Carrier: indigo fur, amber eyes, cyan pings. Nothing about her is a robot, a screen glitch, or falling green code.</p>
+      <p class="try"><b>Try this.</b> Move the pointer and watch her eyes and ears follow. Stop moving for a while and she falls asleep. Click an empty spot to toss a blip and she will swoop for it.</p>
+    </section>
+
+    <section id="why">
+      <p class="eyebrow">02 / Why a bat</p>
+      <h2>She does what Carrier does</h2>
+      <p class="mut">Carrier's promise is "Say it once. Know it arrived." A bat is the one animal that lives by exactly that. She sends a sound out, waits, and uses the answer to know where everything is.</p>
+      <div class="why-item"><h3>Ping, then listen</h3><p><strong>Every action has two halves.</strong> Vesper sends a cyan ring. A moment later an amber ring comes back and lands in her ears, and they flare. That is delivery confirmation you can see, and it is the whole product in one gesture.</p></div>
+      <div class="why-item"><h3>Nobody expects a bat</h3><p><strong>Messaging mascots are birds, envelopes, paper planes and robots.</strong> A bat is none of those. She hangs from the wire itself, so her home is the infrastructure. She is also the only mascot here that sleeps the right way up in a footer: upside down.</p></div>
+      <div class="why-item"><h3>She is built from the language</h3><p><strong>Her ears are receiver dishes.</strong> They glow when she hears something. Her wings are scalloped membranes with a cyan rim light, her pings are the same rings as the buttons, and her wire is the same line as the nav. Nothing is pasted on.</p></div>
+      <div class="why-item"><h3>She teaches the product states</h3><p><strong>People read a face faster than a banner.</strong> Concerned means something failed. Busy means a message is in flight. Proud means it landed. Asleep means all quiet. Ten feelings, each with a trigger the site already has.</p></div>
+      <div class="why-item"><h3>Why people will share her</h3><p><strong>She falls asleep in the footer, wraps herself up when poked too often, and reveals a hidden tagline when you ping.</strong> Add a pointer that she actually watches and a secret in her ears, and you get clips people send to a friend.</p></div>
+      <div class="why-item"><h3>The honest risk</h3><p><strong>Bats can read as spooky.</strong> So she has a round face, warm amber eyes, a small smile with two tiny fangs, and blushes when petted. She is cozy, not Halloween.</p></div>
+    </section>
+
+    <section id="emotions">
+      <p class="eyebrow">03 / Emotion sheet</p>
+      <h2>Ten feelings, all live</h2>
+      <p class="mut">Each card is a real Vesper running right now. Press a button and the big one on the left feels it too.</p>
+      <div class="tiles">
+        <article class="tile"><canvas aria-hidden="true" data-m="content"></canvas><div class="tb"><h3>Content</h3><p>Default. Nothing is wrong. Slow breathing, soft smile, wings wrapped.</p><button class="btn" type="button" data-feel="content">Feel content</button></div></article>
+        <article class="tile"><canvas aria-hidden="true" data-m="curious"></canvas><div class="tb"><h3>Curious</h3><p>The pointer moves near her, or a field gets focus. Ears up, head tilted.</p><button class="btn" type="button" data-feel="curious">Feel curious</button></div></article>
+        <article class="tile"><canvas aria-hidden="true" data-m="delighted"></canvas><div class="tb"><h3>Delighted</h3><p>She is petted, catches a blip, or an echo comes back. Happy eyes, flutter, a lap of the stage.</p><button class="btn" type="button" data-feel="delighted">Feel delighted</button></div></article>
+        <article class="tile"><canvas aria-hidden="true" data-m="surprised"></canvas><div class="tb"><h3>Surprised</h3><p>A poke or a sudden grab. Wings snap open, ears shoot up, she swings.</p><button class="btn" type="button" data-feel="surprised">Feel surprised</button></div></article>
+        <article class="tile"><canvas aria-hidden="true" data-m="sleepy"></canvas><div class="tb"><h3>Sleepy</h3><p>No one has moved for a while, or it is daytime. Heavy lids, drooping ears, a yawn.</p><button class="btn" type="button" data-feel="sleepy">Feel sleepy</button></div></article>
+        <article class="tile"><canvas aria-hidden="true" data-m="asleep"></canvas><div class="tb"><h3>Asleep</h3><p>Idle for long, or sent to sleep. Wrapped up, little z's, slow breath. Any movement wakes her.</p><button class="btn" type="button" data-feel="asleep">Feel asleep</button></div></article>
+        <article class="tile"><canvas aria-hidden="true" data-m="shy"></canvas><div class="tb"><h3>Shy</h3><p>Poked three times quickly. She hides behind her wings, peeks out, blushes and trembles.</p><button class="btn" type="button" data-feel="shy">Feel shy</button></div></article>
+        <article class="tile"><canvas aria-hidden="true" data-m="concerned"></canvas><div class="tb"><h3>Concerned</h3><p>A form error or a failed send. Worried brows, drooped ears, a small frown. Never blames.</p><button class="btn" type="button" data-feel="concerned">Feel concerned</button></div></article>
+        <article class="tile"><canvas aria-hidden="true" data-m="proud"></canvas><div class="tb"><h3>Proud</h3><p>The message was delivered. Chest out, wings wide, a gold glint on the membrane.</p><button class="btn" type="button" data-feel="proud">Feel proud</button></div></article>
+        <article class="tile"><canvas aria-hidden="true" data-m="focused"></canvas><div class="tb"><h3>Focused</h3><p>Something is loading or sending. She takes off with a packet and flies a steady loop.</p><button class="btn" type="button" data-feel="focused">Feel focused</button></div></article>
+      </div>
+    </section>
+
+    <section id="play">
+      <p class="eyebrow">04 / Playground</p>
+      <h2>Make the site happen to her</h2>
+      <div class="play">
+        <h3>Page events</h3>
+        <div class="row">
+          <button class="btn" id="pErr" type="button">Form error</button>
+          <button class="btn" id="pOk" type="button">Success</button>
+          <button class="btn" id="pLoad" type="button" aria-pressed="false">Loading</button>
+          <button class="btn" id="pIdle" type="button">Idle</button>
+        </div>
+        <h3>Time of day</h3>
+        <div class="row">
+          <button class="btn" type="button" data-tod="night" aria-pressed="false">Night</button>
+          <button class="btn" type="button" data-tod="day" aria-pressed="false">Day</button>
+          <button class="btn" type="button" data-tod="auto" aria-pressed="true">My clock</button>
+        </div>
+        <p class="note" id="todNote"></p>
+        <h3 style="margin-top:20px">A real form</h3>
+        <form id="form" novalidate>
+          <label class="vh" for="email">Email address</label>
+          <div class="field"><input id="email" type="email" inputmode="email" autocomplete="off" placeholder="name@example.com" aria-describedby="fmsg"><button class="btn pri" type="submit">Send</button></div>
+          <p id="fmsg" role="status"></p>
+        </form>
+        <p class="note">Type in the box and her ears twitch with each key. Send a bad address and she worries. Send a good one and she carries it, then celebrates.</p>
+        <p class="secret-hint"><b>Secret:</b> her ears are dishes. Click one, or press Ping five times fast.</p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<section class="full" id="wild">
+  <p class="eyebrow">05 / In the wild</p>
+  <h2>Where she lives on a real site</h2>
+  <p class="mut" style="max-width:62ch">Five placements, all running live. In each one she stays out of the way of content and does one job.</p>
+  <div class="grid2" style="margin-top:24px">
+    <div class="card">
+      <div class="mock"><div class="navbar"><span class="lg">Carrier</span><span class="l">Product</span><span class="l">Pricing</span><span class="l">Docs</span><span>Sign in</span></div><canvas id="wNav" aria-hidden="true"></canvas></div>
+      <div class="cb"><h3>Tucked in the nav</h3><p>She hangs from the nav bar's bottom line, in the corner. The line is her wire. She watches the pointer and does nothing else unless you do.</p></div>
+    </div>
+    <div class="card">
+      <div class="mock"><canvas id="w404" aria-hidden="true"></canvas><div class="overlay b"><div class="big">404</div><div class="sm" id="m404">Nothing back from /oops</div></div></div>
+      <div class="actions"><button class="btn" id="b404" type="button">Ping the server</button></div>
+      <div class="cb"><h3>On a 404 page</h3><p>She is concerned, and she pings again and again into the quiet. Press the button and an echo finally comes back.</p></div>
+    </div>
+    <div class="card">
+      <div class="mock"><canvas id="wLoad" aria-hidden="true"></canvas><div class="overlay b"><div class="sendline"><span>Sending to 1,284 people</span></div><div id="bar" aria-hidden="true"></div> <span class="vh">Progress</span><div class="sm" id="pct">62%</div></div></div>
+      <div class="cb"><h3>During loading</h3><p>She flies a calm loop with the packet in her feet. A page that is working should look busy in a gentle way, never panicked.</p></div>
+    </div>
+    <div class="card">
+      <div class="mock"><canvas id="wWin" aria-hidden="true"></canvas><div class="overlay b"><span class="winmsg" id="mWin">Join the list</span></div></div>
+      <div class="actions"><button class="btn pri" id="bWin" type="button">Join the list</button></div>
+      <div class="cb"><h3>Celebrating a signup</h3><p>She delivers the packet in a burst of 0s and 1s, flies a victory lap, then lands proud with her wings wide.</p></div>
+    </div>
+    <div class="card" style="grid-column:1/-1">
+      <div class="mock footmock"><canvas id="wFoot" aria-hidden="true"></canvas><div class="overlay"><div class="sm" id="mFoot">Shh. She is asleep.</div></div></div>
+      <div class="cb"><h3>Asleep in the footer</h3><p>The footer is where she lives when nothing needs saying. She is wrapped in her wings, snoring in tiny z's. Hover or click her (or tap) and she stirs, then drifts off again. People scroll down just to look.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="full" id="rules">
+  <p class="eyebrow">06 / Character rules</p>
+  <h2>How the brand uses her</h2>
+  <ol class="rules" style="margin-top:24px">
+    <li><strong>She lives where status lives.</strong>Nav corner, empty states, loading, success, footer. Never over a form, a price or a paragraph.</li>
+    <li><strong>She never blocks.</strong>One tap minimizes her, one tap sends her to sleep, and the choice is remembered. Nothing on the page waits for her.</li>
+    <li><strong>She reacts to the product, not to blame.</strong>Concerned means "something failed", never "you did it wrong". Error copy stays plain and kind.</li>
+    <li><strong>She speaks rarely.</strong>Pings and captions of six words or fewer, in plain lowercase sentences. No jokes at the visitor's expense, no emoji, no baby talk.</li>
+    <li><strong>She never appears in payment, legal or security screens.</strong>Those moments need calm and trust, not a character. She is also never a cursor replacement.</li>
+    <li><strong>Three colors only.</strong>Indigo fur, amber eyes and warm things, cyan for sound and signal. She always hangs from a wire and is always a little sleepy in daylight.</li>
+  </ol>
+  <div class="palette" aria-label="Palette"><span><i style="background:#5a6fb0"></i>Indigo fur</span><span><i style="background:#ffb040"></i>Amber eyes</span><span><i style="background:#54d6ff"></i>Cyan pings</span><span><i style="background:#ff5482"></i>Blush and ears</span></div>
+</section>
+
+<section class="full" id="sketches">
+  <p class="eyebrow">07 / The sketches</p>
+  <h2>Three that lost</h2>
+  <p class="mut" style="max-width:62ch">Rough, live and small. Move the pointer over each one.</p>
+  <div class="sk" style="margin-top:24px">
+    <figure><canvas id="sMoth" aria-label="Sketch of Lumen, a moth circling a lamp that follows the pointer" role="img"></canvas><figcaption><h3>Lumen the moth</h3>Lost because every glow-based brand reaches for a moth, and a moth is a fan of the light, not a carrier of anything. <em>Pretty, but it does not mean our thing.</em></figcaption></figure>
+    <figure><canvas id="sCrab" aria-label="Sketch of Tuck, a hermit crab with a satellite dish on its shell" role="img"></canvas><figcaption><h3>Tuck the hermit crab</h3>Lost because the dish shell is clever but a sideways crab reads grumpy in a nav bar, and a face on stalks cannot show seven feelings. <em>Good walker, thin range.</em></figcaption></figure>
+    <figure><canvas id="sSprout" aria-label="Sketch of Dish, a sprout that bends toward the pointer and opens like a satellite flower" role="img"></canvas><figcaption><h3>Dish the sprout</h3>Lost because a plant that turns toward the signal is calm and unusual, but with no eyes it became a gauge instead of a friend. <em>Great as a meter, not a mascot.</em></figcaption></figure>
+  </div>
+</section>
+</main>
+
+<footer class="end"><div class="wrap">Vesper, the Carrier mascot. Drawn in full-color text characters on canvas, simulated live, with bloom. One shared animation loop, paused when offscreen or hidden. Respects reduced motion.</div></footer>
+
+<script>
+(() => {
+'use strict';
+const REDUCE = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const FAMILY = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const STEP = 1 / 60;
+const TAU = Math.PI * 2;
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function hash2(x, y) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function lineChar(x, y) {
+  let a = Math.atan2(y, x); if (a < 0) a += Math.PI; if (a >= Math.PI) a -= Math.PI;
+  if (a < Math.PI / 8 || a > 7 * Math.PI / 8) return '-';
+  if (a < 3 * Math.PI / 8) return '\\';
+  if (a < 5 * Math.PI / 8) return '|';
+  return '/';
+}
+function sdSeg(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  let t = l2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const qx = ax + dx * t - px, qy = ay + dy * t - py; return Math.sqrt(qx * qx + qy * qy);
+}
+const CY = [84, 214, 255], AM = [255, 176, 64], MG = [255, 84, 130], WH = [246, 242, 228];
+
+// ---------- shared state ----------
+let NOW = 0;
+const GP = { x: -999, y: -999, has: false, t: -99, vx: 0, vy: 0, touch: false };
+const SC = { y: 0, v: 0 };
+const TOD = { mode: 'auto' };
+function isNight() {
+  if (TOD.mode === 'night') return true;
+  if (TOD.mode === 'day') return false;
+  const h = new Date().getHours(); return h >= 19 || h < 6;
+}
+
+// ---------- Grid ----------
+const cssCache = new Map();
+function cssRGB(q) {
+  let s = cssCache.get(q);
+  if (!s) { s = 'rgb(' + (((q >> 10) & 31) << 3) + ',' + (((q >> 5) & 31) << 3) + ',' + ((q & 31) << 3) + ')'; if (cssCache.size > 9000) cssCache.clear(); cssCache.set(q, s); }
+  return s;
+}
+class Grid {
+  constructor(cv, o) {
+    this.cv = cv; this.o = o; this.ctx = cv.getContext('2d', { alpha: !o.bg });
+    this.bc = document.createElement('canvas'); this.bx = this.bc.getContext('2d');
+    this.cols = 0; this.rows = 0;
+  }
+  layout(w, h, fs) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2); this.dpr = dpr; const cv = this.cv;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    this.w = w; this.h = h; this.fs = fs; this.font = '700 ' + fs.toFixed(2) + 'px ' + FAMILY;
+    const x = this.ctx; x.setTransform(dpr, 0, 0, dpr, 0, 0); x.font = this.font;
+    this.cw = x.measureText('M').width || fs * .6; this.chh = fs * 1.25;
+    this.cols = Math.ceil(w / this.cw); this.rows = Math.ceil(h / this.chh); this.asp = this.chh / this.cw;
+    const N = this.N = this.cols * this.rows;
+    this.A = new Float32Array(N); this.ch = new Array(N).fill(' ');
+    this.R = new Uint8Array(N); this.G = new Uint8Array(N); this.B = new Uint8Array(N);
+    this.bc.width = Math.max(1, Math.round(cv.width / 5)); this.bc.height = Math.max(1, Math.round(cv.height / 5));
+  }
+  clear() { this.A.fill(0); }
+  put(c, r, ch, R, G, B, a) {
+    if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return;
+    const i = r * this.cols + c; this.ch[i] = ch; this.R[i] = R; this.G[i] = G; this.B[i] = B; this.A[i] = a;
+  }
+  putI(i, ch, R, G, B, a) { this.ch[i] = ch; this.R[i] = R; this.G[i] = G; this.B[i] = B; this.A[i] = a; }
+  str(c, r, s, R, G, B, a) { for (let k = 0; k < s.length; k++) if (s[k] !== ' ') this.put(c + k, r, s[k], R, G, B, a); }
+  present() {
+    const x = this.ctx, cv = this.cv, dpr = this.dpr, cols = this.cols, rows = this.rows, A = this.A, cw = this.cw, chh = this.chh;
+    x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1;
+    const bg = typeof this.o.bg === 'function' ? this.o.bg() : this.o.bg;
+    if (bg) { x.fillStyle = bg; x.fillRect(0, 0, cv.width, cv.height); } else x.clearRect(0, 0, cv.width, cv.height);
+    x.setTransform(dpr, 0, 0, dpr, 0, 0); x.font = this.font; x.textBaseline = 'middle';
+    let lastq = -1, any = false;
+    const ch = this.ch, R = this.R, G = this.G, B = this.B;
+    for (let r = 0; r < rows; r++) {
+      const y = (r + .5) * chh, o = r * cols;
+      for (let c = 0; c < cols; c++) {
+        const i = o + c, e = A[i];
+        if (e < .04) continue;
+        const g = ch[i]; if (g === ' ') continue;
+        any = true;
+        const k = e > 1 ? 1 : e, hot = e > 1 ? Math.min(1, (e - 1) * 1.6) : 0;
+        let rr = R[i] * k, gg = G[i] * k, bb = B[i] * k;
+        if (hot) { rr += (255 - rr) * hot; gg += (255 - gg) * hot; bb += (255 - bb) * hot; }
+        const q = ((rr >> 3) << 10) | ((gg >> 3) << 5) | (bb >> 3);
+        if (q !== lastq) { x.fillStyle = cssRGB(q); lastq = q; }
+        x.fillText(g, c * cw, y);
+      }
+    }
+    const bl = this.o.bloom;
+    if (bl && any) {
+      const bx = this.bx; bx.globalCompositeOperation = 'copy'; bx.drawImage(cv, 0, 0, this.bc.width, this.bc.height);
+      x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'lighter'; x.globalAlpha = bl; x.imageSmoothingEnabled = true;
+      x.drawImage(this.bc, 0, 0, cv.width, cv.height); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+    }
+  }
+  // raster helpers (fn is a method called with this = owner)
+  ellipse(cx, cy, rx, ry, rot, fn, owner) {
+    const cw = this.cw, chh = this.chh, m = Math.max(rx, ry) * 1.06;
+    const c0 = Math.max(0, Math.floor((cx - m) / cw)), c1 = Math.min(this.cols - 1, Math.ceil((cx + m) / cw));
+    const r0 = Math.max(0, Math.floor((cy - m) / chh)), r1 = Math.min(this.rows - 1, Math.ceil((cy + m) / chh));
+    const cs = Math.cos(rot), sn = Math.sin(rot);
+    for (let r = r0; r <= r1; r++) {
+      const dy = (r + .5) * chh - cy;
+      for (let c = c0; c <= c1; c++) {
+        const dx = (c + .5) * cw - cx;
+        const lx = (cs * dx + sn * dy) / rx, ly = (-sn * dx + cs * dy) / ry;
+        const d2 = lx * lx + ly * ly;
+        if (d2 <= 1) fn.call(owner, c, r, lx, ly, Math.sqrt(d2));
+      }
+    }
+  }
+  poly(xs, ys, n, fn, owner) {
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (let k = 0; k < n; k++) { if (xs[k] < x0) x0 = xs[k]; if (xs[k] > x1) x1 = xs[k]; if (ys[k] < y0) y0 = ys[k]; if (ys[k] > y1) y1 = ys[k]; }
+    const cw = this.cw, chh = this.chh;
+    const c0 = Math.max(0, Math.floor(x0 / cw)), c1 = Math.min(this.cols - 1, Math.ceil(x1 / cw));
+    const r0 = Math.max(0, Math.floor(y0 / chh)), r1 = Math.min(this.rows - 1, Math.ceil(y1 / chh));
+    for (let r = r0; r <= r1; r++) {
+      const py = (r + .5) * chh;
+      for (let c = c0; c <= c1; c++) {
+        const px = (c + .5) * cw;
+        let inside = false;
+        for (let a = 0, b = n - 1; a < n; b = a++) {
+          if (((ys[a] > py) !== (ys[b] > py)) && (px < (xs[b] - xs[a]) * (py - ys[a]) / (ys[b] - ys[a]) + xs[a])) inside = !inside;
+        }
+        if (!inside) continue;
+        let ed = 1e9;
+        for (let a = 0, b = n - 1; a < n; b = a++) { const d = sdSeg(px, py, xs[a], ys[a], xs[b], ys[b]); if (d < ed) ed = d; }
+        fn.call(owner, c, r, px, py, ed);
+      }
+    }
+  }
+}
+
+// ---------- Surf ----------
+const surfs = [];
+const io = new IntersectionObserver(es => { for (const e of es) { const s = e.target.__s; if (s) s.vis = e.isIntersecting; } }, { rootMargin: '60px' });
+const ro = new ResizeObserver(es => { for (const e of es) { const s = e.target.__s; if (s) s.relayout(); } });
+class Surf {
+  constructor(cv, o) {
+    this.cv = cv; this.o = o; this.g = new Grid(cv, o); this.vis = false; this.t = 0; this.ready = false; this.rc = null;
+    cv.__s = this; surfs.push(this); io.observe(cv); ro.observe(cv);
+  }
+  get on() { return this.vis && this.ready; }
+  relayout() {
+    const r = this.cv.getBoundingClientRect(); if (r.width < 4 || r.height < 4) { this.ready = false; return; }
+    this.g.layout(r.width, r.height, this.o.fs(r.width, r.height));
+    this.ready = true; this.onLayout && this.onLayout();
+    if (REDUCE) this.still();
+  }
+  pre() { this.rc = this.cv.getBoundingClientRect(); }
+  still(n) { if (!this.ready) return; this.pre(); const k = n || 90; for (let i = 0; i < k; i++) this.sim(STEP); this.draw(); this.g.present(); }
+}
+
+// ---------- Vesper: the character ----------
+const KEYS = ['eyeOpen', 'eyeSize', 'brow', 'lid', 'arc', 'smile', 'mouth', 'blush', 'perk', 'droop', 'wing', 'cloak', 'sag', 'puff', 'trem', 'pupil', 'tilt', 'glow', 'cool', 'flap'];
+const DEF = { eyeOpen: .9, eyeSize: 1, brow: 0, lid: 0, arc: 0, smile: .3, mouth: 0, blush: 0, perk: .5, droop: 0, wing: 0, cloak: 0, sag: 0, puff: 0, trem: 0, pupil: .55, tilt: 0, glow: .6, cool: 0, flap: 0 };
+const mk = o => Object.assign({}, DEF, o);
+const EM = {
+  content: mk({ smile: .55, blush: .12, perk: .55, eyeOpen: .9 }),
+  curious: mk({ eyeOpen: 1, eyeSize: 1.2, smile: .1, mouth: .14, perk: 1, pupil: .72, tilt: .2, glow: .85, brow: -.05 }),
+  delighted: mk({ eyeOpen: 0, arc: 1, smile: 1, mouth: .65, blush: .95, perk: .85, wing: .7, glow: 1.15, puff: .4, flap: .45, tilt: -.08 }),
+  surprised: mk({ eyeOpen: 1, eyeSize: 1.5, pupil: .26, smile: 0, mouth: .95, perk: 1.25, wing: 1, puff: .5, glow: 1.25 }),
+  sleepy: mk({ eyeOpen: .4, lid: .5, smile: .15, perk: .15, droop: .5, cloak: .25, sag: .6, glow: .35, pupil: .7 }),
+  asleep: mk({ eyeOpen: 0, arc: -1, smile: .35, perk: .05, droop: .85, cloak: .92, sag: .85, glow: .22, blush: .18, tilt: .06 }),
+  shy: mk({ eyeOpen: .9, eyeSize: 1.15, brow: .55, smile: .1, blush: 1, perk: .1, droop: .55, cloak: 1, trem: 1, pupil: .65, glow: .5, tilt: -.12 }),
+  concerned: mk({ eyeOpen: .95, eyeSize: 1.22, brow: 1, smile: -.75, mouth: .04, perk: .1, droop: 1, cloak: .38, sag: .9, pupil: .88, cool: 1, glow: .4, tilt: .1 }),
+  proud: mk({ eyeOpen: .55, lid: .26, smile: .8, blush: .25, perk: .95, wing: 1, puff: 1, glow: 1.3, tilt: -.06, brow: -.15 }),
+  focused: mk({ eyeOpen: .74, brow: -.8, lid: .16, smile: -.05, perk: .95, wing: .7, glow: .95, pupil: .42, flap: .6 })
+};
+const MOODS = Object.keys(EM);
+const SAY = {
+  content: 'Vesper is content.', curious: 'Vesper is curious.', delighted: 'Vesper is delighted.', surprised: 'Vesper is startled.',
+  sleepy: 'Vesper is getting sleepy.', asleep: 'Vesper is asleep.', shy: 'Vesper is feeling shy.', concerned: 'Vesper looks concerned.',
+  proud: 'Vesper is proud.', focused: 'Vesper is busy and focused.'
+};
+// wing configs, left wing: wrist, then four fingertips (x,y) in body units (y toward head)
+const WO = [-.8, .68, -1.5, .48, -1.44, .02, -1.14, -.4, -.8, -.66];
+const WA = [-.28, .15, -.05, .34, .0, .12, .03, -.08, .02, -.26];
+const WB = [-.45, .7, .05, 1.12, .22, .92, .24, .66, .14, .36];
+const FUR = '+x%%###';
+
+class Vesper extends Surf {
+  constructor(cv, o) {
+    super(cv, { fs: o.fs || (() => 10), bloom: o.bloom == null ? .5 : o.bloom, bg: o.bg === undefined ? (() => '#05070b') : (o.bg || undefined) });
+    this.o = Object.assign({ env: {}, perch: [.5, .16], fit: null }, o); this.env = this.o.env;
+    this.V = {}; this.W = {}; this.T = {};
+    for (const k of KEYS) { this.V[k] = EM.content[k]; this.W[k] = 0; this.T[k] = EM.content[k]; }
+    this.mood = this.o.locked || 'content'; this.lastMood = ''; this.time = 0; this.idle = 0; this.ovr = null; this.q = [];
+    this.sleepLock = false; this.petAcc = 0; this.pokes = []; this.lookX = 0; this.lookY = 0; this.lwX = 0; this.lwY = 0; this.lkX = 0; this.lkY = 0;
+    this.earKick = [0, 0]; this.earKickW = [0, 0]; this.listen = 0; this.fx = null; this.microT = 3; this.blinkT = 2; this.blinkP = -1; this.blink = 1;
+    this.sway = 0; this.swayW = 0; this.sq = 0; this.sqW = 0; this.ang = Math.PI; this.angW = 0; this.angT = Math.PI; this.bank = 0; this.flapPh = 0;
+    this.mode = 'perch'; this.task = ''; this.taskT = 0; this.launchT = 0; this.bx = 0; this.by = 0; this.vx = 0; this.vy = 0; this.snapX = 0; this.snapY = 0;
+    this.rings = []; this.echoQ = []; this.blips = []; this.carry = 0; this.carryT = 0;
+    this.parts = []; for (let i = 0; i < 80; i++) this.parts.push({ a: false, x: 0, y: 0, vx: 0, vy: 0, l: 0, m: 1, ch: '+', c: CY, gr: 0, w: 0, s: 1 });
+    this.wire = { x0: 0, t0: -99, amp: 0 }; this.dayK = isNight() ? 0 : 1; this.hits = { hc: [0, 0, 1], ears: [[0, 0], [0, 0]], body: [0, 0, 1, 1] };
+    this.wx = new Float32Array(10); this.wy = new Float32Array(10); this.bone = new Float32Array(10);
+    this.px = new Float32Array(5); this.py = new Float32Array(5);
+    this.dragging = false; this.down = null; this.ptr = { x: -999, y: -999, in: false }; this.dayK = isNight() ? 0 : 1; this.nextBlip = 20;
+    this.mask = null; this.echo = null; this.stars = [];
+    this.cx = 0; this.cy = 0; this.cs = 1; this.sn = 0; this.sx = 1; this.sy = 1; this._x = 0; this._y = 0; this.fr = 0;
+    if (this.o.interactive) this.bindPointer();
+  }
+  onLayout() {
+    const g = this.g, w = g.w, h = g.h;
+    this.U = this.o.fit ? this.o.fit(w, h) : Math.min(w / 3.1, h / 2.7);
+    this.k = this.U / 154;
+    this.hx = w * this.o.perch[0]; this.hy = this.o.perchY != null ? this.o.perchY : (this.o.perchU || 1.36) * this.U + 6;
+    this.setHang();
+    if (this.mode === 'perch') { this.bx = this.hangX; this.by = this.hangY; }
+    this.buildMask(); this.buildStars();
+    this.dirtyBg = true;
+  }
+  setHang() { this.hangX = this.hx; this.hangY = this.hy + .25 * this.U; }
+  buildMask() {
+    if (!this.env.mask) return;
+    const g = this.g, c = document.createElement('canvas'); c.width = g.cols; c.height = g.rows;
+    const x = c.getContext('2d'); x.setTransform(1 / g.cw, 0, 0, 1 / g.chh, 0, 0);
+    x.fillStyle = '#fff'; x.textBaseline = 'alphabetic';
+    const S = g.w * .12; x.font = '700 ' + S + 'px ' + FAMILY;
+    const l1 = 'SAY IT ONCE.', l2 = 'KNOW IT ARRIVED.';
+    const fit = Math.min(1, g.w * .86 / Math.max(x.measureText(l1).width, x.measureText(l2).width * 1.0));
+    x.font = '700 ' + (S * fit) + 'px ' + FAMILY;
+    x.textAlign = 'center';
+    x.strokeStyle = '#fff'; x.lineWidth = S * fit * .05; x.lineJoin = 'round'; const y1 = g.h * .74, y2 = y1 + S * fit * 1.2;
+    x.fillText(l1, g.w / 2, y1); x.strokeText(l1, g.w / 2, y1); x.fillText(l2, g.w / 2, y2); x.strokeText(l2, g.w / 2, y2);
+    const d = x.getImageData(0, 0, g.cols, g.rows).data; this.mask = new Uint8Array(g.N);
+    for (let i = 0; i < g.N; i++) this.mask[i] = d[i * 4 + 3] > 110 ? 1 : 0;
+    this.echo = new Float32Array(g.N);
+  }
+  buildStars() {
+    this.stars.length = 0; if (!this.env.stars) return;
+    const g = this.g; const n = Math.round(g.cols * g.rows / 70);
+    for (let i = 0; i < n; i++) this.stars.push({ c: Math.floor(hash2(i, 3) * g.cols), r: Math.floor(hash2(i, 9) * g.rows * .8), ph: hash2(i, 5) * 6.28, s: hash2(i, 7) });
+  }
+
+  // ---------- public API ----------
+  react(m, dur, noQ) {
+    if (this.sleepLock && !this.o.napper && m !== 'asleep') return;
+    this.activity(true);
+    if (REDUCE) dur = 1e9;
+    this.ovr = { m, until: this.time + (dur == null ? 2 : dur) };
+    if (!noQ) this.q.length = 0;
+    this.onReact(m);
+    if (REDUCE && this.ready) this.still(70);
+  }
+  then(m, dur) { this.q.push({ m, dur }); }
+  onReact(m) {
+    const k = this.k || 1;
+    if (REDUCE) return;
+    if (m === 'surprised') {
+      this.earKickW[0] += 14; this.earKickW[1] += 14; this.swayW += (Math.random() < .5 ? -1 : 1) * 1.6; this.sqW -= 5; this.W.wing += 6; this.W.eyeSize += 4; this.listen = 1;
+      this.ring(this.hits.hc[0], this.hits.hc[1], .5, 0);
+    } else if (m === 'delighted') { this.burst(this.hits.hc[0], this.hits.hc[1] - this.U * .3, 10, 'spark'); this.sqW += 3; }
+    else if (m === 'proud') { this.burst(this.bx, this.by, 12, 'gold'); this.W.puff += 3; }
+    else if (m === 'shy') { this.swayW += 1.2; this.W.cloak += 2; }
+    else if (m === 'concerned') { this.W.sag += 2; this.swayW += .5; }
+  }
+  poke() {
+    const now = this.time; this.pokes = this.pokes.filter(t => now - t < 5); this.pokes.push(now);
+    if (this.mode === 'perch') this.swayW += (Math.random() < .5 ? -1 : 1) * 2.2;
+    if (this.pokes.length >= 3) { this.pokes.length = 0; this.react('shy', 4.2); this.then('content', 1); }
+    else { this.react('surprised', .9); this.then('curious', 1.6); }
+    this.sound('poke');
+  }
+  pet(a) {
+    this.petAcc = Math.min(4, this.petAcc + (a == null ? 1.2 : a)); this.activity();
+    if (this.petAcc > .5 && !this.ovr && !REDUCE) { this.sparkT = (this.sparkT || 0) - 1; }
+    if (REDUCE && this.ready) { this.react(this.petAcc > 1.6 ? 'delighted' : 'content', 1e9); }
+  }
+  ping(big, x, y) {
+    if (this.mood === 'asleep' && !big) return;
+    this.activity();
+    const hx = this.hits.hc[0], hy = this.hits.hc[1];
+    this.ring(x == null ? hx : x, y == null ? hy : y, big ? 1.5 : .8, 0);
+    this.echoQ.push({ t: this.time + (big ? .9 : 1.0), big, x: x == null ? hx : x, y: y == null ? hy : y });
+    this.mouthT = .35; this.listen = Math.max(this.listen, .5);
+    if (REDUCE) { this.react(big ? 'delighted' : 'curious', 1e9); }
+  }
+  secret() {
+    this.react('delighted', 3); this.then('proud', 2.4);
+    this.ring(this.hits.hc[0], this.hits.hc[1], 1.6, 0); this.ring(this.hits.hc[0], this.hits.hc[1], 1.3, .28);
+    this.echoQ.push({ t: this.time + 1.1, big: true, x: this.hits.hc[0], y: this.hits.hc[1] });
+    this.burst(this.hits.hc[0], this.hits.hc[1], 22, 'spark'); this.listen = 1.4;
+    if (this.secretCb) this.secretCb();
+  }
+  toss(x, y) {
+    if (this.sleepLock || !this.env.blips) return;
+    if (this.blips.length >= 3) this.blips.shift();
+    this.blips.push({ x, y, vx: 0, vy: 0, ph: Math.random() * 6 });
+    this.ring(x, y, .35, 0); this.activity(true);
+    if (REDUCE) { this.react('curious', 1e9); return; }
+    if (this.o.canFly !== false && this.mode === 'perch' && this.mood !== 'asleep') this.startTask('chase');
+    else if (this.mood === 'asleep') this.react('curious', 1.5);
+  }
+  cancelChase() { this.blips.length = 0; if (this.task === 'chase') this.startTask('return'); }
+  setSleep(b) {
+    this.sleepLock = b; this.idle = b ? 999 : 0;
+    if (b) { this.ovr = null; this.q.length = 0; if (this.mode === 'fly') this.startTask('return'); }
+    else { this.react('sleepy', 1.1); this.then('curious', 1.6); }
+    if (REDUCE && this.ready) this.still(70);
+  }
+  activity(strong) {
+    if (this.sleepLock) return;
+    if (this.mood === 'asleep' && this.idle > 30 && !this.ovr) { this.ovr = { m: 'sleepy', until: this.time + 1.1 }; this.q.push({ m: 'curious', dur: 1.6 }); this.earKickW[0] += 8; this.earKickW[1] += 8; }
+    this.idle = 0;
+  }
+  celebrate() {
+    this.react('delighted', 1.5); this.then('proud', 2.6); this.carry = 0; this.confetti(this.bx, this.by - this.U * .3, 46);
+    if (this.o.canFly !== false && !REDUCE) this.startTask('celebrate');
+  }
+  busy(on) {
+    if (on) { this.react('focused', 1e9); this.carry = 1; if (this.o.canFly !== false && !REDUCE) this.startTask('orbit'); }
+    else { this.ovr = null; this.carry = 0; if (this.mode === 'fly') this.startTask('return'); }
+  }
+  sound(kind) {
+    this.listen = Math.max(this.listen, kind === 'key' ? .45 : .9);
+    if (kind === 'key') { const s = Math.random() < .5 ? 0 : 1; this.earKickW[s] += 7; }
+  }
+  hit(x, y) {
+    const H = this.hits, U = this.U;
+    for (let s = 0; s < 2; s++) { const e = H.ears[s]; if (Math.hypot(x - e[0], y - e[1]) < .3 * U) return 'ear'; }
+    if (Math.hypot(x - H.hc[0], y - H.hc[1]) < .52 * U) return 'head';
+    if (Math.hypot(x - H.body[0], y - H.body[1]) < .62 * U) return 'body';
+    return null;
+  }
+
+  // ---------- pointer ----------
+  bindPointer() {
+    const cv = this.cv;
+    const loc = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    cv.addEventListener('pointerdown', e => {
+      if (!this.ready) return; const [x, y] = loc(e); const h = this.hit(x, y);
+      this.activity(true);
+      if (h === 'ear') { this.secret(); return; }
+      if (h) { this.down = { x, y, h, moved: false }; try { cv.setPointerCapture(e.pointerId); } catch (_) { } }
+      else this.toss(x, y);
+    });
+    cv.addEventListener('pointermove', e => {
+      if (!this.ready) return; const [x, y] = loc(e);
+      const px = this.ptr.x, py = this.ptr.y; this.ptr.x = x; this.ptr.y = y; this.ptr.in = true;
+      if (this.down) {
+        if (!this.down.moved && Math.hypot(x - this.down.x, y - this.down.y) > 7 && !REDUCE) { this.down.moved = true; this.startDrag(); }
+        return;
+      }
+      const h = this.hit(x, y); cv.style.cursor = h ? (h === 'ear' ? 'pointer' : 'grab') : 'default';
+      if ((h === 'head' || h === 'body') && px > -900) this.pet(Math.hypot(x - px, y - py) / this.U * 1.6);
+    });
+    const up = e => {
+      if (!this.down) return; const d = this.down; this.down = null;
+      try { cv.releasePointerCapture(e.pointerId); } catch (_) { }
+      if (this.dragging) { this.dragging = false; this.react('delighted', 1.2); this.then('curious', 1); this.startTask('return', .5); }
+      else this.poke();
+    };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    cv.addEventListener('pointerleave', () => { this.ptr.in = false; if (!this.down) cv.style.cursor = 'default'; });
+  }
+  startDrag() {
+    if (this.o.canFly === false) return;
+    this.dragging = true; this.react('surprised', .8); this.then('curious', 99);
+    if (this.mode === 'perch') this.doLaunch(true);
+    this.task = 'drag'; this.taskT = 0;
+  }
+
+  // ---------- flight ----------
+  startTask(t, delay) {
+    if (this.o.canFly === false || REDUCE) return;
+    this.task = t; this.taskT = -(delay || 0); this.tk = 0;
+    if (this.mode === 'perch' && t !== 'return') this.doLaunch(false);
+  }
+  doLaunch(quick) {
+    if (this.mode !== 'perch' || this.launchT > 0) return;
+    this.launchT = quick ? .05 : .26;
+  }
+  taskTarget() {
+    const g = this.g, U = this.U, t = this.taskT, k = this.k;
+    switch (this.task) {
+      case 'drag': return [this.ptr.x, this.ptr.y + U * .1];
+      case 'chase': { const b = this.blips[0]; return b ? [b.x, b.y] : [this.hangX, this.hangY]; }
+      case 'orbit': return [g.w * .5 + Math.cos(t * 1.9) * g.w * .27, g.h * .4 + Math.sin(t * 1.9) * g.h * .12];
+      case 'lap': { const p = t * 1.5; return [g.w * .5 + Math.sin(p) * g.w * .3, g.h * .45 + Math.sin(p * 2) * g.h * .1]; }
+      case 'celebrate': { const p = t * 2.4; return [g.w * .5 + Math.sin(p) * g.w * .26, g.h * .4 + Math.sin(p * 2) * g.h * .1]; }
+      default: return [this.hangX, this.hangY];
+    }
+  }
+  stepFly(dt) {
+    const U = this.U, k = this.k;
+    this.taskT += dt;
+    if (this.taskT < 0) { this.vx *= .9; this.vy *= .9; return; }
+    if (this.task === 'celebrate' && this.taskT > 3.4) this.startTask('return');
+    if (this.task === 'lap' && this.taskT > 4.2) this.startTask('return');
+    const tg = this.taskTarget();
+    let ax = (tg[0] - this.bx) * 6.5 - this.vx * 2.5, ay = (tg[1] - this.by) * 6.5 - this.vy * 2.5;
+    if (this.task === 'return') { const d = Math.hypot(tg[0] - this.bx, tg[1] - this.by); const sl = clamp(d / (U * 1.5), .35, 1); ax *= sl; ay *= sl; }
+    ay -= Math.cos(this.flapPh) * 340 * k; // wing beat lift
+    this.vx += ax * dt; this.vy += ay * dt;
+    const sp = Math.hypot(this.vx, this.vy), mx = (this.task === 'chase' ? 640 : 480) * k; if (sp > mx) { this.vx *= mx / sp; this.vy *= mx / sp; }
+    this.bx += this.vx * dt; this.by += this.vy * dt;
+    const m = U * .5; this.bx = clamp(this.bx, m, this.g.w - m); this.by = clamp(this.by, m * .8, this.g.h - m * .8);
+    this.bank += (clamp(this.vx / (420 * k), -1, 1) * .38 - this.bank) * Math.min(1, dt * 7);
+    // chase
+    if (this.task === 'chase') {
+      const b = this.blips[0];
+      if (!b) { this.startTask('return'); }
+      else if (Math.hypot(b.x - this.bx, b.y - (this.by - U * .5)) < .75 * U || Math.hypot(b.x - this.hits.hc[0], b.y - this.hits.hc[1]) < .5 * U) {
+        this.blips.shift(); this.munch = 1.3; this.burst(b.x, b.y, 8, 'spark'); this.react('delighted', 1.8); this.then('content', 1);
+        this.startTask(this.blips.length ? 'chase' : 'return', .5); this.ring(b.x, b.y, .5, 0);
+      }
+    }
+    // landing
+    if (this.task === 'return') {
+      const d = Math.hypot(this.hangX - this.bx, this.hangY - this.by);
+      
+      if (d < 7 * k + 3 &&  Math.hypot(this.vx, this.vy) < 140 * k) {
+        this.mode = 'perch'; this.snapX = this.bx - this.hangX; this.snapY = this.by - this.hangY; this.task = '';
+        this.swayW += this.vx * .006; this.sqW -= 4; this.wire = { x0: this.hangX, t0: this.time, amp: 1 };
+        this.ring(this.hangX, this.hangY - this.U * .6, .3, 0);
+        if (this.mood !== 'asleep') { this.react('content', 1.2, true); }
+      }
+    }
+  }
+
+  // ---------- brain ----------
+  brain(dt) {
+    const T = this.time, night = isNight();
+    if (!REDUCE) this.idle += dt;
+    // pointer on page
+    const gpNear = GP.has && (NOW - GP.t < 1.6);
+    if (this.o.page && GP.has && NOW - GP.t < .12) this.idle = 0;
+    // choose mood
+    let m;
+    if (this.ovr && T >= this.ovr.until) { this.ovr = null; if (this.q.length) { const n = this.q.shift(); this.ovr = { m: n.m, until: T + (REDUCE ? 1e9 : n.dur) }; this.onReact(n.m); } }
+    if (this.o.locked) m = this.o.locked;
+    else if (this.ovr) m = this.ovr.m;
+    else if (this.sleepLock) m = this.mode === 'fly' ? 'sleepy' : 'asleep';
+    else if (REDUCE) m = this.baseMood || 'content';
+    else {
+      const sleepyAt = night ? 80 : 18, asleepAt = night ? 150 : 38;
+      if (this.idle > asleepAt) m = 'asleep';
+      else if (this.idle > sleepyAt) m = 'sleepy';
+      else if (this.petAcc > 2) m = 'delighted';
+      else if (this.petAcc > .6) m = 'content';
+      else if (this.ptr.in || (this.o.page && this.near)) m = 'curious';
+      else m = 'content';
+    }
+    if (m === 'sleepy' && this.mood === 'asleep' && !this.ovr && this.idle > 30) m = 'asleep';
+    this.mood = m;
+    this.petAcc = Math.max(0, this.petAcc - dt * .55);
+    if (m !== this.lastMood) { this.lastMood = m; this.moodAt = T; if (this.onMood) this.onMood(m, this); }
+  }
+  micro(dt) {
+    if (REDUCE || this.o.locked && !this.o.alive) return;
+    const m = this.mood;
+    if (this.fx) { this.fx.t += dt; if (this.fx.t >= this.fx.d) this.fx = null; }
+    this.microT -= dt;
+    if (this.microT > 0 || this.fx || this.ovr || m === 'asleep' || this.mode === 'fly') return;
+    this.microT = 2.5 + Math.random() * 4.5;
+    const r = Math.random(), night = isNight();
+    if (m === 'sleepy') { this.fx = { n: 'yawn', t: 0, d: 1.8 }; return; }
+    if (m !== 'content') return;
+    if (r < .3) { this.fx = { n: 'look', t: 0, d: 1.5 }; this.lwX = Math.random() * 2 - 1; this.lwY = Math.random() * 1.2 - .6; }
+    else if (r < .45) { this.earKickW[Math.random() < .5 ? 0 : 1] += 9; }
+    else if (r < .6) { this.fx = { n: 'stretch', t: 0, d: 2.2 }; }
+    else if (r < .75) { this.fx = { n: 'hum', t: 0, d: .5 }; this.ping(false); }
+    else if (r < .85) { this.swayW += (Math.random() < .5 ? -1 : 1) * 1.2; }
+    else if (night && this.idle > 40 && this.o.canFly !== false && this.mode === 'perch') this.startTask('lap');
+  }
+
+  // ---------- simulation ----------
+  sim(dt) {
+    this.t += dt; this.time += dt; const U = this.U, k = this.k, T = this.time;
+    // pointer position within canvas from global pointer
+    if (this.rc && GP.has && !this.o.interactive) { this.ptr.x = GP.x - this.rc.left; this.ptr.y = GP.y - this.rc.top; this.ptr.in = false; }
+    if (this.o.interactive && this.rc && GP.has && !this.ptr.in) { this.ptr.x = GP.x - this.rc.left; this.ptr.y = GP.y - this.rc.top; }
+    this.near = GP.has && NOW - GP.t < 2 && this.rc && GP.x > this.rc.left - 60 && GP.x < this.rc.right + 60 && GP.y > this.rc.top - 60 && GP.y < this.rc.bottom + 60;
+    this.brain(dt); this.micro(dt);
+    const m = this.mood, E = EM[m], V = this.V, W = this.W, Tg = this.T;
+    for (let i = 0; i < KEYS.length; i++) Tg[KEYS[i]] = E[KEYS[i]];
+    const fx = this.fx, fe = fx ? Math.sin(Math.PI * clamp(fx.t / fx.d, 0, 1)) : 0;
+    if (fx) {
+      if (fx.n === 'yawn') { Tg.mouth = fe; Tg.eyeOpen = .1; Tg.arc = -.4; Tg.perk = .0; Tg.wing = .35 * fe; Tg.puff = .5 * fe; }
+      else if (fx.n === 'stretch') { Tg.wing = .95 * fe; Tg.puff = .7 * fe; Tg.perk = .9; Tg.eyeOpen = .6; Tg.smile = .8; }
+    }
+    if (this.mouthT > 0) { this.mouthT -= dt; Tg.mouth = Math.max(Tg.mouth, .55); }
+    if (this.munch > 0) { this.munch -= dt; Tg.mouth = .3 + .6 * Math.abs(Math.sin(T * 14)); Tg.smile = .4; }
+    if (this.mode === 'fly' || this.launchT > 0) { Tg.wing = Math.max(Tg.wing, .92); Tg.flap = 1; Tg.cloak = 0; Tg.sag = 0; Tg.droop = Math.min(Tg.droop, .3); }
+    if (this.launchT > 0) { Tg.wing = 1; Tg.flap = 0; }
+    if (m === 'proud' && this.mode === 'perch') Tg.flap = 0;
+    // pet blush
+    Tg.blush = Math.max(Tg.blush, clamp(this.petAcc * .35, 0, 1));
+    if (this.petAcc > .6 && m === 'content') { Tg.arc = 0; Tg.smile = .9; Tg.eyeOpen = .25; Tg.lid = .3; }
+    // listen bump
+    Tg.perk += this.listen * .25; Tg.glow += this.listen * .3;
+    // night glow
+    if (isNight() && !this.sleepLock && m === 'content') { Tg.wing = Math.max(Tg.wing, .06); Tg.perk += .12; }
+    // springs
+    const Kc = REDUCE ? 600 : 130, Cc = 2 * Math.sqrt(Kc) * .62;
+    if (REDUCE) { for (let i = 0; i < KEYS.length; i++) { const kk = KEYS[i]; V[kk] = Tg[kk]; W[kk] = 0; } }
+    else for (let i = 0; i < KEYS.length; i++) {
+      const kk = KEYS[i]; const a = (Tg[kk] - V[kk]) * Kc - W[kk] * Cc; W[kk] += a * dt; V[kk] += W[kk] * dt;
+    }
+    // look
+    let tx = 0, ty = 0;
+    if (m === 'asleep') { tx = 0; ty = .1; }
+    else if (fx && fx.n === 'look') { tx = this.lwX; ty = this.lwY; }
+    else if (this.mode === 'fly' && this.task !== 'drag') { tx = clamp(this.vx / (300 * k), -1, 1); ty = -.2; }
+    else if (this.ptr.x > -900 && (this.near || this.ptr.in || this.o.page)) {
+      const dx = this.ptr.x - this.hits.hc[0], dy = this.ptr.y - this.hits.hc[1], d = Math.hypot(dx, dy) || 1;
+      const s = Math.min(1, d / (1.1 * U)); tx = dx / d * s; ty = dy / d * s * .8;
+      if (m === 'shy') { tx = -tx * .5; ty = -.2; }
+      if (m === 'sleepy') { tx *= .4; ty = .3; }
+    } else if (!REDUCE) { tx = Math.sin(T * .37) * .3; ty = Math.sin(T * .23) * .15; }
+    if (this.o.locked) { tx *= .7; }
+    const kl = Math.min(1, dt * 9); this.lookX += (tx - this.lookX) * kl; this.lookY += (ty - this.lookY) * kl;
+    // ears
+    for (let s = 0; s < 2; s++) { const a = -this.earKick[s] * 140 - this.earKickW[s] * 11; this.earKickW[s] += a * dt; this.earKick[s] += this.earKickW[s] * dt; }
+    this.listen = Math.max(0, this.listen - dt * .7);
+    // blink
+    if (!REDUCE) {
+      this.blinkT -= dt;
+      if (this.blinkT <= 0 && this.blinkP < 0) { this.blinkP = 0; this.blinkT = 2.2 + Math.random() * 4.2; if (Math.random() < .2) this.blinkT = .35; }
+      if (this.blinkP >= 0) { this.blinkP += dt / .17; if (this.blinkP >= 1) { this.blinkP = -1; this.blink = 1; } else this.blink = Math.abs(this.blinkP * 2 - 1); }
+    }
+    // flap phase
+    const fr = this.mode === 'fly' || this.launchT > 0 ? 11.5 : (m === 'delighted' ? 8 : m === 'focused' ? 9 : 6);
+    this.flapPh += dt * fr;
+    // squash
+    { const a = (0 - this.sq) * 160 - this.sqW * 12; this.sqW += a * dt; this.sq += this.sqW * dt; }
+    if (this.launchT > 0) { this.launchT -= dt; this.sq += (.2 - this.sq) * .3; if (this.launchT <= 0) this.liftOff(); }
+    // ang
+    this.angT = Math.PI;
+    { const a = ((this.angT || 0) - this.ang) * 70 - this.angW * 11; this.angW += a * dt; this.ang += this.angW * dt; }
+    // motion
+    if (this.mode === 'perch') {
+      const w2 = 17, breeze = REDUCE ? 0 : Math.sin(T * .9) * .015 + Math.sin(T * 2.3) * .006;
+      const a = -w2 * this.sway - this.swayW * .55 + breeze * 14; this.swayW += a * dt; this.sway += this.swayW * dt;
+      this.snapX *= .86; this.snapY *= .86;
+      this.bx = this.hangX + Math.sin(this.sway) * .25 * U + this.snapX; this.by = this.hangY - .25 * U * (1 - Math.cos(this.sway)) + this.snapY;
+      if (!REDUCE) { this.by += Math.sin(T * (m === 'asleep' ? 1.1 : 2.2)) * U * (m === 'asleep' ? .012 : .008); }
+      this.bank *= .9;
+      // scroll nudge
+      if (Math.abs(SC.v) > 300) this.swayW += clamp(SC.v, -3000, 3000) * .0000035 * dt * 60;
+    } else this.stepFly(dt);
+    if (this.mode === 'perch' && this.task === 'chase') { /* waiting for launch */ }
+    // trembling
+    // blips
+    this.stepBlips(dt);
+    // rings
+    for (let i = this.rings.length - 1; i >= 0; i--) {
+      const r = this.rings[i]; r.age += dt;
+      if (r.age < 0) continue;
+      r.r = r.inward ? r.r0 * (1 - r.age / r.life) : r.v * r.age;
+      if (r.age > r.life) { this.rings.splice(i, 1); if (r.inward && r.big !== undefined) this.heard(r); continue; }
+      if (this.mask && !r.inward) this.reveal(r);
+    }
+    for (let i = this.echoQ.length - 1; i >= 0; i--) {
+      const e = this.echoQ[i]; if (T >= e.t) {
+        this.echoQ.splice(i, 1);
+        const r0 = Math.min(this.g.w, this.g.h) * (e.big ? .6 : .42);
+        this.rings.push({ x: e.x, y: e.y, r: r0, r0, v: 0, life: .75, age: 0, str: e.big ? .9 : .55, inward: true, big: e.big, col: AM, ex: this.hits.hc[0], ey: this.hits.hc[1] });
+      }
+    }
+    if (this.echo) { const E2 = this.echo, N = E2.length; for (let i = 0; i < N; i++) if (E2[i] > .01) E2[i] *= .9945; else E2[i] = 0; }
+    // particles
+    for (let i = 0; i < this.parts.length; i++) {
+      const p = this.parts[i]; if (!p.a) continue; p.l += dt; if (p.l >= p.m) { p.a = false; continue; }
+      p.vy += p.gr * dt; p.x += p.vx * dt + (p.w ? Math.sin(p.l * 4 + p.w) * 12 * dt * k : 0); p.y += p.vy * dt; p.vx *= .985;
+    }
+    // sleeping Zs
+    if (m === 'asleep' && !REDUCE) { this.zT = (this.zT || 0) - dt; if (this.zT <= 0) { this.zT = 1.5; this.emit(this.hits.hc[0] + U * .35, this.hits.hc[1] - U * .35, 18 * k, -26 * k, 3.2, Math.random() < .5 ? 'z' : 'Z', [160, 190, 255], -2 * k, 1 + Math.random() * 3); } }
+    if (this.petAcc > 1 && !REDUCE) { this.sparkT = (this.sparkT || 0) - dt; if (this.sparkT <= 0) { this.sparkT = .22; this.burst(this.hits.hc[0] + (Math.random() - .5) * U * .6, this.hits.hc[1] - U * .35, 1, 'spark'); } }
+    // carry
+    if (this.carry > 0) this.carryT = Math.min(1, this.carryT + dt * 3); else this.carryT = Math.max(0, this.carryT - dt * 4);
+    // blip auto spawn at night
+    if (this.env.blips && isNight() && !REDUCE && !this.sleepLock && this.blips.length < 1 && m !== 'asleep') { this.nextBlip -= dt; if (this.nextBlip <= 0) { this.nextBlip = 26 + Math.random() * 20; this.toss(this.g.w * (.2 + Math.random() * .6), this.g.h * (.45 + Math.random() * .2)); } }
+    // day colour
+    const dk = isNight() ? 0 : 1; this.dayK += (dk - this.dayK) * Math.min(1, dt * 2);
+  }
+  liftOff() {
+    this.mode = 'fly'; this.bx = this.hangX + Math.sin(this.sway) * .25 * this.U; this.by = this.hangY - .25 * this.U * (1 - Math.cos(this.sway)); this.bx += this.snapX; this.by += this.snapY;
+    this.vx = this.swayW * 80 * this.k + (Math.random() - .5) * 40 * this.k; this.vy = -330 * this.k; this.sqW += -6; this.angT = Math.PI; this.sway = 0; this.swayW = 0;
+    this.wire = { x0: this.hangX, t0: this.time, amp: 1.2 };
+    if (!this.task) this.task = 'lap';
+  }
+  stepBlips(dt) {
+    for (const b of this.blips) {
+      b.ph += dt * 9; b.vx += (Math.random() - .5) * 900 * dt * this.k; b.vy += (Math.random() - .5) * 900 * dt * this.k;
+      b.vx *= .94; b.vy *= .94; b.x += b.vx * dt; b.y += b.vy * dt;
+      b.x = clamp(b.x, 12, this.g.w - 12); b.y = clamp(b.y, this.hy + this.U * .9, this.g.h - 12);
+    }
+  }
+  heard(r) {
+    this.listen = Math.max(this.listen, 1.4); this.earKickW[0] += 10; this.earKickW[1] += 10;
+    this.burst(this.hits.hc[0], this.hits.hc[1] - this.U * .45, r.big ? 12 : 5, 'spark');
+    if (!this.ovr && !this.o.locked && this.mood !== 'asleep') { this.ovr = { m: r.big ? 'delighted' : 'content', until: this.time + (r.big ? 1.4 : .9) }; }
+    if (this.heardCb) this.heardCb(r.big);
+  }
+  reveal(r) {
+    const g = this.g, band = g.cw * 1.8, rr = r.r, cw = g.cw, chh = g.chh;
+    const c0 = Math.max(0, Math.floor((r.x - rr - band) / cw)), c1 = Math.min(g.cols - 1, Math.ceil((r.x + rr + band) / cw));
+    const r0 = Math.max(0, Math.floor((r.y - rr - band) / chh)), r1 = Math.min(g.rows - 1, Math.ceil((r.y + rr + band) / chh));
+    const f = r.str * (1 - r.age / r.life);
+    for (let rw = r0; rw <= r1; rw++) {
+      const dy = (rw + .5) * chh - r.y;
+      for (let c = c0; c <= c1; c++) {
+        const i = rw * g.cols + c; if (!this.mask[i]) continue;
+        const dx = (c + .5) * cw - r.x, d = Math.sqrt(dx * dx + dy * dy);
+        if (Math.abs(d - rr) < band) { const v = f * (1 - Math.abs(d - rr) / band) * 1.7; if (v > this.echo[i]) this.echo[i] = Math.min(1.5, v); }
+      }
+    }
+  }
+  ring(x, y, str, delay) {
+    if (this.rings.length > 7) this.rings.shift();
+    this.rings.push({ x, y, r: 0, v: 360 * this.k, life: 2.1, age: -(delay || 0), str, col: CY });
+  }
+  emit(x, y, vx, vy, life, ch, col, gr, w) {
+    for (let i = 0; i < this.parts.length; i++) {
+      const p = this.parts[i]; if (p.a) continue;
+      p.a = true; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.l = 0; p.m = life; p.ch = ch; p.c = col; p.gr = gr || 0; p.w = w || 0; return;
+    }
+  }
+  burst(x, y, n, kind) {
+    if (REDUCE) return; const k = this.k;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * TAU, s = (40 + Math.random() * 110) * k;
+      const col = kind === 'gold' ? (Math.random() < .5 ? AM : WH) : (Math.random() < .5 ? CY : (Math.random() < .5 ? WH : MG));
+      this.emit(x, y, Math.cos(a) * s, Math.sin(a) * s - 40 * k, .7 + Math.random() * .7, '+*.x'[(Math.random() * 4) | 0], col, 90 * k);
+    }
+  }
+  confetti(x, y, n) {
+    if (REDUCE) return; const k = this.k;
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + (Math.random() - .5) * 2.6, s = (120 + Math.random() * 260) * k, r = Math.random();
+      this.emit(x, y, Math.cos(a) * s, Math.sin(a) * s, 1.4 + Math.random() * 1.2, '01+=x#%*'[(Math.random() * 8) | 0], r < .34 ? CY : r < .67 ? AM : r < .9 ? MG : WH, 330 * k, Math.random() * 6);
+    }
+  }
+
+  // ---------- drawing ----------
+  W2(x, y) { const X = x * this.sx, Y = y * this.sy; this._x = this.bx + (X * this.cs - Y * this.sn) * this.U; this._y = this.by + (X * this.sn + Y * this.cs) * this.U; }
+  F(x, y) { const c = Math.cos(this.fr), s = Math.sin(this.fr); this._x = this.hcx + (x * c - y * s) * this.U; this._y = this.hcy + (x * s + y * c) * this.U; }
+  draw() {
+    const g = this.g, U = this.U, V = this.V, k = this.k; g.clear();
+    this.drawEnv();
+    // pose
+    const th = this.ang + (this.mode === 'perch' ? this.sway : this.bank) * Math.cos(this.ang);
+    this.cs = Math.cos(th); this.sn = Math.sin(th);
+    const brth = REDUCE ? 0 : Math.sin(this.time * (this.mood === 'asleep' ? 1.3 : this.mood === 'sleepy' ? 1.6 : 2.4));
+    const br = 1 + brth * (.022 + V.puff * .01) + V.puff * .07;
+    this.sx = (1 + this.sq * .6) * br; this.sy = (1 - this.sq * .8) * (1 + V.puff * .02);
+    this.drawWire();
+    this.drawRingsAndEcho();
+    this.drawBlips();
+    // head
+    const hy = .64 - V.sag * .04 + V.puff * .03;
+    this.W2(0, hy); this.hcx = this._x; this.hcy = this._y;
+    this.fr = V.tilt + 0.45 * (this.mode === 'perch' ? this.sway : this.bank) + (V.trem > .05 && !REDUCE ? Math.sin(this.time * 41) * .022 * V.trem : 0) + (REDUCE ? 0 : Math.sin(this.time * .8) * .012);
+    const H = this.hits; H.hc[0] = this.hcx; H.hc[1] = this.hcy;
+    this.W2(0, 0); H.body[0] = this._x; H.body[1] = this._y;
+    this.cool = V.cool; this.glow = V.glow;
+    // feet
+    for (let s = -1; s <= 1; s += 2) { this.W2(s * .12, -.4); this.dot(this._x, this._y, .05 * U, 'v', 205, 170, 190, 1); this.W2(s * .12, -.47); this.dot(this._x, this._y, .04 * U, 'v', 205, 170, 190, .9); }
+    this.drawBody();
+    this.drawHead();
+    this.drawWings();
+    this.drawThumbs();
+    this.drawEars();
+    this.drawFace();
+    this.drawCarry();
+    this.drawParts();
+  }
+  dot(x, y, r, ch, R, G, B, a) { const g = this.g; const c = Math.floor(x / g.cw), rw = Math.floor(y / g.chh); g.put(c, rw, ch, R, G, B, a); if (r > g.cw * .9) { g.put(c + 1, rw, ch, R, G, B, a); g.put(c - 1, rw, ch, R, G, B, a); } }
+  tint(R, G, B) { const c = this.cool; if (c > .01) { const f = .5 * Math.min(1, c); this.tr = R + (95 - R) * f; this.tg = G + (120 - G) * f; this.tb = B + (150 - B) * f; } else { this.tr = R; this.tg = G; this.tb = B; } }
+
+  drawEnv() {
+    const g = this.g, e = this.env, T = this.time, dk = this.dayK;
+    if (e.dots) { for (let r = 1; r < g.rows; r += 3) for (let c = 2; c < g.cols; c += 6) g.put(c, r, '.', 40, 60, 84, .55 - .2 * dk); }
+    if (e.stars && dk < .98) {
+      const sc = SC.y * .0, a = 1 - dk;
+      for (const s of this.stars) { const tw = .5 + .5 * Math.sin(T * (1 + s.s * 2) + s.ph); g.put(s.c, s.r, s.s > .85 ? '*' : (s.s > .5 ? '+' : '.'), 170, 200, 255, (.25 + .55 * tw) * a); }
+      // moon
+      const mr = Math.round(g.rows * .1), mc = Math.round(g.cols * .86);
+      g.ellipse(mc * g.cw, mr * g.chh * 1.8, g.cw * 3.6, g.chh * 1.9, 0, function (c, r, u, v, d) { const l = (u - .35) ** 2 + (v + .1) ** 2; if (l < .7 && d < 1 && ((u + 0.3) ** 2 + v * v) > .0) this.g.put(c, r, d > .8 ? 'o' : 'O', 220, 226, 245, .75 * a); }, this);
+    }
+    if (dk > .02 && e.stars) {
+      const mc = g.cols * .84 * g.cw, mr = g.rows * .16 * g.chh;
+      g.ellipse(mc, mr, g.cw * 8, g.chh * 4.2, 0, function (c, r, u, v, d) { const a = (1 - d) * .55 * this.dayK; this.g.put(c, r, d < .35 ? 'O' : d < .6 ? 'o' : ':', 255, 190, 90, a); }, this);
+    }
+  }
+  drawWire() {
+    if (!this.env.wire) return;
+    const g = this.g, T = this.time, wy = this.hy / g.chh, w = this.wire;
+    const age = T - w.t0, amp = w.amp * Math.exp(-age * 1.4) * 1.6;
+    for (let c = 0; c < g.cols; c++) {
+      const x = c * g.cw; const dx = x - w.x0;
+      const off = amp * Math.sin(Math.abs(dx) / (g.cw * 3.5) - age * 14) * Math.exp(-Math.abs(dx) / (g.w * .25));
+      const sag = Math.sin(c / g.cols * Math.PI) * 0.9;
+      let row = wy + sag + off;
+      const r0 = Math.round(row), fr = row - r0;
+      const ch = fr < -.28 ? '¯' : fr > .28 ? '_' : '=';
+      g.put(c, r0, (c % 11 === 5) ? 'o' : ch, 118, 150, 176, c % 11 === 5 ? .95 : .75);
+    }
+  }
+  drawRingsAndEcho() {
+    const g = this.g;
+    if (this.echo) {
+      const E = this.echo, N = E.length, t8 = Math.floor(this.time * 9);
+      const M = this.mask;
+      for (let i = 0; i < N; i++) {
+        const e = E[i]; if (e < .05) { if (M[i]) g.putI(i, '.', 70, 105, 140, .5 + .12 * Math.sin(this.time * .8 + i * .3)); continue; }
+        const h = hash2(i, t8 >> 2);
+        const hot = Math.min(1, e); const col = e > .9 ? 1 : 0;
+        g.putI(i, '#', 84 + 150 * col, 214 + 30 * col, 255, Math.min(1.1, .25 + e));
+      }
+    }
+    for (const r of this.rings) {
+      if (r.age < 0 || r.r < 2) continue;
+      const f = r.str * (r.inward ? (1 - r.age / r.life * .5) : (1 - r.age / r.life));
+      if (f < .04) continue;
+      const band = g.cw * 1.15, rr = r.r, cw = g.cw, chh = g.chh;
+      const c0 = Math.max(0, Math.floor((r.x - rr - band) / cw)), c1 = Math.min(g.cols - 1, Math.ceil((r.x + rr + band) / cw));
+      const r0 = Math.max(0, Math.floor((r.y - rr - band) / chh)), r1 = Math.min(g.rows - 1, Math.ceil((r.y + rr + band) / chh));
+      for (let rw = r0; rw <= r1; rw++) {
+        const dy = (rw + .5) * chh - r.y;
+        for (let c = c0; c <= c1; c++) {
+          const dx = (c + .5) * cw - r.x, d = Math.sqrt(dx * dx + dy * dy), e = Math.abs(d - rr);
+          if (e < band) { const a = f * (1 - e / band); if (a > .08) g.put(c, rw, lineChar(-dy, dx), r.col[0], r.col[1], r.col[2], Math.min(1, a * 1.3)); }
+        }
+      }
+    }
+  }
+  drawBlips() {
+    const g = this.g;
+    for (const b of this.blips) {
+      const c = Math.floor(b.x / g.cw), rw = Math.floor(b.y / g.chh), fl = Math.sin(b.ph) > 0;
+      g.put(c - 1, rw, fl ? '\\' : '/', 255, 190, 80, .8); g.put(c + 1, rw, fl ? '/' : '\\', 255, 190, 80, .8); g.put(c, rw, 'o', 255, 236, 170, 1.1);
+      g.put(c, rw - 1, '.', 255, 190, 80, .35); g.put(c, rw + 1, '.', 255, 190, 80, .35);
+    }
+  }
+  shadeFur(c, r, u, v, d) {
+    const nx = u * this.cs - v * this.sn, ny = u * this.sn + v * this.cs;
+    const lt = -(nx * .5 + ny * .62);
+    let lum = .5 + .42 * lt * (.35 + .65 * d) + (hash2(c, r) - .5) * .16;
+    const belly = Math.abs(u) < .55 && v > -.7 && v < .5 && ny > -.2;
+    if (belly && this.bellyOk) lum += .12;
+    lum = clamp(lum + (this.glow - .6) * .1, 0, 1);
+    this.tint(34 + 70 * lum, 46 + 84 * lum, 112 + 110 * lum);
+    let R = this.tr, G = this.tg, B = this.tb;
+    if (d > .8) { const rim = clamp((d - .78) / .22, 0, 1) * (.35 + Math.max(0, nx * .6 + ny * .55)); if (rim > 0) { R += (84 - R) * rim * .8; G += (214 - G) * rim * .8; B += (255 - B) * rim * .8; lum += rim * .25; } }
+    this.g.put(c, r, FUR[Math.min(6, (lum * 7) | 0)], R, G, B, .95);
+  }
+  drawBody() {
+    this.W2(0, 0); const U = this.U;
+    this.bellyOk = true;
+    this.g.ellipse(this._x, this._y, .27 * U * this.sx, .38 * U * this.sy, Math.atan2(this.sn, this.cs), this.shadeFur, this);
+  }
+  shadeHead(c, r, u, v, d) {
+    const cs = Math.cos(this.fr), sn = Math.sin(this.fr);
+    const nx = u * cs - v * sn, ny = u * sn + v * cs, lt = -(nx * .5 + ny * .62);
+    let lum = .56 + .4 * lt * (.35 + .65 * d) + (hash2(c, r) - .5) * .14;
+    lum = clamp(lum + (this.glow - .6) * .1, 0, 1);
+    this.tint(40 + 78 * lum, 54 + 90 * lum, 120 + 110 * lum);
+    let R = this.tr, G = this.tg, B = this.tb;
+    if (d > .82) { const rim = clamp((d - .8) / .2, 0, 1) * (.35 + Math.max(0, nx * .6 + ny * .55)); if (rim > 0) { R += (84 - R) * rim * .8; G += (214 - G) * rim * .8; B += (255 - B) * rim * .8; lum += rim * .25; } }
+    this.g.put(c, r, FUR[Math.min(6, (lum * 7) | 0)], R, G, B, 1);
+  }
+  shadeMuzzle(c, r, u, v, d) {
+    const h = hash2(c, r), l = .55 + .3 * (1 - d) + (h - .5) * .1;
+    this.tint(170 * l + 40, 160 * l + 40, 190 * l + 40);
+    this.g.put(c, r, d > .75 ? ';' : (h < .5 ? 'o' : ':'), this.tr, this.tg, this.tb, 1);
+  }
+  drawHead() {
+    const U = this.U, V = this.V;
+    this.g.ellipse(this.hcx, this.hcy, .44 * U, .4 * U, this.fr, this.shadeHead, this);
+    this.F(0, .12 + this.lookY * .01); this.g.ellipse(this._x, this._y, .23 * U, .16 * U, this.fr, this.shadeMuzzle, this);
+  }
+  earPoly(s, outer) {
+    const U = this.U, V = this.V;
+    const perk = clamp(V.perk, 0, 1.3), th0 = lerp(1.0, .1, clamp(perk, 0, 1)) + (perk > 1 ? -(perk - 1) * .2 : 0);
+    const aim = clamp((this.ptr.x - this.hcx) / (3.2 * U), -1, 1) * .22 * (this.mood === 'asleep' ? 0 : 1);
+    const th = s * (th0 + V.droop * .95) + aim + this.earKick[s < 0 ? 0 : 1] * .3 + Math.sin(this.time * 1.7 + s) * (REDUCE ? 0 : .012);
+    this.F(s * .24, -.26); const bx = this._x, by = this._y;
+    const fcs = Math.cos(this.fr), fsn = Math.sin(this.fr);
+    const dx = Math.sin(th) * fcs - (-Math.cos(th)) * fsn, dy = Math.sin(th) * fsn + (-Math.cos(th)) * fcs; // direction in world (rotate by fr)
+    const L = (.72 - V.droop * .16 + this.listen * .04) * U * (outer ? 1 : .8), px = -dy, py = dx;
+    const wb = (outer ? .3 : .17) * U * (1 + this.listen * .06);
+    const sh = outer ? 0 : .12 * U;
+    const bx0 = bx + dx * sh, by0 = by + dy * sh;
+    const xs = this.px, ys = this.py;
+    xs[0] = bx0 - px * wb / 2; ys[0] = by0 - py * wb / 2;
+    xs[1] = bx0 + dx * L * .5 - px * wb * .72 * s * s; ys[1] = by0 + dy * L * .5 - py * wb * .72;
+    xs[2] = bx0 + dx * L + (V.droop * .15 * U) * s * 0; ys[2] = by0 + dy * L + V.droop * .18 * U * (outer ? 1 : .8);
+    xs[3] = bx0 + dx * L * .5 + px * wb * .72; ys[3] = by0 + dy * L * .5 + py * wb * .72;
+    xs[4] = bx0 + px * wb / 2; ys[4] = by0 + py * wb / 2;
+    return [xs[2], ys[2]];
+  }
+  shadeEarOut(c, r, px, py, ed) {
+    const h = hash2(c, r), lum = .4 + .3 * h + (ed < this.g.cw * 1.4 ? .25 : 0);
+    this.tint(60 + 80 * lum, 78 + 90 * lum, 140 + 90 * lum);
+    this.g.put(c, r, ed < this.g.cw * 1.2 ? '+' : FUR[Math.min(6, (lum * 7) | 0)], ed < this.g.cw * 1.2 ? 84 : this.tr, ed < this.g.cw * 1.2 ? 214 : this.tg, ed < this.g.cw * 1.2 ? 255 : this.tb, .95);
+  }
+  shadeEarIn(c, r, px, py, ed) {
+    const l = clamp(this.V.glow * .55 + this.listen * .55 + .15, 0, 1.5), h = hash2(c, r);
+    const k = clamp(ed / (this.U * .08), 0, 1);
+    const ring = (Math.sin((Math.hypot(px - this.eCx, py - this.eCy) / this.U) * 38 - this.time * (this.listen > .3 ? 14 : 0)) + 1) / 2;
+    const hot = clamp(this.listen, 0, 1);
+    const R = lerp(150, 255, hot), G = lerp(40, 190, hot), B = lerp(100, 110, hot);
+    this.g.put(c, r, ring > .62 ? ')' : (k > .5 ? '%' : ':'), R, G, B, (.5 + .45 * k) * clamp(l + .3, .5, 1.3));
+  }
+  drawThumbs() {
+    if (this.mode !== 'perch' && this.V.wing > .5) return;
+    const U = this.U, g = this.g;
+    for (let s = -1; s <= 1; s += 2) { this.W2(s * .2, .2); const c = Math.floor(this._x / g.cw), r = Math.floor(this._y / g.chh); g.put(c, r, 'n', 215, 195, 215, 1); g.put(c, r - 1, '^', 215, 195, 215, .95); }
+  }
+  drawEars() {
+    for (let s = -1; s <= 1; s += 2) {
+      const tip = this.earPoly(s, true);
+      this.hits.ears[s < 0 ? 0 : 1][0] = tip[0]; this.hits.ears[s < 0 ? 0 : 1][1] = tip[1];
+      this.g.poly(this.px, this.py, 5, this.shadeEarOut, this);
+      this.earPoly(s, false);
+      this.eCx = (this.px[0] + this.px[2]) / 2; this.eCy = (this.py[0] + this.py[2]) / 2;
+      this.g.poly(this.px, this.py, 5, this.shadeEarIn, this);
+    }
+  }
+  wingShade(c, r, px, py, ed) {
+    const g = this.g, U = this.U; let bd = 1e9, bi = 0;
+    for (let b = 0; b < 5; b++) { const d = sdSeg(px, py, this.bn[b * 4], this.bn[b * 4 + 1], this.bn[b * 4 + 2], this.bn[b * 4 + 3]); if (d < bd) { bd = d; bi = b; } }
+    const open = this.wingK, h = hash2(c, r);
+    const th = U * .022 + g.cw * .35;
+    if (bd < th) {
+      const b = bi * 4; this.tint(190, 215, 255);
+      g.put(c, r, lineChar(this.bn[b + 2] - this.bn[b], this.bn[b + 3] - this.bn[b + 1]), this.tr, this.tg, this.tb, .95); return;
+    }
+    if (ed < g.cw * .85) { g.put(c, r, '+', 84, 214, 255, .85); return; }
+    if (open > .5) { const e2 = clamp(ed / (U * .35), 0, 1); this.tint(70 + 30 * h + 40 * e2, 60 + 30 * h, 150 + 40 * h); g.put(c, r, h < .45 ? ':' : (h < .8 ? '+' : '%'), this.tr, this.tg, this.tb, .7 + .2 * h); }
+    else { const l = .45 + .3 * h; this.tint(50 * l + 28, 66 * l + 38, 130 * l + 40); g.put(c, r, h < .4 ? 'x' : h < .75 ? '%' : '#', this.tr, this.tg, this.tb, .92); }
+  }
+  drawWings() {
+    const V = this.V, U = this.U, w = V.wing, cl = clamp(V.cloak, 0, 1.05);
+    this.wingK = w;
+    const amp = V.flap * (.25 + .75 * clamp(w, 0, 1)), ph = this.flapPh;
+    if (!this.bn) this.bn = new Float32Array(20);
+    for (let s = -1; s <= 1; s += 2) {
+      const xs = this.wx, ys = this.wy;
+      // gather 5 points
+      const pts = [];
+      for (let p = 0; p < 5; p++) {
+        let lx = lerp(lerp(WA[p * 2], WB[p * 2], cl), WO[p * 2], w), ly = lerp(lerp(WA[p * 2 + 1], WB[p * 2 + 1], cl), WO[p * 2 + 1], w);
+        if (amp > .01) { const f = Math.sin(ph - p * .55); ly += f * amp * (p === 0 ? .32 : .62); lx += f * amp * .1; }
+        pts.push(lx, ly);
+      }
+      const L = (i, ox) => { this.W2(s * pts[i * 2], pts[i * 2 + 1]); return [this._x, this._y]; };
+      this.W2(s * .17, .15); const S = [this._x, this._y];
+      this.W2(s * .13, -.34); const Hp = [this._x, this._y];
+      const wr = L(0), t1 = L(1), t2 = L(2), t3 = L(3), t4 = L(4);
+      const sc = (a, b) => { const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2; const q = .22 + .3 * w; return [mx + (S[0] - mx) * q, my + (S[1] - my) * q]; };
+      const m12 = sc(t1, t2), m23 = sc(t2, t3), m34 = sc(t3, t4);
+      const arr = [S, wr, t1, m12, t2, m23, t3, m34, t4, Hp];
+      for (let i = 0; i < 10; i++) { xs[i] = arr[i][0]; ys[i] = arr[i][1]; }
+      const bn = this.bn; const seg = [[S, wr], [wr, t1], [wr, t2], [wr, t3], [wr, t4]];
+      for (let i = 0; i < 5; i++) { bn[i * 4] = seg[i][0][0]; bn[i * 4 + 1] = seg[i][0][1]; bn[i * 4 + 2] = seg[i][1][0]; bn[i * 4 + 3] = seg[i][1][1]; }
+      this.g.poly(xs, ys, 10, this.wingShade, this);
+      // thumb claw
+      this.g.put(Math.floor(wr[0] / this.g.cw), Math.floor(wr[1] / this.g.chh), 'o', 200, 220, 255, .95);
+    }
+    // eye slit when head wrapped
+    if (cl > .55) {
+      const a = clamp((cl - .5) / .4, 0, 1);
+      this.F(0, -.04); this.g.ellipse(this._x, this._y, .33 * U, .105 * U * a + .001, this.fr, function (c, r) { this.g.put(c, r, '@', 12, 14, 34, 1); }, this);
+    }
+  }
+  shadeEye(c, r, u, v, d) {
+    const V = this.V, s = this.eS, w = -s * u;
+    const th = -1 + 2 * V.lid + .9 * V.brow * -w * .9;
+    if (v < th) return;
+    const px = u - this.lookX * .42, py = v - this.lookY * .4;
+    const pr = V.pupil * .66;
+    if (px * px + py * py < pr * pr) { this.g.put(c, r, ' ', 0, 0, 0, 1); return; }
+    const hx = px + .38, hy = py + .42;
+    if (hx * hx + hy * hy < .1) { this.g.put(c, r, '*', 255, 255, 255, 1.2); return; }
+    const k = d;
+    this.g.put(c, r, k > .8 ? '0' : k > .45 ? 'O' : 'o', lerp(255, 255, k), lerp(226, 150, k), lerp(150, 40, k), 1.1);
+  }
+  eyeArc(cx, cy, rx, arc, a) {
+    const g = this.g, U = this.U, cw = g.cw, n = Math.max(6, Math.ceil(rx * 2 / cw * 1.4));
+    const cs = Math.cos(this.fr), sn = Math.sin(this.fr);
+    for (let i = 0; i <= n; i++) {
+      const t = i / n * 2 - 1, lx = t * rx, ly = -arc * rx * .85 * (1 - t * t) + arc * rx * .3;
+      const x = cx + lx * cs - ly * sn, y = cy + lx * sn + ly * cs;
+      const dy = -arc * rx * .85 * (-2 * t) / rx; // slope
+      g.put(Math.floor(x / g.cw), Math.floor(y / g.chh), Math.abs(dy) < .5 ? '-' : (dy * arc > 0 ? '/' : '\\'), 255, 200, 90, a * 1.1);
+      if (Math.abs(t) < .85) g.put(Math.floor(x / g.cw), Math.floor(y / g.chh) + (arc > 0 ? 0 : 0), '=', 255, 190, 80, a * .5);
+    }
+  }
+  brow(ax, ay, bx, by, a) {
+    const g = this.g, cw = g.cw, chh = g.chh;
+    const c0 = Math.floor(Math.min(ax, bx) / cw) - 1, c1 = Math.floor(Math.max(ax, bx) / cw) + 1, r0 = Math.floor(Math.min(ay, by) / chh) - 1, r1 = Math.floor(Math.max(ay, by) / chh) + 1;
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const d = sdSeg((c + .5) * cw, (r + .5) * chh, ax, ay, bx, by);
+      if (d < chh * .5) g.put(c, r, lineChar(bx - ax, by - ay), 150, 175, 245, a);
+    }
+  }
+  drawFace() {
+    const g = this.g, U = this.U, V = this.V;
+    const openE = V.eyeOpen * this.blink, sz = V.eyeSize;
+    const rx = .125 * U * sz, ry = .15 * U * sz;
+    for (let s = -1; s <= 1; s += 2) {
+      this.F(s * .17 + this.lookX * .035, -.04 + this.lookY * .03 - (sz - 1) * .01); const cx = this._x, cy = this._y;
+      this.eS = s;
+      if (openE > .16) {
+        const ryy = ry * (.25 + .75 * clamp(openE, 0, 1.1));
+        g.ellipse(cx, cy, rx, ryy, this.fr, this.shadeEye, this);
+      }
+      const aa = smooth(.2, .06, openE);
+      if (aa > .02) { const arc = Math.abs(V.arc) > .15 ? V.arc : -.35; this.eyeArc(cx, cy, rx * 1.05, arc, aa); }
+      // brows
+      const bz = Math.abs(V.brow) > .3 || sz > 1.3;
+      if (bz && this.V.cloak < .6) {
+        const lift = .13 + (sz - 1) * .12; const inner = -V.brow * .06, outer = V.brow * .03;
+        this.F(s * .145 - s * .1, -.04 - lift + inner); const ax = this._x, ay = this._y;
+        this.F(s * .145 + s * .1, -.04 - lift + outer); this.brow(ax, ay, this._x, this._y, clamp(Math.abs(V.brow) * 1.2 + (sz - 1) * 1.2, 0, .95));
+      }
+      // blush
+      if (V.blush > .05 && V.cloak < .85) {
+        this.F(s * .225, .095); g.ellipse(this._x, this._y, .08 * U, .045 * U, this.fr, function (c, r, u, v, d) { g.put(c, r, d > .6 ? ':' : '%', 255, 100, 140, (1 - d * .7) * V.blush * .85); }, this);
+      }
+    }
+    if (V.cloak > .8) return;
+    // nose
+    this.F(0, .068); g.ellipse(this._x, this._y, .034 * U, .026 * U, this.fr, function (c, r, u, v, d) { g.put(c, r, 'w', 255, 126, 160, 1); }, this);
+    // mouth
+    this.F(0 + this.lookX * .01, .17); const mx = this._x, my = this._y;
+    const op = clamp(V.mouth, 0, 1.1);
+    if (op > .08 && V.cloak < .6) {
+      const rxm = (.05 + .035 * op) * U, rym = (.015 + .085 * op) * U;
+      g.ellipse(mx, my + rym * .5, rxm, rym, this.fr, function (c, r, u, v, d) {
+        if (d > .78) g.put(c, r, '0', 255, 120, 160, 1); else if (v > .25) g.put(c, r, '@', 235, 80, 120, .95); else g.put(c, r, ' ', 0, 0, 0, 1);
+      }, this);
+      if (op > .2) { this.F(-.04, .152); g.put(Math.floor(this._x / g.cw), Math.floor(this._y / g.chh), 'v', 255, 255, 240, 1); this.F(.04, .152); g.put(Math.floor(this._x / g.cw), Math.floor(this._y / g.chh), 'v', 255, 255, 240, 1); }
+    } else if (V.cloak < .6) {
+      const sm = V.smile, w = (.075 + .025 * Math.abs(sm)) * U, n = Math.max(5, Math.ceil(w * 2 / g.cw * 1.5));
+      for (let i = 0; i <= n; i++) {
+        const t = i / n * 2 - 1, lx = t * w, ly = sm * .045 * U * (1 - t * t);
+        const cs = Math.cos(this.fr), sn = Math.sin(this.fr), x = mx + lx * cs - ly * sn, y = my + lx * sn + ly * cs;
+        const slope = -sm * .045 * U * (-2 * t) / w * (sm >= 0 ? 1 : 1);
+        g.put(Math.floor(x / g.cw), Math.floor(y / g.chh), Math.abs(slope) < .35 ? '_' : (slope > 0 ? '\\' : '/'), 255, 150, 180, .95);
+      }
+      if (sm > .5) { this.F(-.055, .175); g.put(Math.floor(this._x / g.cw), Math.floor(this._y / g.chh), 'v', 255, 255, 240, .9); this.F(.055, .175); g.put(Math.floor(this._x / g.cw), Math.floor(this._y / g.chh), 'v', 255, 255, 240, .9); }
+    }
+  }
+  drawCarry() {
+    if (this.carryT < .02) return;
+    const g = this.g, U = this.U;
+    this.W2(0, -.5); const x = this._x, y = this._y + U * .18;
+    const c = Math.round(x / g.cw) - 3, r = Math.round(y / g.chh);
+    const a = this.carryT, fl = Math.sin(this.time * 6) > .6;
+    g.str(c, r, '+-----+', 255, 176, 64, a); g.str(c, r + 1, fl ? '|\\_/ |' : '|\\ /|', 255, 214, 130, a); if (!fl) { /* keep width */ } g.str(c, r + 2, '+-----+', 255, 176, 64, a);
+    if (fl) g.put(c + 6, r + 1, '|', 255, 214, 130, a);
+  }
+  drawParts() {
+    const g = this.g;
+    for (const p of this.parts) { if (!p.a) continue; const f = 1 - p.l / p.m; g.put(Math.floor(p.x / g.cw), Math.floor(p.y / g.chh), p.ch, p.c[0], p.c[1], p.c[2], Math.min(1.1, f * 1.6)); }
+  }
+}
+
+// ---------- Rejected sketches (kept live and small) ----------
+class SketchBase extends Surf {
+  constructor(cv) { super(cv, { fs: () => 6.6, bloom: .55, bg: () => '#070b12' }); this.mx = -1; this.my = -1; this.near = 0; }
+  lamp() {
+    const g = this.g, rc = this.rc; let x = g.w * .5, y = g.h * .5, has = false;
+    if (rc && GP.has && GP.x > rc.left - 30 && GP.x < rc.right + 30 && GP.y > rc.top - 30 && GP.y < rc.bottom + 30) { x = GP.x - rc.left; y = GP.y - rc.top; has = true; }
+    this.mx += (x - (this.mx < 0 ? x : this.mx)) * .12; this.my += (y - (this.my < 0 ? y : this.my)) * .12;
+    this.mx = this.mx < 0 ? x : this.mx; this.my = this.my < 0 ? y : this.my; this.has = has;
+    this.near += ((has ? 1 : 0) - this.near) * .06;
+  }
+  sim(dt) { this.t += dt; this.lamp(); }
+}
+class MothSketch extends SketchBase {
+  draw() {
+    const g = this.g, t = this.t; g.clear();
+    const lx = this.mx, ly = this.my;
+    g.ellipse(lx, ly, 46, 34, 0, function (c, r, u, v, d) { g.put(c, r, d < .25 ? '@' : d < .5 ? 'o' : d < .75 ? ':' : '.', 255, 190, 90, (1 - d) * .8); }, this);
+    const a = t * 2.3, rad = 26 + Math.sin(t * .8) * 7;
+    const x = lx + Math.cos(a) * rad * 1.6, y = ly + Math.sin(a) * rad * .8;
+    const w = .2 + .8 * Math.abs(Math.cos(t * 17));
+    const sh = function (c, r, u, v, d) { g.put(c, r, d > .8 ? '+' : (hash2(c, r) < .5 ? '%' : '#'), 232, 214, 180, .95); };
+    g.ellipse(x - 9 * w, y - 4, 10 * w + 1, 8, -.3, sh, this); g.ellipse(x + 9 * w, y - 4, 10 * w + 1, 8, .3, sh, this);
+    g.ellipse(x, y, 3, 8, 0, function (c, r) { g.put(c, r, 'H', 150, 130, 110, 1); }, this);
+    g.put(Math.floor((x - 5) / g.cw), Math.floor((y - 12) / g.chh), '\\', 232, 214, 180, 1); g.put(Math.floor((x + 5) / g.cw), Math.floor((y - 12) / g.chh), '/', 232, 214, 180, 1);
+  }
+}
+class CrabSketch extends SketchBase {
+  draw() {
+    const g = this.g, t = this.t; g.clear();
+    const dir = Math.cos(t * .5) >= 0 ? 1 : -1;
+    const x = g.w * .5 + Math.sin(t * .5) * g.w * .22, y = g.h * .62;
+    const scared = Math.hypot(this.mx - x, this.my - y) < 60 && this.has;
+    const bx = x + dir * 24;
+    // legs
+    for (let i = 0; i < 3; i++) for (const s of [-1, 1]) {
+      const ph = Math.sin(t * 9 + i * 2 + (s > 0 ? 1.5 : 0)) * 3, lx = bx + s * (9 + i * 3), ly = y + 8 + ph * .4;
+      g.put(Math.floor(lx / g.cw), Math.floor(ly / g.chh), s > 0 ? '\\' : '/', 255, 130, 90, .95); g.put(Math.floor((lx + s * 6) / g.cw), Math.floor((ly + 8) / g.chh), s > 0 ? '\\' : '/', 255, 130, 90, .8);
+    }
+    g.ellipse(bx, y, 19, 11, 0, function (c, r, u, v, d) { g.put(c, r, d > .8 ? 'O' : '0', 255, 120 + 40 * (1 - d), 90, 1); }, this);
+    // shell
+    const sc = scared ? 1.2 : 1;
+    g.ellipse(x, y - 8, 28 * sc, 22 * sc, 0, function (c, r, u, v, d) {
+      const sp = (Math.atan2(v, u) + d * 7) % (Math.PI * .8); const st = sp < .45;
+      g.put(c, r, st ? '%' : '#', st ? 120 : 70, st ? 190 : 110, st ? 235 : 170, 1);
+    }, this);
+    // dish on shell
+    for (let i = -4; i <= 4; i++) g.put(Math.floor((x + i * 3.6) / g.cw), Math.floor((y - 34 + Math.abs(i) * 1.4) / g.chh), i === 0 ? '|' : '_', 84, 214, 255, 1);
+    g.put(Math.floor(x / g.cw), Math.floor((y - 31) / g.chh), '|', 84, 214, 255, 1);
+    // eyes
+    if (!scared) for (const s of [-4, 6]) {
+      const ex = bx + s + dir * 2, ey = y - 18; const dx = this.mx - ex, dy = this.my - ey, d = Math.hypot(dx, dy) || 1;
+      g.put(Math.floor(ex / g.cw), Math.floor((ey + 8) / g.chh), '|', 255, 130, 90, 1); g.put(Math.floor(ex / g.cw), Math.floor((ey + 3) / g.chh), '|', 255, 130, 90, 1);
+      g.put(Math.floor((ex + dx / d * 1.5) / g.cw), Math.floor(ey / g.chh), 'O', 255, 240, 200, 1);
+    }
+    // claws
+    g.put(Math.floor((bx + dir * 20) / g.cw), Math.floor((y - 2) / g.chh), 'V', 255, 130, 90, 1);
+  }
+}
+class SproutSketch extends SketchBase {
+  draw() {
+    const g = this.g, t = this.t; g.clear();
+    const bx = g.w * .5, by = g.h - 6, H = g.h * .72;
+    const tx = this.has ? clamp((this.mx - bx) / g.w * 2, -1, 1) : Math.sin(t * .7) * .3;
+    const open = this.has ? clamp(1 - Math.hypot(this.mx - bx, this.my - (by - H)) / (g.w * .5), .1, 1) : .25 + .1 * Math.sin(t);
+    this.tx = (this.tx || 0) + (tx - (this.tx || 0)) * .05; this.op = (this.op || 0) + (open - (this.op || 0)) * .06;
+    let px = bx, py = by;
+    for (let i = 0; i <= 26; i++) {
+      const s = i / 26; px = bx + this.tx * s * s * H * .55; py = by - s * H;
+      g.put(Math.floor(px / g.cw), Math.floor(py / g.chh), '|', 90, 190, 120, 1);
+      if (i === 8 || i === 15) {
+        const side = i === 8 ? -1 : 1, lw = 18 + this.op * 10;
+        g.ellipse(px + side * lw * .8, py, lw, 6, side * -.3 + this.tx * .2, function (c, r, u, v, d) { g.put(c, r, d > .85 ? '+' : ':', 110, 220, 150, .95); }, this);
+      }
+    }
+    const rad = 10 + this.op * 22, n = 7;
+    for (let i = 0; i < n; i++) {
+      const a = i / n * TAU + t * .2 * this.op;
+      g.ellipse(px + Math.cos(a) * rad * .8, py + Math.sin(a) * rad * .5, rad * .55, 5, a, function (c, r, u, v, d) { g.put(c, r, d > .8 ? 'o' : '*', 255, 130 + 60 * (1 - d), 160, .95); }, this);
+    }
+    g.ellipse(px, py, 7, 5, 0, function (c, r) { g.put(c, r, '@', 255, 200, 80, 1); }, this);
+  }
+}
+
+// ---------- page wiring ----------
+const $ = s => document.querySelector(s), $$ = s => Array.from(document.querySelectorAll(s));
+const ticks = [];
+NOW = performance.now() / 1000;
+const stageEl = $('#stage');
+const main = new Vesper(stageEl, {
+  id: 'main', page: true, interactive: true, bloom: .5,
+  env: { wire: true, mask: true, stars: true, blips: true, dots: true }, perch: [.5, 0],
+  fs: w => clamp(w / 64, 8, 10.4), fit: (w, h) => Math.min(w / 3.5, h / 3.2)
+});
+// live region (throttled, polite)
+const live = $('#live'), chip = $('#moodChip');
+let lastAnn = -1e9, pending = null, annTimer = 0, lastSaid = '';
+function flushAnn() { annTimer = 0; if (pending && pending !== lastSaid) { live.textContent = SAY[pending]; lastSaid = pending; lastAnn = performance.now(); } pending = null; }
+function announce(m) {
+  pending = m; const dt = performance.now() - lastAnn;
+  if (dt > 4500) flushAnn(); else if (!annTimer) annTimer = setTimeout(flushAnn, 4500 - dt);
+}
+main.onMood = m => { chip.textContent = m; chip.dataset.m = m; if (lastSaid || m !== 'content') announce(m); };
+main.secretCb = () => { const s = $('#secretNote'); s.classList.add('on'); setTimeout(() => s.classList.remove('on'), 5200); };
+
+// ---- global pointer, scroll, keys
+addEventListener('pointermove', e => {
+  const t = performance.now() / 1000; GP.vx = e.clientX - GP.x; GP.vy = e.clientY - GP.y; GP.x = e.clientX; GP.y = e.clientY; GP.has = true; GP.t = t; GP.touch = e.pointerType === 'touch';
+}, { passive: true });
+addEventListener('pointerdown', e => { GP.x = e.clientX; GP.y = e.clientY; GP.has = true; GP.t = performance.now() / 1000; main.activity(); }, { passive: true });
+let lastSY = scrollY;
+addEventListener('scroll', () => { main.activity(); }, { passive: true });
+addEventListener('keydown', e => {
+  main.activity();
+  const t = e.target; const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA');
+  if (typing || (e.key.length === 1)) { main.sound('key'); if (typing) { const r = t.getBoundingClientRect(); GP.x = r.left + r.width / 2; GP.y = r.top + r.height / 2; GP.t = performance.now() / 1000; } }
+});
+
+// ---- toolbar
+function feel(m) {
+  main.setSleep(false); if (main.mode === 'fly' && m !== 'delighted') main.startTask('return');
+  if (m === 'delighted') { main.react('delighted', 4.2); main.startTask('lap'); }
+  else if (m === 'focused') { main.busy(true); clearTimeout(feel.t); feel.t = setTimeout(() => main.busy(false), 5200); }
+  else if (m === 'asleep' || m === 'sleepy') main.react(m, 7);
+  else if (m === 'surprised') { main.react('surprised', 2.4); }
+  else main.react(m, 5.2);
+  const r = stageEl.getBoundingClientRect();
+  if (r.bottom < 120 || r.top > innerHeight - 120) $('#meet').scrollIntoView({ behavior: REDUCE ? 'auto' : 'smooth', block: 'start' });
+}
+$$('[data-feel]').forEach(b => b.addEventListener('click', () => feel(b.dataset.feel)));
+$('#bPet').addEventListener('click', () => { main.pet(2.6); if (REDUCE) main.react('delighted', 1e9); else if (main.petAcc > 2) { } });
+$('#bPoke').addEventListener('click', () => main.poke());
+$('#bPing').addEventListener('click', () => { pingCount++; clearTimeout(pingT); pingT = setTimeout(() => pingCount = 0, 2600); if (pingCount >= 5) { pingCount = 0; main.secret(); } else main.ping(false); });
+let pingCount = 0, pingT = 0;
+$('#bToss').addEventListener('click', () => { const g = main.g; main.toss(g.w * (.25 + Math.random() * .5), g.h * (.5 + Math.random() * .2)); });
+const bSleep = $('#bSleep');
+bSleep.addEventListener('click', () => { const on = !main.sleepLock; main.setSleep(on); bSleep.textContent = on ? 'Wake her' : 'Send to sleep'; bSleep.setAttribute('aria-pressed', on); });
+const box = $('#stageBox'), rest = $('#resting');
+$('#bMin').addEventListener('click', () => { box.classList.add('min'); rest.hidden = false; $('#bBack').focus(); live.textContent = 'Vesper is resting out of the way.'; });
+$('#bBack').addEventListener('click', () => { box.classList.remove('min'); rest.hidden = true; $('#bMin').focus(); main.react('curious', 1.6); live.textContent = 'Vesper is back.'; });
+
+// ---- playground
+const email = $('#email'), form = $('#form'), fmsg = $('#fmsg');
+function formError(msg) { fmsg.textContent = msg; fmsg.dataset.k = 'err'; email.setAttribute('aria-invalid', 'true'); main.setSleep(false); main.cancelChase(); main.react('concerned', 3.6); main.then('content', 1); document.dispatchEvent(new CustomEvent('carrier:error')); }
+function formOk() { fmsg.textContent = 'Delivered. Check your inbox.'; fmsg.dataset.k = 'ok'; email.removeAttribute('aria-invalid'); main.setSleep(false); main.celebrate(); }
+let loadT = 0;
+function formLoad(then) { fmsg.textContent = 'Sending...'; fmsg.dataset.k = ''; main.setSleep(false); main.busy(true); clearTimeout(loadT); loadT = setTimeout(() => { main.busy(false); then(); }, 2200); }
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.value.trim())) { formError('That email looks incomplete. Try name@example.com.'); email.focus(); return; }
+  formLoad(formOk);
+});
+email.addEventListener('input', () => { fmsg.textContent = ''; main.activity(); });
+$('#pErr').addEventListener('click', () => formError('Simulated error: that email looks incomplete.'));
+$('#pOk').addEventListener('click', () => { formOk(); });
+const pLoad = $('#pLoad');
+pLoad.addEventListener('click', () => {
+  const on = pLoad.getAttribute('aria-pressed') !== 'true'; pLoad.setAttribute('aria-pressed', on); pLoad.textContent = on ? 'Stop loading' : 'Loading';
+  main.setSleep(false); main.busy(on); fmsg.textContent = on ? 'Sending...' : ''; fmsg.dataset.k = '';
+});
+const todNote = $('#todNote');
+function setTod(mode) {
+  TOD.mode = mode; main.setSleep(false);
+  if (mode === 'night') { main.idle = 0; main.react('curious', 1.2); main.then('delighted', 1.6); todNote.textContent = 'Night: she is awake, stars out, blips drift in.'; }
+  else if (mode === 'day') { main.react('sleepy', 2); main.idle = 17; todNote.textContent = 'Day: she gets drowsy fast. Hold still for a moment.'; }
+  else todNote.textContent = 'Using your clock (' + new Date().getHours() + ':00).';
+  $$('[data-tod]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tod === mode));
+}
+$$('[data-tod]').forEach(b => b.addEventListener('click', () => setTod(b.dataset.tod)));
+let idleT = 0;
+$('#pIdle').addEventListener('click', () => {
+  main.setSleep(false); main.ovr = null; const n = isNight(); main.idle = n ? 80 : 18; main.react('sleepy', .01); todNote.textContent = 'Idle test: stay still, she nods off in a few seconds.';
+  clearTimeout(idleT); idleT = setTimeout(() => { main.idle = n ? 151 : 39; }, 3500);
+});
+if (isNight()) todNote.textContent = 'Your clock says night: she starts awake and a little restless.'; else todNote.textContent = 'Your clock says day: if you stop moving she will nap.';
+
+// ---- emotion tiles
+const tiles = $$('canvas[data-m]').map(cv => {
+  const m = cv.dataset.m;
+  return new Vesper(cv, { id: 't-' + m, locked: m, alive: true, canFly: false, bloom: .45, env: { wire: true }, perch: [.5, 0], fs: () => 5.6, fit: (w, h) => Math.min(w / (['delighted', 'surprised', 'proud'].includes(m) ? 3.3 : 2.1), h / 2.1) });
+});
+
+// ---- in the wild
+const wNav = new Vesper($('#wNav'), { id: 'nav', bg: null, bloom: .5, canFly: false, env: { wire: true }, perch: [.5, 0], perchY: 64, fs: () => 6, fit: (w, h) => 44 });
+const w404 = new Vesper($('#w404'), { id: '404', bloom: .5, env: { wire: true, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 3.2, h / 3.3), canFly: false, bg: () => '#080c14' });
+const wLoad = new Vesper($('#wLoad'), { id: 'load', bloom: .5, env: { wire: false, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 4.2, h / 3.8), bg: () => '#080c14' });
+const wWin = new Vesper($('#wWin'), { id: 'win', bloom: .5, env: { wire: true, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 3.4, h / 3.3), bg: () => '#080c14' });
+const wFoot = new Vesper($('#wFoot'), { id: 'foot', bg: null, bloom: .45, canFly: false, napper: true, env: { wire: true }, perch: [.5, 0], fs: () => 6.2, fit: (w, h) => h / 2.6 });
+w404.baseMood = 'concerned'; wLoad.baseMood = 'focused'; wWin.baseMood = 'content'; wNav.baseMood = 'content';
+wFoot.sleepLock = true; wFoot.idle = 999;
+w404.react('concerned', 1e9, true); wLoad.carry = 1; wLoad.carryT = 1; wWin.carry = 1; wWin.carryT = 1;
+let t404 = 0;
+ticks.push(dt => {
+  if (w404.on) { t404 -= dt; if (t404 <= 0 && !w404.found) { t404 = 3.4; w404.ping(false); } }
+});
+w404.heardCb = big => { };
+$('#b404').addEventListener('click', () => {
+  w404.found = true; w404.ping(true); const msg = $('#m404'); msg.textContent = 'Echo found: /home';
+  w404.then('delighted', 1.8); w404.then('concerned', 1e9);
+  setTimeout(() => { w404.found = false; t404 = 1; msg.textContent = 'Nothing back from /oops'; }, 3600);
+});
+// loading
+let progT = 0; const bar = $('#bar'), pct = $('#pct'); let prog = 0;
+function setProg(p) { const n = 30, f = Math.round(p * n); bar.textContent = '['.concat('#'.repeat(f), '.'.repeat(n - f), ']'); pct.textContent = Math.round(p * 100) + '%'; }
+setProg(.62);
+ticks.push(dt => {
+  if (!wLoad.on) return;
+  if (!wLoad.started && !REDUCE) { wLoad.started = true; wLoad.react('focused', 1e9); wLoad.startTask('orbit'); }
+  prog = (prog + dt / 7) % 1.0; if (REDUCE) return; setProg(prog);
+});
+// signup
+$('#bWin').addEventListener('click', () => {
+  wWin.celebrate(); const m = $('#mWin'); m.textContent = 'You are in. Check your inbox.'; m.classList.add('on');
+  setTimeout(() => { m.classList.remove('on'); m.textContent = 'Join the list'; wWin.carry = 1; }, 4800);
+});
+// footer
+const footCv = $('#wFoot');
+footCv.parentElement.addEventListener('pointerenter', () => { wFoot.sound('key'); });
+footCv.parentElement.addEventListener('click', () => { wFoot.react('sleepy', 1.5); wFoot.sound('poke'); $('#mFoot').textContent = 'mm. five more minutes.'; setTimeout(() => $('#mFoot').textContent = 'Shh. She is asleep.', 2800); });
+
+// ---- sketches
+const sketches = [new MothSketch($('#sMoth')), new CrabSketch($('#sCrab')), new SproutSketch($('#sSprout'))];
+
+// ---- entrance on first view
+let entered = false;
+ticks.push(dt => {
+  if (entered || !main.on || REDUCE) return; entered = true;
+  const g = main.g; main.mode = 'fly'; main.bx = -main.U * .6; main.by = g.h * .5; main.vx = 360 * main.k; main.vy = -160 * main.k; main.ang = Math.PI; main.angT = Math.PI; main.task = 'return'; main.taskT = 0;
+  main.W.wing = .9; main.V.wing = .9; main.V.flap = 1;
+  main.ovr = { m: 'curious', until: main.time + 2.2 };
+});
+
+// ---- the shared loop
+const all = surfs;
+if (!REDUCE) {
+  let last = performance.now(), acc = 0, lastR = 0, lsy = scrollY;
+  const frame = now => {
+    requestAnimationFrame(frame);
+    if (document.hidden) { last = now; return; }
+    const dt = Math.min(.1, (now - last) / 1000); last = now; acc += dt;
+    if (now - lastR < 30) return; lastR = now;
+    NOW = now / 1000;
+    const n = Math.min(4, Math.floor(acc / STEP)); acc -= n * STEP; if (acc > STEP * 4) acc = 0;
+    const sy = scrollY; SC.v = SC.v * .8 + ((sy - lsy) / Math.max(dt, .016)) * .2; lsy = sy; SC.y = sy;
+    for (let i = 0; i < ticks.length; i++) ticks[i](n * STEP);
+    for (let i = 0; i < all.length; i++) {
+      const s = all[i]; if (!s.on) continue;
+      s.pre(); for (let k = 0; k < n; k++) s.sim(STEP);
+      s.draw(); s.g.present();
+    }
+  };
+  requestAnimationFrame(frame);
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { for (const s of surfs) s.relayout(); });
+// reduced motion: still poses re-render when something changes
+if (REDUCE) {
+  setProg(.62); $('#ctl-motion').hidden = false;
+  addEventListener('resize', () => { for (const s of surfs) if (s.ready) s.still(); });
+}
+window.Vesper = { react: m => main.react(m, REDUCE ? 1e9 : 3), celebrate: () => main.celebrate(), busy: b => main.busy(b), error: () => main.react('concerned', 3.5), success: () => main.celebrate() };
+document.addEventListener('carrier:mood', e => main.react(e.detail, 3));
+
+
+})();
+</script>
+</body>
+</html>
