@@ -380,7 +380,8 @@ const SLEEP = { v: 0, t: 0 };
 const WHALE = { on: false, x: 0, y: 0, r: 0 };
 const PT = { x: -9999, y: -9999, in: false, down: false, speed: 0, lt: 0, touch: false };
 const scenes = [];
-// Under reduced motion nothing steps, so a moving pointer asks the scenes it is over for one repaint (throttled, no rAF).
+// Pointer speed and button state are page-wide; where the pointer is comes from each surface (pointer: 'window').
+// Under reduced motion nothing steps, so movement asks the scenes for one throttled repaint. Draw-only scenes get theirs from the engine.
 let hoverTimer = 0;
 function hoverSoon() { if (hoverTimer) return; hoverTimer = setTimeout(() => { hoverTimer = 0; for (const s of scenes) s.hoverRefresh(); }, 60); }
 addEventListener('pointermove', e => {
@@ -389,22 +390,17 @@ addEventListener('pointermove', e => {
   PT.x = e.clientX; PT.y = e.clientY; PT.lt = e.timeStamp; PT.in = true; PT.touch = e.pointerType === 'touch';
   if (GM.reducedMotion) hoverSoon();
 }, { passive: true });
-document.documentElement.addEventListener('mouseleave', () => { PT.in = false; if (GM.reducedMotion) hoverSoon(); });
+// the engine keeps "inside" until the next move, so clear it when the pointer leaves the page or a touch ends
+function leaveAll() { PT.in = false; for (const s of scenes) if (s.v) s.v.pointer.inside = false; if (GM.reducedMotion) hoverSoon(); }
+document.documentElement.addEventListener('mouseleave', leaveAll);
 
-// ---------- page-wide per-frame state (the engine has one loop, so this rides on whichever surface steps first) ----------
-let tickAt = performance.now();
-function tick() {
-  const now = performance.now(); if (now - tickAt < 4) return;
-  const dt = Math.min(0.1, (now - tickAt) / 1000); tickAt = now;
+// ---------- page-wide per-frame state (never runs under reduced motion; the sleep toggle jumps to its target there) ----------
+GM.onFrame(dt => {
   PT.speed *= Math.exp(-dt * 5);
   SLEEP.v += (SLEEP.t - SLEEP.v) * Math.min(1, dt * 1.6);
-}
-// The pointer is tracked on the window (the hero canvas sits under its own copy), then placed in each surface's own units.
-function track(s) {
-  const r = s.rect = s.canvas.getBoundingClientRect();
-  s.px = (PT.x - r.left) / s.cw; s.py = (PT.y - r.top) / s.cw;
-  s.pin = PT.in && PT.x >= r.left && PT.x <= r.right && PT.y >= r.top && PT.y <= r.bottom;
-}
+});
+// the whale and the dock read the canvas rect
+function track(s) { s.rect = s.canvas.getBoundingClientRect(); }
 
 // ---------- Scene: one Glyphmotion surface plus the behavior that lives on it ----------
 class Scene {
@@ -418,9 +414,9 @@ class Scene {
     const o = this.so;
     this.v = GM.surface(this.cv, {
       fontSize: o.fs || (w => clamp(w / (o.fsDiv || 44), o.fsMin || 7, o.fsMax || 10)),
-      bloom: o.bloom == null ? 0.5 : o.bloom, bloomScale: o.bdiv || 5, background: o.bg || '#040a14', transparent: !!o.alpha,
+      bloom: o.bloom == null ? 0.5 : o.bloom, bloomScale: o.bdiv || 5, background: o.bg || '#040a14', transparent: !!o.alpha, pointer: 'window',
       setup: s => this.setup(s),
-      step: () => { tick(); track(this.v); if (!this.shown) { this.shown = true; if (this.onFirstShow) this.onFirstShow(); } this.sim(STEP); },
+      step: () => { track(this.v); if (!this.shown) { this.shown = true; if (this.onFirstShow) this.onFirstShow(); } this.sim(STEP); },
       draw: s => { track(s); this.draw(); },
       still: () => this.rest(),
     });
@@ -445,18 +441,23 @@ class Scene {
   }
   hoverRefresh() {
     const v = this.v; if (!this.hover || !v || !v.visible || !this.key) return;
-    track(v); const was = this.wasIn; this.wasIn = v.pin;
-    if (!v.pin && !was) return;
-    if (this.hover === 'draw') v.invalidate(); else this.poke(v.pin ? (was ? 0.12 : 0.5) : 1.5);
+    track(v); const was = this.wasIn, now = v.pointer.inside; this.wasIn = now;
+    if (!now && !was) return;
+    if (this.hover === 'draw') { if (!now) v.invalidate(); } // the engine repaints while the pointer moves over the canvas; this covers leaving
+    else this.poke(now ? (was ? 0.12 : 0.5) : 1.5);
   }
   onLayout() {} sim() {} draw() {}
 }
 addEventListener('pointerdown', e => {
   PT.x = e.clientX; PT.y = e.clientY; PT.in = true; PT.down = true; PT.touch = e.pointerType === 'touch';
   if (e.target.closest && e.target.closest('button,a,.panel,.mpanel')) return;
-  for (const s of scenes) { if (!s.vis || !s.ready || !s.onDown) continue; track(s.v); if (s.v.pin) s.onDown(s.v.px, s.v.py); }
+  for (const s of scenes) {
+    if (!s.vis || !s.ready || !s.onDown) continue;
+    track(s.v); const r = s.v.rect; // this listener runs before the engine's, so test the rect here
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) s.onDown((e.clientX - r.left) / s.v.cw, (e.clientY - r.top) / s.v.cw);
+  }
 });
-const upAll = () => { PT.down = false; for (const s of scenes) if (s.onUp && s.ready) s.onUp(); if (PT.touch) setTimeout(() => { if (!PT.down) PT.in = false; }, 900); };
+const upAll = () => { PT.down = false; for (const s of scenes) if (s.onUp && s.ready) s.onUp(); if (PT.touch) setTimeout(() => { if (!PT.down) leaveAll(); }, 900); };
 addEventListener('pointerup', upAll); addEventListener('pointercancel', upAll);
 
 // ---------- flocking helpers ----------
@@ -599,7 +600,7 @@ class Wordmark extends Scene {
   scatter() { const v = this.v; for (let i = 0; i < this.n; i++) { const a = Math.random() * 6.28, s = rnd(30, 70); this.vx[i] += Math.cos(a) * s; this.vy[i] += Math.sin(a) * s; } this.poke(0.25); }
   sim(dt) {
     const v = this.v, n = this.n, T = this.T += dt, sl = SLEEP.v;
-    const hov = v.pin ? 1 : 0; this.attn += ((hov || this.force > 0 ? 1 : 0) - this.attn) * Math.min(1, dt * 4); if (this.force > 0) this.force -= dt;
+    const hov = v.pointer.inside ? 1 : 0; this.attn += ((hov || this.force > 0 ? 1 : 0) - this.attn) * Math.min(1, dt * 4); if (this.force > 0) this.force -= dt;
     const loose = (0.4 + this.attn * 1.0) * (1 - sl * 0.6), K = 28, C = 7.2, R = this.o.R || 10, R2 = R * R;
     if (!GM.reducedMotion && this.formed) {
       this.nextWave -= dt; if (this.nextWave < 0) { this.nextWave = 4.5 + Math.random() * 3; this.wave = -3; }
@@ -610,8 +611,8 @@ class Wordmark extends Scene {
       if (this.dl[i] > 0) { this.dl[i] -= dt; continue; }
       const dx = this.tx[i] + Math.sin(T * 1.7 + this.ph[i]) * loose * 0.6 - this.x[i], dy = this.ty[i] + Math.cos(T * 2.1 + this.ph[i] * 1.3) * loose * 0.4 - this.y[i];
       let ax = K * dx - C * this.vx[i], ay = K * dy - C * this.vy[i];
-      if (v.pin) {
-        const px = this.x[i] - v.px, py = this.y[i] - v.py, d2 = px * px + py * py;
+      if (v.pointer.inside) {
+        const px = this.x[i] - v.pointer.x, py = this.y[i] - v.pointer.y, d2 = px * px + py * py;
         if (d2 < R2) { const d = Math.sqrt(d2) + 0.01, f = (1 - d / R); ax += px / d * f * f * 640; ay += py / d * f * f * 640; this.fl[i] = Math.max(this.fl[i], f); }
       }
       if (this.wave > -9) { const dd = Math.abs(this.tx[i] - this.wave); if (dd < 4.5) { this.fl[i] = Math.max(this.fl[i], 1 - dd / 4.5); ay -= (1 - dd / 4.5) * 90; } }
@@ -710,7 +711,7 @@ class Lagoon extends Scene {
   sim(dt) {
     const v = this.v, S = this.S, W = v.W, H = v.H, T = this.T += dt, sl = SLEEP.v, o = this.o; if (!S) return;
     if (this.holding) {
-      if (v.pin && PT.down && !this.holdExt) { this.hx = v.px; this.hy = v.py; }
+      if (v.pointer.inside && PT.down && !this.holdExt) { this.hx = v.pointer.x; this.hy = v.pointer.y; }
       this.ox += (this.hx - this.ox) * Math.min(1, dt * 6); this.oy += (this.hy - this.oy) * Math.min(1, dt * 6);
       this.charge = Math.min(1, this.charge + dt / 2.2);
       if (this.charge >= 1 && !this.fired) { this.bloom(1); this.holding = false; this.charge = 0; }
@@ -719,13 +720,13 @@ class Lagoon extends Scene {
     const ax = W * (o.night ? 0.5 + 0.25 * Math.sin(T * 0.11) : 0.68 + 0.1 * Math.sin(T * 0.1)), ay = H * (0.4 + 0.06 * Math.sin(T * 0.17 + 1.3)), Rm = Math.min(W, H * 1.4) * (o.night ? 0.16 : 0.15);
     flock(S, dt, { R: 15, sep: 2.6, sepW: 34, ali: 3.2, coh: 0.5, wand: 6 * slow, wall: 2.2, m: 9, x0: 0, x1: W, y0: 2, y1: this.groundY - 6, ax, ay, aw: 0, swirl: 0, T });
     for (let i = 0; i < S.n; i++) { const dx = ax - S.x[i], dy = (ay - S.y[i]) * 1.0, d = Math.hypot(dx, dy) + 0.01, rad = (d - Rm * (0.75 + 0.5 * ((i * 7) % 5) / 4)) * 0.9, tan = 11 * slow; S.vx[i] += (dx / d * rad - dy / d * tan) * dt * 1.4; S.vy[i] += (dy / d * rad + dx / d * tan) * dt * 1.4; }
-    const px = v.px, py = v.py, spook = smooth(0.9, 2.6, PT.speed / 1000);
+    const px = v.pointer.x, py = v.pointer.y, spook = smooth(0.9, 2.6, PT.speed / 1000);
     const wx = WHALE.on ? (WHALE.x - v.rect.left) / v.cw : 0, wy = WHALE.on ? (WHALE.y - v.rect.top) / v.cw : 0, wr = WHALE.r / v.cw;
     const b = this.bloomO; if (b.on) { b.t += dt; if (b.t > 5.5) b.on = false; }
     const br = b.t * 78;
     for (let i = 0; i < S.n; i++) {
       let lit = 0;
-      if (v.pin && !this.holding) {
+      if (v.pointer.inside && !this.holding) {
         const dx = S.x[i] - px, dy = S.y[i] - py, d = Math.hypot(dx, dy) + 0.01;
         if (spook > 0.06) { if (d < 28) { const f = (1 - d / 28) * spook * 190; S.vx[i] += dx / d * f * dt; S.vy[i] += dy / d * f * dt; } }
         else if (d < 52) { const k = (d - 9) * 0.55 * (1 - sl * 0.7); S.vx[i] -= dx / d * k * dt; S.vy[i] -= dy / d * k * dt; S.vx[i] += -dy / d * 7 * dt; S.vy[i] += dx / d * 7 * dt; }
@@ -756,7 +757,7 @@ class Lagoon extends Scene {
       const tgt = this.holding || ch > 0 ? { x: this.ox, y: this.oy } : null; if (tgt) { j.vx += (tgt.x - j.x) * 0.05 * ch * dt * 6; j.vy += (tgt.y - j.y) * 0.05 * ch * dt * 6; }
       if (j.y > this.groundY - 14) j.vy -= 14 * dt; if (j.y < H * 0.12) j.vy += 12 * dt;
       if (j.x < 10) j.vx += 8 * dt; if (j.x > W - 10) j.vx -= 8 * dt;
-      if (v.pin && PT.speed > 900) { const dx = j.x - px, dy = j.y - py, d = Math.hypot(dx, dy); if (d < 22) { j.vx += dx / d * 40 * dt * 6; j.vy += dy / d * 40 * dt * 6; } }
+      if (v.pointer.inside && PT.speed > 900) { const dx = j.x - px, dy = j.y - py, d = Math.hypot(dx, dy); if (d < 22) { j.vx += dx / d * 40 * dt * 6; j.vy += dy / d * 40 * dt * 6; } }
       if (WHALE.on) { const dx = (j.x - wx) * 0.5; if (Math.abs(dx) < wr + 8) j.vx += Math.sign(dx || 1) * 40 * dt; }
       if (b.on && Math.abs(Math.hypot(j.x - b.x, j.y - b.y) - br) < 8) j.fl = 1;
       j.fl *= Math.exp(-dt * 1.2);
@@ -782,7 +783,7 @@ class Lagoon extends Scene {
       }
     }
     // lantern
-    const L = { x: v.px, y: v.py, on: v.pin && !this.holding && PT.in };
+    const L = { x: v.pointer.x, y: v.pointer.y, on: v.pointer.inside && !this.holding };
     const orb = (this.holding || this.charge > 0) ? { x: this.ox, y: this.oy, c: this.charge } : null;
     if (L.on) this.halo(L.x, L.y, 20, 255, 205, 125, 0.5 * (1 - smooth(1, 2.6, PT.speed / 1000) * 0.6));
     if (orb) this.halo(orb.x, orb.y, 10 + orb.c * 34, 140, 255, 240, 0.35 + orb.c * 0.5);
@@ -891,7 +892,7 @@ class BtnFx extends Scene {
   sim_shelter(dt) {
     const S = this.S, v = this.v, tgtM = this.hov || this.foc ? -0.3 : 2.2 + Math.sin(this.T * 0.8) * 0.4, tgtSp = this.hov || this.foc ? 19 : 8;
     this.m += (tgtM - this.m) * Math.min(1, dt * 4); this.sp += (tgtSp - this.sp) * Math.min(1, dt * 3);
-    const shift = this.hov && v.pin ? clamp(v.px - this.cx, -this.bw * 0.3, this.bw * 0.3) * 0.5 : 0; this.cxo += (shift - this.cxo) * Math.min(1, dt * 4);
+    const shift = this.hov && v.pointer.inside ? clamp(v.pointer.x - this.cx, -this.bw * 0.3, this.bw * 0.3) * 0.5 : 0; this.cxo += (shift - this.cxo) * Math.min(1, dt * 4);
     this.kf = Math.min(1, this.kf + dt / 1.5); const kk = this.kf * this.kf;
     const K = 1.4 + 26 * kk, C = 1.5 + 6 * kk;
     this.cx += this.cxo - (this._lastShift || 0); this._lastShift = this.cxo;
@@ -923,7 +924,7 @@ class BtnFx extends Scene {
     if (s > 0 && Math.cos(this.jph) > 0) this.jvy -= (act ? 30 : 12) * dt;
     this.kh = Math.min(6, this.kh + dt * 3.2);
     let hx = this.bx + 8, hy = this.by + this.bh * 0.3;
-    if (act && v.pin) { hx += clamp(v.px - hx, -this.bw * 0.25, this.bw * 0.45) * 0.4; }
+    if (act && v.pointer.inside) { hx += clamp(v.pointer.x - hx, -this.bw * 0.25, this.bw * 0.45) * 0.4; }
     this.jvx += ((hx - this.jx) * this.kh - this.jvx * 2.6) * dt; this.jvy += ((hy - this.jy) * this.kh - this.jvy * 2.6) * dt;
     this.jx += this.jvx * dt; this.jy += this.jvy * dt; this.simBub(dt);
   }
@@ -945,7 +946,7 @@ class BtnFx extends Scene {
     const lineY = this.by + this.bh - 1.5;
     for (let i = 0; i < S.n; i++) {
       let tx = this.bx + (i + 0.5) / S.n * this.bw, ty = lineY + Math.sin(T * 1.4 + S.ph[i]) * 0.35;
-      if (act && v.pin) { const lead = clamp(v.px, this.bx, this.bx + this.bw); const w = 0.9; tx = lerp(tx, lead + (i - S.n / 2) * 0.9, w); ty = lineY + Math.sin(T * 5 - i * 0.6) * 1.1; }
+      if (act && v.pointer.inside) { const lead = clamp(v.pointer.x, this.bx, this.bx + this.bw); const w = 0.9; tx = lerp(tx, lead + (i - S.n / 2) * 0.9, w); ty = lineY + Math.sin(T * 5 - i * 0.6) * 1.1; }
       else if (foc) { tx = lerp(tx, this.cx + (i - S.n / 2) * 1.3, 0.55); ty = lineY + Math.sin(T * 3 - i * 0.5) * 0.9; }
       S.vx[i] += (22 * (tx - S.x[i]) - 6 * S.vx[i]) * dt; S.vy[i] += (22 * (ty - S.y[i]) - 6 * S.vy[i]) * dt;
       S.x[i] += S.vx[i] * dt; S.y[i] += S.vy[i] * dt;
@@ -967,7 +968,7 @@ class BtnFx extends Scene {
     const S = this.S, n = S.n, v = this.v, act = this.hov || this.foc, K = act ? 3.4 : 0.35;
     let sx = 0, sy = 0; for (let i = 0; i < n; i++) { sx += Math.cos(this.phi[i]); sy += Math.sin(this.phi[i]); } sx /= n; sy /= n;
     const R = Math.hypot(sx, sy), psi = Math.atan2(sy, sx); this.R = R;
-    const ox = act && v.pin ? clamp(v.px - this.cx, -5, 5) * 0.5 : 0, oy = act && v.pin ? clamp(v.py - this.cy, -4, 4) * 0.5 : 0;
+    const ox = act && v.pointer.inside ? clamp(v.pointer.x - this.cx, -5, 5) * 0.5 : 0, oy = act && v.pointer.inside ? clamp(v.pointer.y - this.cy, -4, 4) * 0.5 : 0;
     this.cxo += (ox - this.cxo) * Math.min(1, dt * 3); this.cyo += (oy - this.cyo) * Math.min(1, dt * 3);
     for (let i = 0; i < n; i++) {
       this.phi[i] += (this.om[i] + K * R * Math.sin(psi - this.phi[i])) * dt;
@@ -1174,7 +1175,7 @@ class GlyphFx extends Scene {
     for (let i = 0; i < S.n; i++) {
       const j = (i * 7) % m, tx = set.tx[j] + Math.sin(T * 2 + S.ph[i]) * 0.15, ty = set.ty[j];
       let ax = 40 * (tx - S.x[i]) - 9 * S.vx[i], ay = 40 * (ty - S.y[i]) - 9 * S.vy[i];
-      if (v.pin) { const dx = S.x[i] - v.px, dy = S.y[i] - v.py, d = Math.hypot(dx, dy) + 0.1; if (d < 5) { ax += dx / d * (1 - d / 5) * 260; ay += dy / d * (1 - d / 5) * 260; } }
+      if (v.pointer.inside) { const dx = S.x[i] - v.pointer.x, dy = S.y[i] - v.pointer.y, d = Math.hypot(dx, dy) + 0.1; if (d < 5) { ax += dx / d * (1 - d / 5) * 260; ay += dy / d * (1 - d / 5) * 260; } }
       S.vx[i] += ax * dt; S.vy[i] += ay * dt; S.x[i] += S.vx[i] * dt; S.y[i] += S.vy[i] * dt;
     }
   }
@@ -1235,7 +1236,7 @@ class Estuary extends Scene {
     const h = this.hours, Nf = nightF(h), Pf = perchF(h), Sf = sleepFn(h), Df = duskF(h);
     this.Nf = Nf; this.Df = Df; const sun = h >= 6 && h <= 18 ? Math.sin(Math.PI * (h - 6) / 12) : 0; this.L = clamp(sun + 0.1 * (1 - Nf), 0, 1); this.Lw = 0.22 + 0.78 * this.L;
     // pointer
-    const px = v.px, py = v.py, spook = smooth(0.9, 2.6, PT.speed / 1000), pin = v.pin;
+    const px = v.pointer.x, py = v.pointer.y, spook = smooth(0.9, 2.6, PT.speed / 1000), pin = v.pointer.inside;
     // birds
     const B = this.B, F = this.F;
     for (let i = 0; i < B.n; i++) B.free[i] = 1 - clamp((Pf - this.bth[i] * 0.7) / 0.3, 0, 1);
@@ -1363,7 +1364,7 @@ class Estuary extends Scene {
     // fireflies
     const FF = this.FF; if (Nf > 0.12) for (let i = 0; i < FF.n; i++) { const b = Math.pow(Math.max(0, Math.cos(FF.phi[i])), 6) * Nf; if (b > 0.1) { cellW(v, FF.x[i], FF.y[i], b > 0.6 ? 42 : 43, 210 * b + 40, 255 * b, 120 * b); if (b > 0.7) { cellW(v, FF.x[i] - 1, FF.y[i], 46, 120 * b, 160 * b, 60 * b); cellW(v, FF.x[i] + 1, FF.y[i], 46, 120 * b, 160 * b, 60 * b); } } else if (Nf > 0.5) cellW(v, FF.x[i], FF.y[i], 183, 50, 70, 40); }
     // pointer light underwater at night
-    if (v.pin && v.py > wy && Nf > 0.3) halo(v.px, v.py, 14, [255, 205, 125], 0.4 * Nf);
+    if (v.pointer.inside && v.pointer.y > wy && Nf > 0.3) halo(v.pointer.x, v.pointer.y, 14, [255, 205, 125], 0.4 * Nf);
     const sw = this.startle; if (sw.on) { const rad = sw.t * 48, a = 1 - sw.t / 1.4; for (let k = 0; k < 36; k++) { const th = k / 36 * 6.283; cellW(v, sw.x + Math.cos(th) * rad, sw.y + Math.sin(th) * rad * 0.6, 46, 255 * a, 255 * a, 255 * a); } }
   }
 }

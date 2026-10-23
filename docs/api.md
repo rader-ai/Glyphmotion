@@ -21,15 +21,23 @@ Creates a `Surface` bound to a canvas. Size the canvas with CSS; the engine matc
 | `family` | JetBrains Mono stack | Monospace font family for the glyphs. |
 | `weight` | `600` | Font weight. |
 | `lineHeight` | `1.2` | Cell height as a multiple of the font size. |
-| `background` | `#070b18` | Color painted under the grid each frame. |
+| `background` | `#070b18` | Painted under the grid each frame. Any canvas fill works: a color, a `CanvasGradient` or a `CanvasPattern`. |
 | `transparent` | `false` | For overlays such as nav strips and button effects: skip the background so the page shows through. |
 | `bloom` | `0.5` | Glow strength, 0 to 1. `0` turns the glow pass off. |
 | `bloomScale` | `5` | How much the glow pass is shrunk. Higher is softer and cheaper. |
 | `fps` | `30` | Paint rate. The simulation always steps at 60Hz. |
 | `setup(s)` | | Called after every layout, when the grid size changes. Allocate your world here. |
 | `step(s, dt)` | | Fixed 60Hz simulation step. `dt` is `1/60`. |
-| `draw(s)` | | Fill the grid for this frame. Call `s.clear()` first if you do not overwrite every cell. |
+| `draw(s)` | | Fill the grid for this frame. Call `s.clear()` first if you do not overwrite every cell. Return `false` when nothing changed since the last paint (an idle overlay, for example) and the engine skips the paint and glow pass. |
+| `under(ctx, s)` | | Paint beneath the glyphs each frame, in CSS pixels: a sky gradient, a sun glow. It is included in the glow pass. |
 | `still(s)` | runs `step` for 1.2s | Under reduced motion, put the world in a good resting pose. |
+| `onVisible(s, visible)` | | Called when the surface scrolls into or out of view. Use it to start a reveal the first time a piece is seen. |
+| `persistence` | `0` | Seconds a glyph keeps glowing after you stop drawing it, like phosphor on an old screen. Your `draw` must `clear()` each frame for this to work. |
+| `persistenceCurve` | `'linear'` | `'exp'` fades fast at first and leaves a long soft tail, like real phosphor. |
+| `persistenceHold` | `false` | When a cell is drawn again more faintly than its fading glow, keep the brighter glow. |
+| `pointer` | `'canvas'` | `'window'` tracks the pointer page-wide, for overlays styled `pointer-events: none` and for characters that watch the pointer anywhere on the page. `pointer.x` and `pointer.y` follow it everywhere; `pointer.inside` is true only over the canvas, and clears when a touch ends or the mouse leaves the page. |
+| `baseline` | `'top'` | `'middle'` centers glyphs vertically in their cell. |
+| `relayoutDelay` | `120` | Milliseconds to wait after a resize before re-laying out. `0` re-lays out on every resize, for elements that animate their size. |
 
 ### Surface properties
 
@@ -39,10 +47,11 @@ Creates a `Surface` bound to a canvas. Size the canvas with CSS; the engine matc
 
 | Method | What it does |
 |---|---|
-| `put(c, r, ch, R, G, B)` | Write one cell by column and row. Out-of-range writes are ignored. |
-| `putI(i, ch, R, G, B)` | Write one cell by index, `i = r * cols + c`. Fastest. |
-| `putW(x, y, ch, R, G, B)` | Write one cell by world position. |
-| `text(c, r, str, R, G, B)` | Write a string. Spaces are skipped so the scene shows through. |
+| `put(c, r, ch, R, G, B, A)` | Write one cell by column and row. `A` is optional opacity, 0 to 1. Out-of-range writes are ignored. |
+| `putI(i, ch, R, G, B, A)` | Write one cell by index, `i = r * cols + c`. Fastest. |
+| `blank(i)` | Empty one cell. |
+| `putW(x, y, ch, R, G, B, A)` | Write one cell by world position. |
+| `text(c, r, str, R, G, B, A)` | Write a string. Spaces are skipped so the scene shows through. |
 | `clear()` | Blank the grid. |
 | `invalidate()` | Ask for one repaint. Under reduced motion this paints right away, so call it after any interaction that changes state. |
 | `pause()`, `resume()` | Stop and restart this surface. |
@@ -59,8 +68,9 @@ Creates a `Surface` bound to a canvas. Size the canvas with CSS; the engine matc
 | `spring(state, target, k, damping, dt)` | Moves `state.x` toward `target` with `state.v` as velocity. Good for moods, gaze and anything that should settle. |
 | `RAMP`, `ramp(t, chars)` | The default light ramp `' .:-=+*#%@'`, and a picker from 0 to 1. |
 | `lineChar(dx, dy)` | The glyph (`- \ \| /`) that best draws a line in that direction. Use it for spray, rain and rings. |
-| `textMask(surface, text, { font, fill, lineGap })` | Rasterizes a word into the grid. Use `\n` to stack lines on narrow screens. Returns a `Uint8Array` with 1 where the letters cover a cell. |
+| `textMask(surface, text, { font, fill, lineGap, spacing, stretch, center, ink })` | Rasterizes a word into the grid. Use `\n` to stack lines on narrow screens. `spacing` adds space between letters in ems, `stretch` makes letters taller, `center` sets the vertical center as a fraction of the height, and `ink: true` centers on the letters actually drawn instead of the font's box, so capitals do not sit high. Returns a `Uint8Array` with 1 where the letters cover a cell. |
 | `new Pool(capacity, fields)` | Fixed-size particle pool stored as typed arrays. `spawn({ ...values })` returns an index or -1 when full; `kill(i)` swap-removes, so loop backwards when killing. |
+| `onFrame(fn)` | Runs `fn(dt)` once per animation frame, before any surface, while anything is animating. Returns an unsubscribe function. Use it for page-wide state such as scroll speed or a shared clock. It never runs under reduced motion. |
 | `reducedMotion` | `true` when the viewer prefers reduced motion. Updates live. |
 | `STEP` | The simulation step, `1/60`. |
 

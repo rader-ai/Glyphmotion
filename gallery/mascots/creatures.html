@@ -358,6 +358,7 @@ class View {
   get cols() { return this.s.cols; } get rows() { return this.s.rows; } get asp() { return this.s.asp; }
   get W() { return this.s.W; } get H() { return this.s.H; } get cw() { return this.s.cw; }
   get rect() { return this.cv.getBoundingClientRect(); }
+  get pointer() { return this.s.pointer; }
   clear() { this.s.clear(); }
   put(c, r, code, R, G, B) { this.s.put(c, r, GLYPH[code], R, G, B); }
 }
@@ -379,6 +380,7 @@ function surface(cv, o) {
     bloom: o.bloom == null ? 0.45 : o.bloom,
     background: o.bg || '#06131f',
     transparent: !!o.transparent,
+    pointer: o.pointer, onVisible: o.onVisible,
     setup: s => { s.view = s.view || new View(s); if (o.setup) o.setup(s); },
     step: (s, dt) => o.step(s, dt),
     still: s => settle(s),
@@ -878,15 +880,15 @@ function drawEnv(v, t) {
 }
 function mainSim(dt) { brain.update(dt); nib.sim(dt); }
 let stageVis = false;
-function checkVis() { if (stage.visible !== stageVis) { stageVis = stage.visible; syncDock(); } }
 const stage = surface(stageCv, {
-  fsDiv: 112, fsMin: 6.2, fsMax: 10.4, bloom: .5, still: 2.6,
+  fsDiv: 112, fsMin: 6.2, fsMax: 10.4, bloom: .5, still: 2.6, pointer: 'window',
+  onVisible(s, vis) { stageVis = vis; syncDock(); },
   setup(s) { s.S = Math.min(s.W / 104, s.H / 72); s.ox = s.W / 2; s.oy = s.H * .4; s.fl = (s.H - s.oy) / s.S - 6; },
   step(s, dt) { mainSim(dt); },
-  draw(s, v) { checkVis(); useScene(s); drawEnv(v, nib.pt); nib.paint(v, s); }
+  draw(s, v) { useScene(s); drawEnv(v, nib.pt); nib.paint(v, s); }
 });
 const dock = surface(dockCv, {
-  fsDiv: 44, fsMin: 5, fsMax: 6.2, bloom: .45, still: 2.6,
+  fsDiv: 44, fsMin: 5, fsMax: 6.2, bloom: .45, still: 2.6, pointer: 'window',
   setup(s) { s.S = Math.min(s.W / 66, s.H / 52); s.ox = s.W / 2; s.oy = s.H * .42; s.fl = (s.H - s.oy) / s.S - 4; },
   step(s, dt) { if (!stage.visible) mainSim(dt); },
   skip() { return !dockEl.classList.contains('show'); },
@@ -934,7 +936,7 @@ function applyDock(ok) {
 let dockT = 0;
 function syncDock() { clearTimeout(dockT); dockT = setTimeout(placeDock, 120); if (stageVis) { dockEl.classList.remove('show'); $('#dockOpen').classList.remove('show'); } }
 // the engine tracks which canvases are on screen; re-check after scrolling settles
-let scT = 0; addEventListener('scroll', () => { if (!scT) scT = setTimeout(() => { scT = 0; checkVis(); if (!stage.visible) placeDock(); }, 140); }, { passive: true });
+let scT = 0; addEventListener('scroll', () => { if (!scT) scT = setTimeout(() => { scT = 0; if (!stageVis) placeDock(); }, 140); }, { passive: true });
 addEventListener('resize', () => syncDock());
 $('#dockHide').addEventListener('click', () => { dockOff = true; dockEl.classList.remove('show'); $('#dockOpen').classList.add('show'); $('#dockOpen').focus(); });
 $('#dockOpen').addEventListener('click', () => { dockOff = false; $('#dockOpen').classList.remove('show'); placeDock(); setTimeout(() => $('#dockSleep').focus(), 80); });
@@ -976,7 +978,7 @@ const brain = {
     const t = now(), nb = nib;
     // pointer in design coordinates
     let pd = null; if (PT.in && nb.cur) pd = nb.toDesign(PT.x, PT.y);
-    const rect = nb.cur && nb.cur.v.rect; const inRect = !!(pd && rect && PT.x >= rect.left && PT.x <= rect.right && PT.y >= rect.top && PT.y <= rect.bottom);
+    const inRect = !!(pd && nb.cur.v.pointer.inside);
     this.near = !!(inRect && Math.hypot(pd.x - nb.px, pd.y - nb.py) < 60) && !GM.reducedMotion;
     // scroll
     const sy = scrollY, sv = (sy - this.lastY) / Math.max(dt, 1e-3); this.lastY = sy; this.scrollV += (sv - this.scrollV) * Math.min(1, dt * 6);

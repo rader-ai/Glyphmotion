@@ -294,15 +294,10 @@ const HT=[[0,34,28,30],[.2,110,24,16],[.45,225,76,18],[.7,255,160,50],[.9,255,22
 let HR=0,HG=0,HB=0;
 function heat(h){if(h<0)h=0;else if(h>1)h=1;let i=1;while(i<5&&h>HT[i][0])i++;const a=HT[i-1],b=HT[i],t=(h-a[0])/(b[0]-a[0]);HR=a[1]+(b[1]-a[1])*t;HG=a[2]+(b[2]-a[2])*t;HB=a[3]+(b[3]-a[3])*t}
 const hc=h=>GM.RAMP.charCodeAt(Math.min(9,Math.max(0,(h*9.99)|0)));
-/* Local adapter: most canvases are pointer-events:none overlays, so the engine's own
-   canvas pointer cannot see them. One page-level pointer feeds every field instead. */
-const ptr={x:-999,y:-999,on:false};
 const fields=[];
-let touchT=0;
-addEventListener('pointermove',e=>{ptr.x=e.clientX;ptr.y=e.clientY;ptr.on=true},{passive:true});
-addEventListener('pointerdown',e=>{ptr.x=e.clientX;ptr.y=e.clientY;ptr.on=true;for(const f of fields)if(f.vis&&f.down){f.rect=f.cv.getBoundingClientRect();f._rts=performance.now();f.updPtr();if(f.inside){f.down(f.px,f.py);if(GM.reducedMotion)f.s.invalidate()}}},{passive:true});
-addEventListener('pointerup',e=>{if(e.pointerType==='touch'){clearTimeout(touchT);touchT=setTimeout(()=>{ptr.on=false},500)}},{passive:true});
-document.addEventListener('pointerleave',()=>{ptr.on=false});
+/* pointer: 'window' tracks the pointer for pointer-events:none overlays. Presses are routed to each field
+   under the pointer; this listener is added after the surfaces exist so the engine has already updated them. */
+function onPress(){for(const f of fields)if(f.vis&&f.down){f.updPtr();if(f.inside){f.down(f.px,f.py);if(GM.reducedMotion)f.s.invalidate()}}}
 const status=document.getElementById('status');
 function say(t){status.textContent='';setTimeout(()=>{status.textContent=t},30)}
 
@@ -316,7 +311,7 @@ class Field{
     this.stillN=6;this.kickN=14;
     this.P=new GM.Pool(this.o.maxp,PF);
     fields.push(this);
-    this.s=GM.surface(cv,{fontSize:this.o.fs,family:MONO,weight:700,lineHeight:this.o.lh,transparent:true,bloom:this.o.bloom,
+    this.s=GM.surface(cv,{fontSize:this.o.fs,family:MONO,weight:700,lineHeight:this.o.lh,transparent:true,pointer:'window',baseline:'middle',bloom:this.o.bloom,onVisible:(s,v)=>{if(v&&this.onShow)this.onShow()},
       setup:s=>this.setup(s),step:()=>this.step(),draw:s=>{s.clear();this.render()},still:()=>this.still()});
   }
   get vis(){return !!this.s&&this.s.visible}
@@ -335,10 +330,10 @@ class Field{
   str(c,r,t,R,G,B){this.s.text(c,r,t,R,G,B)}
   getRect(){const now=performance.now();if(!this.rect||now-this._rts>10){this.rect=this.cv.getBoundingClientRect();this._rts=now}return this.rect}
   updPtr(){
-    const r=ptr.on?this.getRect():null;
-    if(!r){this.inside=false;this.moved=0;this.lpx=null;return}
-    const x=(ptr.x-r.left)/this.cw,y=(ptr.y-r.top)/this.chh;
-    this.inside=x>=0&&y>=0&&x<this.cols&&y<this.rows;
+    const p=this.s.pointer;
+    if(!p.inside){this.inside=false;this.moved=0;this.lpx=null;return}
+    const x=p.x,y=p.y/this.asp;
+    this.inside=true;
     this.moved=this.lpx===null?0:Math.hypot(x-this.lpx,y-this.lpy);
     this.px=x;this.py=y;this.lpx=x;this.lpy=y;
   }
@@ -369,20 +364,10 @@ class Field{
   kick(){if(GM.reducedMotion&&this.laid)this.settle(this.kickN)}
 }
 
-/* text mask: the engine's textMask on a stand-in grid. Fewer rows leaves room under the letters
-   (reserve), and a squashed aspect stretches the letters taller (stretch). */
-function textMask(f,text,reserve,fill,fillH,stretch){
-  const fake={cols:f.cols,rows:Math.max(1,f.rows-reserve),asp:f.asp/(stretch||1)};
-  const m=GM.textMask(fake,text,{font:'400 100px '+DISP,fill});
-  const out=new Uint8Array(f.N),cols=f.cols,rr=fake.rows;
-  /* the engine centers on the em box; put the baseline where this page always had it */
-  let r0=rr,r1=-1;for(let i=0;i<m.length;i++)if(m[i]){const r=(i/cols)|0;if(r<r0)r0=r;if(r>r1)r1=r}
-  const mx=textMask.cx||(textMask.cx=document.createElement('canvas').getContext('2d'));mx.font='400 100px '+DISP;
-  const tw=mx.measureText(text).width||100,hs=rr*fake.asp;
-  const size=Math.min(100*cols*fill/tw,hs*fillH/.72);
-  const sh=r1<0?0:Math.round(rr/2+.36*size/fake.asp-(r1+1));
-  for(let i=0;i<m.length;i++)if(m[i]){const j=i+sh*cols;if(j>=0&&j<f.N)out[j]=1}
-  return out;
+/* text mask: the engine's textMask, with the letters centered in the rows above the reserved strip.
+   dy nudges the center down a row where the original's baseline landed half a row lower (footer on wide screens). */
+function textMask(f,text,reserve,fill,stretch,dy){
+  return GM.textMask(f.s,text,{font:'400 100px '+DISP,fill,stretch,ink:true,center:((f.rows-reserve)/2+(dy||0))/f.rows});
 }
 /* a surface that has nothing to draw stops its loop until it is needed again */
 function idleStop(f,idle){if(idle&&!GM.reducedMotion)f.s.pause()}
@@ -440,21 +425,21 @@ class BG extends Field{
 
 /* ---------- molten wordmark ---------- */
 class Logo extends Field{
-  constructor(cv,o){super(cv,Object.assign({bloom:.55,maxp:220},o));this.text=o.text||'MELTWORK';this.reserve=o.reserve||3;this.forming=false;this.formed=false;this.started=false}
+  constructor(cv,o){super(cv,Object.assign({bloom:.55,maxp:220},o));this.text=o.text||'MELTWORK';this.reserve=o.reserve||3;this.forming=false;this.formed=false}
   onLayout(){
-    const f=this;f.mask=textMask(f,f.text,f.reserve,.97,.92,f.o.stretch||1);
+    const f=this;f.mask=textMask(f,f.text,f.reserve,.97,f.o.stretch||1);
     f.fill=new Uint8Array(f.N);f.heatA=new Float32Array(f.N);f.ph=new Float32Array(f.cols);
     f.cells=[];f.bot=[];
     for(let i=0;i<f.N;i++)if(f.mask[i]){f.cells.push(i);if(!f.mask[i+f.cols]||i+f.cols>=f.N)f.bot.push(i)}
     f.dn=0;f.dx=new Float32Array(500);f.dy=new Float32Array(500);f.dv=new Float32Array(500);f.dt=new Int32Array(500);
     if(this.formed&&!this.forming){for(const i of f.cells){f.fill[i]=1}}
-    else this.started=false;/* the first step after it scrolls into view starts the pour */
+    else if(!GM.reducedMotion&&f.s.visible)f.form();/* otherwise the pour starts when it first scrolls into view */
   }
+  onShow(){if(!this.forming&&!this.formed)this.form()}
   onStill(){this.form();this.runSteps(520)}
   recast(){this.form();if(GM.reducedMotion)this.settle(520)}
   form(){
     const f=this;if(!f.laid)return;
-    f.started=true;
     f.fill.fill(0);f.heatA.fill(0);f.ph.fill(0);f.dn=0;f.P.clear();
     f.todo=f.cells.slice();for(let i=f.todo.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;const t=f.todo[i];f.todo[i]=f.todo[j];f.todo[j]=t}
     f.spAcc=0;f.forming=true;f.formed=false;f.t=0;
@@ -466,7 +451,7 @@ class Logo extends Field{
   floor(){return this.rows-1}
   land(x){const c=clamp(Math.round(x),0,this.cols-1);this.ph[c]=1;if(c>0)this.ph[c-1]=Math.max(this.ph[c-1],.6);if(c<this.cols-1)this.ph[c+1]=Math.max(this.ph[c+1],.6)}
   step(){
-    const f=this;if(!f.started)f.form();f.t+=STEP;f.updPtr();const cols=f.cols;
+    const f=this;f.t+=STEP;f.updPtr();const cols=f.cols;
     if(f.forming){
       f.spAcc+=f.perStep;
       while(f.spAcc>=1&&f.todo.length&&f.dn<490){f.spAcc-=1;const i=f.todo.pop();const k=f.dn++;f.dt[k]=i;f.dx[k]=i%cols;f.dy[k]=-1-Math.random()*5;f.dv[k]=.15+Math.random()*.2}
@@ -529,7 +514,7 @@ class Hero extends Field{
   step(){
     this.t+=STEP;const t=this.t,cols=this.cols,hh=this.hh,hv=this.hv,T=this.T;this.updPtr();
     let tx=cols*(this.vw<700?.88:.72)+Math.sin(t*.35)*cols*.04;
-    if(this.inside&&ptr.on)tx=clamp(this.px,cols*.3,cols*.96);
+    if(this.inside)tx=clamp(this.px,cols*.3,cols*.96);
     this.sx+=(tx-this.sx)*.035;this.boost=Math.max(0,this.boost-.006);
     const sx=this.sx|0,b=this.boost;
     hh[clamp(sx,1,cols-2)]-=.1+.35*b+Math.random()*.1;
@@ -1064,7 +1049,7 @@ class Cruc extends Field{
 /* ---------- footer: giant letters filled by scrolling ---------- */
 class Foot extends Field{
   constructor(cv){super(cv,{fs:(w)=>clamp(w/150,4.5,9),lh:1.2,bloom:.6,maxp:200});this.lvl=0;this.prog=0}
-  onLayout(){const f=this;f.mask=textMask(f,'MELTWORK',0,.985,.97,2.1);f.hb=new Float32Array(f.N);f.cells=[];f.mt=f.rows;f.mb=0;
+  onLayout(){const f=this;f.mask=textMask(f,'MELTWORK',0,.985,2.1,f.rows>33?1:0);f.hb=new Float32Array(f.N);f.cells=[];f.mt=f.rows;f.mb=0;
     for(let i=0;i<f.N;i++)if(f.mask[i]){f.cells.push(i);const r=(i/f.cols)|0;if(r<f.mt)f.mt=r;if(r>f.mb)f.mb=r}
     f.mb+=1;f.cool=0}
   floor(){return this.rows}
@@ -1178,6 +1163,7 @@ document.getElementById('mega').addEventListener('focusout',e=>{if(!e.relatedTar
   /* reduced motion has no loop, so scrolling repaints the two scroll-driven fields (at most ~16 times a second) */
   let st=0;
   addEventListener('scroll',()=>{if(!GM.reducedMotion||st)return;st=setTimeout(()=>{st=0;foot.settle(1);BGF.settle(1)},60)},{passive:true});
+  addEventListener('pointerdown',onPress,{passive:true});
   window.__mw={fields,openMega,BGF,cruc,logoBig};
 }
 let BGF,HERO,logos,navfx,mega,mob,cruc,foot,burgerF;

@@ -265,150 +265,28 @@ body{margin:0;background:var(--page);color:var(--ink);font:400 15px/1.5 var(--sa
 
 </div>
 
+<script src="../../src/glyphmotion.js"></script>
 <script>
 (() => {
 'use strict';
 
+const GM = Glyphmotion;
+const { clamp, lerp, rnd, hash2, vnoise } = GM;
 const FAMILY = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace';
-const STEP = 1 / 60;
-const reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-
-// ---------- helpers ----------
-const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
-const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const STEP = GM.STEP;
 const easeOut = t => 1 - Math.pow(1 - t, 3);
-const rnd = (a, b) => a + Math.random() * (b - a);
-function hash2(x, y) {
-  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
-  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
-  return (h >>> 0) / 4294967296;
-}
-function vnoise(x, y) {
-  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
-const cssCache = new Map();
-function css(k) {
-  let s = cssCache.get(k);
-  if (!s) { s = 'rgb(' + ((k >> 16) & 255) + ',' + ((k >> 8) & 255) + ',' + (k & 255) + ')'; if (cssCache.size > 8000) cssCache.clear(); cssCache.set(k, s); }
-  return s;
-}
 const numFmt = {};
 function fmtNum(v, dec) {
   const f = numFmt[dec] || (numFmt[dec] = new Intl.NumberFormat('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }));
   return f.format(v);
 }
 
-// ---------- surface: one canvas, one character grid, one scene ----------
 const SCENES = {};
-const surfaces = [];
-const byHost = new Map();
-
-class Surface {
-  constructor(host, name, o) {
-    this.host = host; this.name = name; this.o = o;
-    this.cv = host.querySelector('canvas');
-    this.ctx = this.cv.getContext('2d', { alpha: false });
-    this.bcv = document.createElement('canvas');
-    this.bctx = this.bcv.getContext('2d');
-    this.bg = o.bg || '#080c14';
-    this.value = o.value || 0;
-    this.nums = o.nums || [];
-    this.time = 0; this.acc = 0; this.rAcc = 1;
-    this.visible = false; this.started = false; this.dirty = true;
-    this.introT = -(o.delay || 0); this.dur = o.dur || 1.9;
-    this.prog = reduce ? 1 : 0;
-    this.scene = null; this.cols = 0; this.rows = 0;
-    this.shown = this.nums.map(() => null);
-  }
-  layout() {
-    const rect = this.host.getBoundingClientRect();
-    const vw = this.vw = Math.max(1, rect.width), vh = this.vh = Math.max(1, rect.height);
-    const dpr = this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.cv.width = Math.round(vw * dpr); this.cv.height = Math.round(vh * dpr);
-    const fs = this.fs = clamp(vw / (this.o.fsDiv || 36), 7.5, 10);
-    this.font = '600 ' + fs.toFixed(2) + 'px ' + FAMILY;
-    const ctx = this.ctx;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.font = this.font;
-    this.cw = ctx.measureText('M').width || fs * 0.6;
-    this.chh = fs * 1.2;
-    this.cols = Math.ceil(vw / this.cw); this.rows = Math.ceil(vh / this.chh);
-    this.asp = this.chh / this.cw;
-    const N = this.cols * this.rows;
-    this.ch = new Array(N).fill(' ');
-    this.R = new Uint8ClampedArray(N); this.G = new Uint8ClampedArray(N); this.B = new Uint8ClampedArray(N);
-    this.bcv.width = Math.max(1, Math.round(this.cv.width / 5));
-    this.bcv.height = Math.max(1, Math.round(this.cv.height / 5));
-    this.scene = SCENES[this.name](this);
-    this.warm(reduce ? 4 : 1.2);
-    this.dirty = true;
-  }
-  warm(sec) { const n = Math.round(sec * 60); for (let i = 0; i < n; i++) { this.time += STEP; this.scene.step(STEP); } }
-  put(c, r, ch, R, G, B) {
-    if (c < 0 || c >= this.cols || r < 0 || r >= this.rows) return;
-    const i = r * this.cols + c; this.ch[i] = ch; this.R[i] = R; this.G[i] = G; this.B[i] = B;
-  }
-  text(c, r, str, R, G, B) { for (let k = 0; k < str.length; k++) this.put(c + k, r, str[k], R, G, B); }
-  clear() { this.ch.fill(' '); }
-  stepOnce() {
-    this.time += STEP;
-    if (this.started && !reduce && this.introT < this.dur) { this.introT += STEP; this.prog = easeOut(clamp(this.introT / this.dur, 0, 1)); }
-    this.scene.step(STEP);
-  }
-  updateNums() {
-    for (let k = 0; k < this.nums.length; k++) {
-      const el = this.nums[k], d = el.dataset;
-      const to = parseFloat(d.to), from = parseFloat(d.from || '0'), dec = parseInt(d.dec || '0', 10);
-      const txt = (d.prefix || '') + fmtNum(lerp(from, to, this.prog), dec) + (d.suffix || '');
-      if (txt !== this.shown[k]) { el.textContent = txt; this.shown[k] = txt; }
-    }
-  }
-  invalidate() { this.dirty = true; if (reduce) this.render(); }
-  render() {
-    if (!this.scene) return;
-    this.updateNums();
-    this.scene.draw();
-    const { ctx, cols, rows, cw, chh, cv, bcv, bctx } = this;
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-    ctx.fillStyle = this.bg; ctx.fillRect(0, 0, this.vw, this.vh);
-    ctx.font = this.font; ctx.textBaseline = 'top';
-    let lastK = -1;
-    for (let r = 0; r < rows; r++) {
-      const y = r * chh, base = r * cols;
-      for (let c = 0; c < cols; c++) {
-        const i = base + c, ch = this.ch[i];
-        if (ch === ' ') continue;
-        const k = ((this.R[i] & 0xfc) << 16) | ((this.G[i] & 0xfc) << 8) | (this.B[i] & 0xfc);
-        if (k !== lastK) { ctx.fillStyle = css(k); lastK = k; }
-        ctx.fillText(ch, c * cw, y);
-      }
-    }
-    // cheap bloom: shrink the frame to 1/5, then add it back stretched
-    bctx.globalCompositeOperation = 'copy';
-    bctx.drawImage(cv, 0, 0, bcv.width, bcv.height);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(bcv, 0, 0, cv.width, cv.height);
-    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-  }
-}
-
-function addSurface(host, name, o) {
-  const s = new Surface(host, name, o);
-  surfaces.push(s); byHost.set(host, s);
-  return s;
-}
 
 // ---------- scene: rising tide (value = percent full) ----------
 SCENES.tide = (s) => {
-  const v = clamp(s.value, 0, 100) / 100;
-  const bubs = [];
+  const v = clamp(s.o.value, 0, 100) / 100;
+  const bubs = new GM.Pool(12, ['x', 'y', 'vy', 'ph']);
   const base = () => s.rows * (1 - v * s.prog);
   const surf = (c) => {
     const t = s.time, a = 0.5 + 0.35 * (1 - s.prog);
@@ -416,10 +294,10 @@ SCENES.tide = (s) => {
   };
   return {
     step(dt) {
-      if (s.prog > 0.1 && bubs.length < 12 && Math.random() < dt * 5) bubs.push({ x: rnd(1, s.cols - 2), y: s.rows - 1, vy: rnd(2.5, 6), ph: rnd(0, 6.28) });
-      for (let i = bubs.length - 1; i >= 0; i--) {
-        const b = bubs[i]; b.y -= b.vy * dt; b.x += Math.sin(s.time * 3 + b.ph) * dt * 1.3;
-        if (b.y < surf(b.x) + 1) { bubs[i] = bubs[bubs.length - 1]; bubs.pop(); }
+      if (s.prog > 0.1 && bubs.n < 12 && Math.random() < dt * 5) bubs.spawn({ x: rnd(1, s.cols - 2), y: s.rows - 1, vy: rnd(2.5, 6), ph: rnd(0, 6.28) });
+      for (let i = bubs.n - 1; i >= 0; i--) {
+        bubs.y[i] -= bubs.vy[i] * dt; bubs.x[i] += Math.sin(s.time * 3 + bubs.ph[i]) * dt * 1.3;
+        if (bubs.y[i] < surf(bubs.x[i]) + 1) bubs.kill(i);
       }
     },
     draw() {
@@ -450,7 +328,7 @@ SCENES.tide = (s) => {
           s.put(c, r, ch, R, G, B);
         }
       }
-      for (const b of bubs) { const lf = clamp((b.y - surf(b.x)) / rows, 0, 1); s.put(Math.round(b.x), Math.floor(b.y), lf > 0.5 ? 'o' : lf > 0.2 ? 'O' : '.', 170, 230, 250); }
+      for (let i = 0; i < bubs.n; i++) { const lf = clamp((bubs.y[i] - surf(bubs.x[i])) / rows, 0, 1); s.put(Math.round(bubs.x[i]), Math.floor(bubs.y[i]), lf > 0.5 ? 'o' : lf > 0.2 ? 'O' : '.', 170, 230, 250); }
     }
   };
 };
@@ -458,7 +336,7 @@ SCENES.tide = (s) => {
 // ---------- scene: growing skyline (value = growth percent, sets the tallest tower) ----------
 SCENES.skyline = (s) => {
   const { cols, rows } = s;
-  const hmax = 0.3 + 0.62 * clamp(s.value / 60, 0, 1);
+  const hmax = 0.3 + 0.62 * clamp(s.o.value / 60, 0, 1);
   const seed = s.o.seed || 0;
   const front = [], back = [];
   let x = 1, i = 0;
@@ -520,7 +398,7 @@ SCENES.skyline = (s) => {
 // ---------- scene: heartbeat line (value = uptime percent; downtime shows as flat beats) ----------
 SCENES.pulse = (s) => {
   const { cols, rows } = s;
-  const v = clamp(s.value, 0, 100), down = (100 - v) / 100;
+  const v = clamp(s.o.value, 0, 100), down = (100 - v) / 100;
   const flatProb = clamp(down * 60, 0, 0.9);
   const col = v >= 99.9 ? [94, 232, 164] : v >= 99 ? [255, 196, 84] : [255, 100, 100];
   const ys = new Float32Array(cols), alive = new Uint8Array(cols);
@@ -566,7 +444,7 @@ SCENES.pulse = (s) => {
 // ---------- scene: growing plant (value = percent of goal, sets stem height and leaf count) ----------
 SCENES.plant = (s) => {
   const { cols, rows } = s;
-  const v = clamp(s.value / 100, 0, 1);
+  const v = clamp(s.o.value / 100, 0, 1);
   const cx = Math.round(cols * 0.7), base = rows - 3;
   const Hmax = Math.round((base - 1) * (0.3 + 0.48 * v));
   const nL = 3 + Math.round(v * 4);
@@ -637,7 +515,7 @@ SCENES.fire = (s) => {
   const flameRows = Math.max(3, Math.round(rows * o.flame));
   const cool = 0.85 / flameRows;
   const seedRow = rows - 1 - Math.round(rows * 0.11), profs = new Float32Array(cols);
-  const emb = [];
+  const emb = new GM.Pool(o.embers + 8, ['x', 'y', 'vx', 'vy', 'life', 'max', 'ph', 'hot']);
   let fAcc = 0, burst = 1.5;
   const wide = Math.min(1, o.spread * 1.6);
   function fireStep() {
@@ -663,17 +541,17 @@ SCENES.fire = (s) => {
   return {
     step(dt) {
       fAcc += dt; if (fAcc >= 1 / 24) { fAcc -= 1 / 24; fireStep(); }
-      if (emb.length < o.embers && Math.random() < dt * o.rate) {
-        emb.push({ x: cols * (0.5 + (Math.random() - 0.5) * wide), y: rows - flameRows * rnd(0.2, 0.8), vx: rnd(-1.5, 1.5), vy: -rnd(3, 8) * (0.6 + o.heat), life: 0, max: rnd(2, 4.5), ph: rnd(0, 6.28) });
+      if (emb.n < o.embers && Math.random() < dt * o.rate) {
+        emb.spawn({ x: cols * (0.5 + (Math.random() - 0.5) * wide), y: rows - flameRows * rnd(0.2, 0.8), vx: rnd(-1.5, 1.5), vy: -rnd(3, 8) * (0.6 + o.heat), life: 0, max: rnd(2, 4.5), ph: rnd(0, 6.28) });
       }
       if (o.heat >= 1) {
         burst -= dt;
-        if (burst <= 0) { burst = rnd(1.8, 3.2); for (let k = 0; k < 6 && emb.length < o.embers + 8; k++) emb.push({ x: cols * (0.5 + (Math.random() - 0.5) * wide), y: rows - flameRows * 0.6, vx: rnd(-3, 3), vy: -rnd(10, 16), life: 0, max: rnd(1.2, 2.2), ph: rnd(0, 6.28), hot: true }); }
+        if (burst <= 0) { burst = rnd(1.8, 3.2); for (let k = 0; k < 6 && emb.n < o.embers + 8; k++) emb.spawn({ x: cols * (0.5 + (Math.random() - 0.5) * wide), y: rows - flameRows * 0.6, vx: rnd(-3, 3), vy: -rnd(10, 16), life: 0, max: rnd(1.2, 2.2), ph: rnd(0, 6.28), hot: 1 }); }
       }
-      for (let i = emb.length - 1; i >= 0; i--) {
-        const e = emb[i]; e.life += dt;
-        e.x += (e.vx + Math.sin(s.time * 2.5 + e.ph) * 2.2) * dt; e.y += e.vy * dt; e.vy *= (1 - 0.1 * dt);
-        if (e.life >= e.max || e.y < -1) { emb[i] = emb[emb.length - 1]; emb.pop(); }
+      for (let i = emb.n - 1; i >= 0; i--) {
+        emb.life[i] += dt;
+        emb.x[i] += (emb.vx[i] + Math.sin(s.time * 2.5 + emb.ph[i]) * 2.2) * dt; emb.y[i] += emb.vy[i] * dt; emb.vy[i] *= (1 - 0.1 * dt);
+        if (emb.life[i] >= emb.max[i] || emb.y[i] < -1) emb.kill(i);
       }
     },
     draw() {
@@ -698,10 +576,10 @@ SCENES.fire = (s) => {
         const ch = FR[Math.max(1, Math.min(9, Math.floor(h * 10)))], p = LUT[Math.min(63, Math.floor(h * 63))];
         s.put(c, r, ch, p[0], p[1], p[2]);
       }
-      for (const e of emb) {
-        const lf = 1 - e.life / e.max, ch = e.hot ? '*' : lf > 0.6 ? '*' : lf > 0.3 ? '+' : '.';
+      for (let i = 0; i < emb.n; i++) {
+        const lf = 1 - emb.life[i] / emb.max[i], ch = emb.hot[i] ? '*' : lf > 0.6 ? '*' : lf > 0.3 ? '+' : '.';
         const R = lerp(160, 255, lf), G = lerp(40, 214, lf * lf), B = lerp(16, 120, lf * lf * lf), m = 0.5 + 0.5 * lf;
-        s.put(Math.round(e.x), Math.round(e.y), ch, R * m, G * m, B * m);
+        s.put(Math.round(emb.x[i]), Math.round(emb.y[i]), ch, R * m, G * m, B * m);
       }
     }
   };
@@ -712,14 +590,14 @@ SCENES.bars = (s) => {
   const { cols, rows } = s, D = s.o.chart;
   const n = D.all.length, max = Math.max(...D.all, D.cap) * 1.12;
   const colW = cols / n, plotH = rows - 3, baseRow = rows - 2;
-  const sparks = [];
+  const sparks = new GM.Pool(8, ['x', 'y', 'vy', 'life', 'max']);
   const bx = (i) => { const x0 = Math.floor(i * colW), x1 = Math.max(x0, Math.floor((i + 1) * colW) - 2); return [x0, x1]; };
   s.colW = colW;
   return {
     step(dt) {
       const [x0, x1] = bx(D.today), top = baseRow - D.all[D.today] / max * plotH * s.prog;
-      if (s.prog > 0.9 && sparks.length < 8 && Math.random() < dt * 5) sparks.push({ x: rnd(x0, x1 + 1), y: top - 1, vy: -rnd(3, 7), life: 0, max: rnd(0.8, 1.6) });
-      for (let i = sparks.length - 1; i >= 0; i--) { const p = sparks[i]; p.life += dt; p.y += p.vy * dt; p.x += Math.sin(s.time * 4 + i) * dt; if (p.life > p.max) { sparks[i] = sparks[sparks.length - 1]; sparks.pop(); } }
+      if (s.prog > 0.9 && sparks.n < 8 && Math.random() < dt * 5) sparks.spawn({ x: rnd(x0, x1 + 1), y: top - 1, vy: -rnd(3, 7), life: 0, max: rnd(0.8, 1.6) });
+      for (let i = sparks.n - 1; i >= 0; i--) { sparks.life[i] += dt; sparks.y[i] += sparks.vy[i] * dt; sparks.x[i] += Math.sin(s.time * 4 + i) * dt; if (sparks.life[i] > sparks.max[i]) sparks.kill(i); }
     },
     draw() {
       s.clear();
@@ -745,26 +623,60 @@ SCENES.bars = (s) => {
         }
         if (sel) for (let c = x0; c <= x1; c++) s.put(c, baseRow - hr - 1, 'v', 255, 255, 255);
       }
-      for (const p of sparks) { const lf = 1 - p.life / p.max; s.put(Math.round(p.x), Math.round(p.y), lf > 0.5 ? '*' : '.', 200 * lf + 40, 250 * lf + 40, 255 * lf + 40); }
+      for (let i = 0; i < sparks.n; i++) { const lf = 1 - sparks.life[i] / sparks.max[i]; s.put(Math.round(sparks.x[i]), Math.round(sparks.y[i]), lf > 0.5 ? '*' : '.', 200 * lf + 40, 250 * lf + 40, 255 * lf + 40); }
     }
   };
 };
+
+// ---------- one engine surface per canvas; count-up and growth start the first time it scrolls into view ----------
+function mount(host, name, o) {
+  let scene = null;
+  return GM.surface(host.querySelector('canvas'), Object.assign({
+    family: FAMILY, weight: 600, background: o.bg || '#080c14',
+    fontSize: vw => clamp(vw / (o.fsDiv || 36), 7.5, 10),
+    setup(s) {
+      if (s.prog === undefined) {
+        s.introT = -(o.delay || 0); s.dur = o.dur || 1.9; s.prog = 0; s.started = false;
+        s.shown = (o.nums || []).map(() => null); s.sel = o.sel;
+      }
+      if (GM.reducedMotion) s.prog = 1;
+      scene = SCENES[name](s);
+      for (let i = 0, n = Math.round((GM.reducedMotion ? 4 : 1.2) * 60); i < n; i++) { s.time += STEP; scene.step(STEP); }
+    },
+    step(s, dt) {
+      if (s.started && s.introT < s.dur) { s.introT += dt; s.prog = easeOut(clamp(s.introT / s.dur, 0, 1)); }
+      scene.step(dt);
+    },
+    still() {},
+    draw(s) {
+      const nums = o.nums || [];
+      for (let k = 0; k < nums.length; k++) {
+        const el = nums[k], d = el.dataset;
+        const txt = (d.prefix || '') + fmtNum(lerp(parseFloat(d.from || '0'), parseFloat(d.to), s.prog), parseInt(d.dec || '0', 10)) + (d.suffix || '');
+        if (txt !== s.shown[k]) { el.textContent = txt; s.shown[k] = txt; }
+      }
+      scene.draw();
+    },
+    onVisible(s, visible) { if (visible) s.started = true; }
+  }, o));
+}
 
 // ---------- wire up: stat tiles ----------
 document.querySelectorAll('.tile').forEach((el, i) => {
   const d = el.dataset, num = el.querySelector('.num');
   ['to', 'from', 'dec', 'prefix', 'suffix'].forEach(k => { if (d[k] !== undefined) num.dataset[k] = d[k]; });
-  addSurface(el, d.scene, { value: parseFloat(d.value), nums: [num], delay: i * 0.12, seed: i * 17 });
+  mount(el, d.scene, { value: parseFloat(d.value), nums: [num], delay: i * 0.12, seed: i * 17 });
 });
 
 // ---------- wire up: pricing cards ----------
 document.querySelectorAll('.plan').forEach((el, i) => {
   const d = el.dataset;
-  addSurface(el, d.scene, {
+  mount(el, d.scene, {
     heat: parseFloat(d.heat), flame: parseFloat(d.flame), spread: parseFloat(d.spread), embers: parseInt(d.embers, 10), rate: parseFloat(d.rate),
     bg: '#0a0c14', fsDiv: 34, delay: i * 0.1
   });
 });
+
 const bm = document.getElementById('bill-m'), ba = document.getElementById('bill-a'), note = document.getElementById('billnote');
 function setBilling(yearly) {
   bm.setAttribute('aria-pressed', String(!yearly)); ba.setAttribute('aria-pressed', String(yearly));
@@ -790,8 +702,7 @@ ba.addEventListener('click', () => setBilling(true));
   document.getElementById('of').textContent = fmtNum(total / LIMIT * 100, 0) + '% of your ' + LIMIT + 'M plan, day ' + (today + 1) + ' of ' + DAYS;
   document.getElementById('pace').textContent = pace.toFixed(1) + 'M';
   document.getElementById('over').textContent = over + ' of ' + (today + 1);
-  const s = addSurface(plot, 'bars', { chart: { all, today, cap }, nums: [totalEl], bg: '#05080e', fsDiv: 70 });
-  s.sel = today;
+  const s = mount(plot, 'bars', { chart: { all, today, cap }, nums: [totalEl], bg: '#05080e', fsDiv: 70, sel: today });
   function describe(i) {
     const proj = i > today, tag = proj ? 'forecast' : all[i] > cap ? 'over the daily soft cap' : 'under the daily soft cap';
     return '<b>Day ' + (i + 1) + (i === today ? ' (today)' : '') + '</b>: ' + all[i].toFixed(2) + 'M calls, ' + tag;
@@ -814,53 +725,6 @@ ba.addEventListener('click', () => setBilling(true));
   });
 })();
 
-// ---------- shared loop: visible canvases only, paused when the tab is hidden ----------
-let last = performance.now();
-function frame(now) {
-  requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  if (document.hidden) return;
-  for (const s of surfaces) {
-    if (!s.visible || !s.scene) continue;
-    s.acc += dt;
-    let n = 0;
-    while (s.acc >= STEP && n < 6) { s.stepOnce(); s.acc -= STEP; n++; }
-    if (n === 6) s.acc = 0;
-    s.rAcc += dt;
-    if (s.rAcc >= 1 / 30 - 0.002 || s.dirty) { s.rAcc = 0; s.dirty = false; s.render(); }
-  }
-}
-document.addEventListener('visibilitychange', () => { last = performance.now(); });
-
-let rzTimer = 0;
-const pending = new Set();
-function relayout(s) { s.layout(); if (reduce) s.render(); }
-const ro = new ResizeObserver(entries => {
-  entries.forEach(e => pending.add(byHost.get(e.target)));
-  clearTimeout(rzTimer);
-  rzTimer = setTimeout(() => { pending.forEach(s => s && relayout(s)); pending.clear(); }, 120);
-});
-const io = new IntersectionObserver(entries => {
-  for (const e of entries) {
-    const s = byHost.get(e.target); if (!s) continue;
-    s.visible = e.isIntersecting;
-    if (s.visible) { s.started = true; s.dirty = true; }
-  }
-}, { rootMargin: '60px' });
-
-function start() {
-  surfaces.forEach(s => { s.layout(); ro.observe(s.host); if (reduce) s.render(); else io.observe(s.host); });
-  if (!reduce) requestAnimationFrame(t => { last = t; frame(t); });
-}
-const fontsReady = (document.fonts && document.fonts.load)
-  ? Promise.race([document.fonts.load('600 16px "JetBrains Mono"'), new Promise(r => setTimeout(r, 1500))])
-  : Promise.resolve();
-let started = false;
-const go = () => { if (started) return; started = true; start(); };
-fontsReady.then(go, go);
-if (document.fonts && document.fonts.addEventListener) {
-  document.fonts.addEventListener('loadingdone', () => { if (started) surfaces.forEach(relayout); });
-}
 })();
 </script>
 </body>

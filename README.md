@@ -19,14 +19,14 @@ Open `index.html` for the landing page, or any file in `examples/` and `gallery/
 | Folder | What is in it |
 |---|---|
 | `src/glyphmotion.js` | The engine. One file, no dependencies. |
-| `examples/` | Small pages built on the engine: hello, an ember button, a wordmark, and the original whale-breach profile card. |
+| `examples/` | Small pages built on the engine: hello, an ember button, a wordmark, afterglow, and the original whale-breach profile card. |
 | `gallery/lab/` | The first component sheets: hero and call to action, data and pricing, app states, content and navigation. |
 | `gallery/championship/` | Four full design languages from the design language championship: Shoal (creatures, the winner), Meridian (sky), Meltwork (materials), Carrier (signal). |
 | `gallery/mascots/` | Four living mascots with their pitches: Nib the cuttlefish, Nomi the sundial keeper, Fettle the slag salamander, Vesper the bat. |
 | `docs/` | API reference, the language principles, and the history of how it was made (briefs and judges' scorecards). |
 | `tools/check.js` | Automated checks for every page. |
 
-The gallery pages were built before the engine existed, so each carries its own copy of the core code. They are kept as they were made. New work should use the engine.
+Every page in `examples/` and `gallery/` runs on the engine.
 
 ## Quick start
 
@@ -57,6 +57,7 @@ The engine handles the parts that are easy to get wrong:
 - a cached, quantized color palette and skipped blank cells
 - the glow pass
 - `prefers-reduced-motion`: no loop at all, one good still frame, and repaints on interaction
+- see-through glyphs, a phosphor afterglow, a page-wide pointer for overlays, page-level frame and visibility hooks, and wordmarks with letter spacing
 
 See [docs/api.md](docs/api.md) for the full reference and [docs/principles.md](docs/principles.md) for the design rules.
 
@@ -79,7 +80,7 @@ For the examples, they also confirm that the loop really stops under reduced mot
 
 ## Status
 
-Early. The engine is small on purpose and will grow as the gallery pieces are rebuilt on top of it.
+Early. The engine is small on purpose; it grows when a real page needs something it cannot do.
 
 ## License
 

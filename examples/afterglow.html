@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Glyphmotion: afterglow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600&family=Archivo+Black&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; margin: 0; background: #05070b; color: #dfe9f1; font: 14px/1.6 "JetBrains Mono", ui-monospace, monospace; }
+  main { position: relative; min-height: 100%; display: grid; place-items: center; padding-inline: max(16px, env(safe-area-inset-left, 0px)); text-align: center; }
+  .copy { position: relative; z-index: 1; max-width: 46ch; }
+  h1 { margin: 0; font: 400 clamp(26px, 6vw, 44px)/1.1 "Archivo Black", Impact, sans-serif; }
+  p { color: #8a9bb0; }
+  #scope { width: min(720px, 100%); height: 170px; display: block; margin: 18px auto 0; }
+  /* the overlay covers the page but never blocks clicks */
+  #trail { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+</style>
+</head>
+<body>
+<main>
+  <div class="copy">
+    <h1>Afterglow</h1>
+    <p>Three engine features in one page: glyphs that keep glowing after they stop being drawn, see-through glyphs, and a pointer trail on an overlay that never blocks clicks. Move your pointer anywhere.</p>
+    <canvas id="scope" role="img" aria-label="An oscilloscope trace that leaves a fading phosphor afterglow."></canvas>
+  </div>
+  <canvas id="trail" aria-hidden="true"></canvas>
+</main>
+<script src="../src/glyphmotion.js"></script>
+<script>
+const { lerp, lineChar, clamp } = Glyphmotion;
+
+// 1. persistence: an oscilloscope dot sweeps the screen; the phosphor holds the trace for 0.9s
+Glyphmotion.surface(document.getElementById('scope'), {
+  fontSize: 9, background: '#05070b', persistence: 0.9, bloom: 0.7,
+  still(s) { s.time = 1.3; },
+  draw(s) {
+    s.clear();
+    const t = s.time;
+    // draw the last few positions of the beam; the afterglow does the rest
+    for (let k = 0; k < 6; k++) {
+      const tt = t - k * 0.004, x = ((tt * 0.55) % 1) * s.W;
+      const y = s.H / 2 + Math.sin(tt * 9) * s.H * 0.28 + Math.sin(tt * 23) * s.H * 0.08;
+      s.putW(x, y, k ? '*' : '@', 160, 255, 210);
+    }
+  }
+});
+
+// 2 and 3. transparent overlay, pointer tracked page-wide, per-cell alpha for a soft comet trail
+const trail = [];
+Glyphmotion.surface(document.getElementById('trail'), {
+  fontSize: 12, transparent: true, pointer: 'window', bloom: 0.6, persistence: 0.35,
+  step(s) {
+    const p = s.pointer;
+    if (p.inside) trail.unshift({ x: p.x, y: p.y });
+    if (trail.length > 24 || (!p.inside && trail.length)) trail.pop();
+  },
+  draw(s) {
+    s.clear();
+    for (let k = 1; k < trail.length; k++) {
+      const a = trail[k - 1], b = trail[k], f = 1 - k / trail.length;
+      s.putW(b.x, b.y, f > 0.6 ? lineChar(a.x - b.x, a.y - b.y) : '.', lerp(90, 255, f), lerp(160, 200, f), 255, clamp(f * 1.2, 0, 1));
+    }
+  }
+});
+</script>
+</body>
+</html>

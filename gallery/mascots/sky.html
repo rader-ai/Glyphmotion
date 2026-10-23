@@ -358,37 +358,12 @@ const CH = []; for (let i = 0; i < 256; i++) CH[i] = String.fromCharCode(i);
 const cc = (s) => s.charCodeAt(0);
 const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 
-/* ================= Grid: adapter between Nomi's pixel-space drawing and a Glyphmotion surface =================
-   The engine grid has no per-cell alpha, so each glyph is blended toward the stage color behind it
-   (the same gradient the page paints in CSS), using the quantized alpha levels this page always used. */
-class Grid {
-  constructor(stops) { this.stops = stops; this.ready = false; this.s = null; this.cols = 1; this.rows = 1; this.cw = 6; this.chh = 12; this.vw = 1; this.vh = 1; }
-  sync(s) {
-    this.s = s; this.cols = s.cols; this.rows = s.rows; this.cw = s.cw; this.chh = s.chh; this.vw = s.vw; this.vh = s.vh; this.N = s.N; this.fs = s.fs;
-    this.ready = s.vw >= 2 && s.vh >= 2;
-    this.A = new Uint8Array(s.N); this.bg = new Uint8ClampedArray(s.rows * 3);
-    this.setStops(this.stops);
-  }
-  setStops(stops) {
-    this.stops = stops; if (!this.s) return;
-    const { rows, chh, vh } = this, bg = this.bg;
-    for (let r = 0; r < rows; r++) {
-      const pct = (r + 0.5) * chh / vh * 100; let i = 0;
-      while (i < stops.length - 2 && stops[i + 1][0] <= pct) i++;
-      const a = stops[i], b = stops[i + 1], t = clamp((pct - a[0]) / Math.max(1e-6, b[0] - a[0]), 0, 1);
-      for (let k = 0; k < 3; k++) bg[r * 3 + k] = lerp(a[1][k], b[1][k], t);
-    }
-  }
-  clearBuf() { this.s.clear(); }
-  put(c, r, ch, R, G, B, A) {
-    if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return;
-    A = A > 255 ? 255 : A > 0 ? A : 0;
-    const a = (((A | 0) >> 6) + 1) * 0.25, i = r * this.cols + c;
-    if (a < 1) { const bg = this.bg, k = r * 3; R = bg[k] + (R - bg[k]) * a; G = bg[k + 1] + (G - bg[k + 1]) * a; B = bg[k + 2] + (B - bg[k + 2]) * a; }
-    this.A[i] = A; this.s.putI(i, CH[ch], R, G, B);
-  }
-  putXY(x, y, ch, R, G, B, A) { this.put(Math.floor(x / this.cw), Math.floor(y / this.chh), ch, R, G, B, A); }
-}
+/* ================= drawing helpers =================
+   Nomi draws in pixel space with char codes and 0..255 alpha. The surfaces are transparent and cells carry
+   their own opacity, so translucent glyphs blend with the stage gradient the page paints in CSS. */
+const ready = (s) => !!s && s.vw >= 2 && s.vh >= 2;
+const put = (s, c, r, code, R, G, B, A) => { s.put(c, r, CH[code], R, G, B, A / 255); };
+const putXY = (s, x, y, code, R, G, B, A) => { put(s, Math.floor(x / s.cw), Math.floor(y / s.chh), code, R, G, B, A); };
 
 /* ================= world: time of day, pointer, scroll ================= */
 const T0 = performance.now();
@@ -457,7 +432,6 @@ const PK = { dust: 1, spark: 2, zed: 3, conf: 4, food: 6 };
 class Nomi {
   constructor(cv, o) {
     this.o = o; this.cv = cv;
-    this.L = new Grid([[0, [29, 42, 96]], [100, [29, 42, 96]]]);
     this.sq = { x: 0, v: 0 }; this.ps = { x: 0, v: 0 };
     this.P = {}; for (const k of KEYS) this.P[k] = E.content[k];
     this.emo = o.emo || 'content'; this.emoT = 0; this.nextEmo = null; this.forced = !!o.emo; this.cycle = o.cycle || null; this.cycI = 0; this.cycT = o.cycleT || 3;
@@ -474,15 +448,18 @@ class Nomi {
     this.noticeT = 0; this.flyT = rnd(8, 14); this.fly = null;
     actors.push(this);
     this.S = GM.surface(cv, { fontSize: o.fs, transparent: true, bloom: o.bloom == null ? 0.35 : o.bloom, fps: o.fps || 30,
+      relayoutDelay: o.main === true ? 0 : 120, onVisible: o.onVisible,
       setup: () => this.onLayout(), step: (s, dt) => this.step(dt), draw: () => this.draw(), still: () => this.pose() });
   }
+  get L() { return this.S; }
+  get ok() { return ready(this.S); }
   get vis() { return !!this.S && this.S.active; }
   get q() { return this.sq.x; } set q(v) { this.sq.x = v; }
   get qv() { return this.sq.v; } set qv(v) { this.sq.v = v; }
   get pa() { return this.ps.x; } set pa(v) { this.ps.x = v; }
   get pav() { return this.ps.v; } set pav(v) { this.ps.v = v; }
   onLayout() {
-    const L = this.L, o = this.o; L.sync(this.S); if (!L.ready) return;
+    const L = this.L, o = this.o; if (!this.ok) return;
     this.rect = null;
     this.u = Math.min(L.vw / (o.uw || 7.4), L.vh / (o.uh || 4.7)) * (o.uk || 1);
     if (o.umax) this.u = Math.min(this.u, o.umax);
@@ -500,10 +477,7 @@ class Nomi {
     const h = hourNow();
     if (!force && Math.abs(h - this.hourSeen) < 0.01) return;
     this.hourSeen = h; const S = skyAt(h); this.skyS = S;
-    if (this.L.ready) {
-      if (this.o.bg !== false) { const st = stageStops(S, this.gpct); this.L.setStops(st); this.cv.parentNode.style.background = stageBg(st); }
-      else this.L.setStops([[0, [16, 22, 61]], [100, [16, 22, 61]]]);
-    }
+    if (this.ok && this.o.bg !== false) this.cv.parentNode.style.background = stageBg(stageStops(S, this.gpct));
   }
   /* ------ emotion control ------ */
   feel(name, dur, next, nextDur) {
@@ -552,7 +526,7 @@ class Nomi {
   pinLen() { return 0.85 * this.u * this.P.pinUp * (1 - this.q * 0.25) * (1 - 0.18 * clamp((62 - this.u) / 30, 0, 1)); }
   /* ------ pose: the resting state for reduced motion and for the first frame ------ */
   pose() {
-    if (!this.L.ready) return;
+    if (!this.ok) return;
     for (const k of KEYS) this.P[k] = E[this.emo][k];
     this.q = 0; this.qv = 0; this.hy = 0; this.vy = 0; this.hopS = 0; this.blink = 0; this.rect = null;
     const tgt = this.looking(); this.lookx = tgt[0] * this.P.look; this.looky = tgt[1] * this.P.look;
@@ -603,8 +577,7 @@ class Nomi {
   }
   /* ------ step ------ */
   step(dt) {
-    const o = this.o, u = this.u, L = this.L; if (!L.ready) return;
-    tickWorld();
+    const o = this.o, u = this.u, L = this.L; if (!this.ok) return;
     this.phase += dt * 3; this.breath += dt * (this.emo === 'asleep' ? 1.5 : this.emo === 'sleepy' ? 2 : 2.8);
     this.idle += dt;
     // scheduled cycle for showcase instances
@@ -774,9 +747,9 @@ class Nomi {
   /* ================= DRAW ================= */
   draw() {
     const L = this.L, { cols, rows, cw, chh } = L, u = this.u, P = this.P, o = this.o;
-    if (!L.ready) return;
+    if (!this.ok) return;
     this.applyBg(false);
-    L.clearBuf();
+    L.clear();
     const S = this.skyS || skyAt(hourNow()); const T = G.T;
     const gy = this.gy, gr = this.gr;
     // ---- ground ----
@@ -798,7 +771,7 @@ class Nomi {
       for (let j = 0; j < gl.length; j += 4) {
         const c = gl[j], r = gl[j + 1]; let glow = 0;
         if (lmOn) { const dx = (c * cw - this.lx_) / (3.2 * u); glow = this.lm * Math.exp(-dx * dx) * 0.9; }
-        L.put(c, r, gl[j + 2], lerp(lg[0], 255, glow * 0.6), lerp(lg[1], 226, glow * 0.6), lerp(lg[2], 170, glow * 0.4), clamp(gl[j + 3] + glow * 110, 0, 255));
+        put(L, c, r, gl[j + 2], lerp(lg[0], 255, glow * 0.6), lerp(lg[1], 226, glow * 0.6), lerp(lg[2], 170, glow * 0.4), clamp(gl[j + 3] + glow * 110, 0, 255));
       }
     }
     // ---- shadow ----
@@ -863,7 +836,7 @@ class Nomi {
     for (let r = Math.max(0, gr); r < rows; r++) for (let c = 0; c < cols; c++) {
       const v = shd[r * cols + c]; if (v < 0.14) continue;
       const ch = v > 0.7 ? 35 : v > 0.45 ? 61 : 58;
-      L.put(c, r, ch, sc[0], sc[1], sc[2], clamp(v * 270, 0, 255));
+      put(L, c, r, ch, sc[0], sc[1], sc[2], clamp(v * 270, 0, 255));
     }
   }
   drawBody(S) {
@@ -919,8 +892,8 @@ class Nomi {
           const bl = P.blush * (Math.exp(-d1 * 1.2) + Math.exp(-d2 * 1.2));
           if (bl > 0.05) { const m = clamp(bl, 0, 0.85); R = lerp(R, 255, m); Gc = lerp(Gc, 112, m); B = lerp(B, 140, m); }
         }
-        if (f > 0.9) { L.put(c, r, 35, base[0] * 0.42, base[1] * 0.3, base[2] * 0.36 + 18, 255); continue; }
-        L.put(c, r, CH_RAMP[idx], R, Gc, B, 255);
+        if (f > 0.9) { put(L, c, r, 35, base[0] * 0.42, base[1] * 0.3, base[2] * 0.36 + 18, 255); continue; }
+        put(L, c, r, CH_RAMP[idx], R, Gc, B, 255);
       }
     }
     // feet
@@ -930,8 +903,8 @@ class Nomi {
       const fx = x + sx * W * 0.28, fy = bottom + 2 - fl;
       const fr = Math.max(0.2 * u, cw * 0.7);
       for (let c = Math.floor((fx - fr) / cw); c <= Math.floor((fx + fr) / cw); c++) {
-        const r = Math.floor(fy / chh); L.put(c, r, 61, base[0] * 0.55, base[1] * 0.5, base[2] * 0.5, 255);
-        if (this.held) { L.put(c, r - 1, 124, base[0] * 0.5, base[1] * 0.45, base[2] * 0.45, 230); }
+        const r = Math.floor(fy / chh); put(L, c, r, 61, base[0] * 0.55, base[1] * 0.5, base[2] * 0.5, 255);
+        if (this.held) { put(L, c, r - 1, 124, base[0] * 0.5, base[1] * 0.45, base[2] * 0.45, 230); }
       }
     };
     foot(-1); foot(1);
@@ -952,7 +925,7 @@ class Nomi {
         const t = i / n; const ax = sx + dx * len * t, ay = sy + dy * len * t;
         let ch;
         if (i === n) ch = 111; else { const adx = Math.abs(dx), ady = Math.abs(dy); ch = adx < 0.4 * ady ? 124 : ady < 0.4 * adx ? 45 : (dx * dy > 0 ? 92 : 47); }
-        L.putXY(ax, ay, ch, base[0] * 0.95, base[1] * 0.8, base[2] * 0.75 + 10, 255);
+        putXY(L, ax, ay, ch, base[0] * 0.95, base[1] * 0.8, base[2] * 0.75 + 10, 255);
       }
     }
   }
@@ -974,7 +947,7 @@ class Nomi {
       if (sleepK > 0.5) { this.arc(ex, ey + 0.05 * u, rxE * 1.15, 0.2 * u, -1, ink, 117); }
       else if (happyK > 0.5) { this.arc(ex, ey + 0.1 * u, rxE * 1.1, Math.max(0.26 * u, chh * 0.7), 1, ink, 94); }
       else if (ryE < chh * 0.34) { // closed slit
-        for (let c = Math.floor((ex - rxE) / cw); c <= Math.floor((ex + rxE) / cw); c++) L.put(c, Math.floor(ey / chh), 45, ink[0], ink[1], ink[2], 255);
+        for (let c = Math.floor((ex - rxE) / cw); c <= Math.floor((ex + rxE) / cw); c++) put(L, c, Math.floor(ey / chh), 45, ink[0], ink[1], ink[2], 255);
       } else {
         ryE = Math.max(ryE, chh * 0.5);
         const lidCut = P.lid;
@@ -985,10 +958,10 @@ class Nomi {
           const cut = -ryE + 2 * ryE * lidCut + P.sad * 0.6 * ryE * ((dx * side) / rxE);
           if (dy < cut) continue;
           const ch = e < 0.3 ? 64 : e < 0.7 ? 35 : 37;
-          L.put(c, r, ch, ink[0], ink[1], ink[2], e > 0.9 ? 190 : 255);
+          put(L, c, r, ch, ink[0], ink[1], ink[2], e > 0.9 ? 190 : 255);
         }
         // glint
-        if (rxE > 1.1 * cw && ryE > 0.9 * chh) L.putXY(ex - rxE * 0.35, ey - ryE * 0.35, 46, 255, 250, 235, 235);
+        if (rxE > 1.1 * cw && ryE > 0.9 * chh) putXY(L, ex - rxE * 0.35, ey - ryE * 0.35, 46, 255, 250, 235, 235);
       }
       // brows
       const raise = side < 0 ? P.bl : P.br; const bs = P.sad;
@@ -1001,7 +974,7 @@ class Nomi {
           const yy = by0 - bs * 0.1 * u * inner;
           const a = clamp(Math.max(Math.abs(bs), raise) * 1.3, 0, 1);
           const sl = -bs * inner; const chb = Math.abs(bs) > 0.5 ? (side * bs * (t > 0 ? 1 : 1) > 0 ? 92 : 47) : 45;
-          L.putXY(ex + t * len, yy, Math.abs(bs) > 0.55 ? (((side < 0) === (bs > 0)) ? 47 : 92) : 45, ink[0], ink[1], ink[2], 255 * a);
+          putXY(L, ex + t * len, yy, Math.abs(bs) > 0.55 ? (((side < 0) === (bs > 0)) ? 47 : 92) : 45, ink[0], ink[1], ink[2], 255 * a);
         }
       }
     }
@@ -1013,7 +986,7 @@ class Nomi {
     const sa = clamp((mc - 0.08) / 0.4, 0, 1) * (1 - oa), fa = clamp((-mc - 0.08) / 0.4, 0, 1) * (1 - oa);
     const na = Math.max(0, 1 - sa - fa) * (1 - oa);
     const wob = P.sh > 0.15;
-    const row = (chf, a, wid) => { if (a < 0.04) return; for (let i = 0; i < n; i++) { const t = n > 1 ? i / (n - 1) * 2 - 1 : 0; L.putXY(mx + t * mw * wid, myc, chf(i, t), ink[0], ink[1], ink[2], 255 * a); } };
+    const row = (chf, a, wid) => { if (a < 0.04) return; for (let i = 0; i < n; i++) { const t = n > 1 ? i / (n - 1) * 2 - 1 : 0; putXY(L, mx + t * mw * wid, myc, chf(i, t), ink[0], ink[1], ink[2], 255 * a); } };
     row((i) => wob ? 126 : 45, na, 0.8);
     row((i) => n >= 3 ? (i === 0 ? 92 : i === n - 1 ? 47 : 95) : 117, sa, 1);
     row((i) => n >= 3 ? (i === 0 ? 47 : i === n - 1 ? 92 : 94) : 94, fa, 1);
@@ -1025,7 +998,7 @@ class Nomi {
         if (e > 1.1) continue;
         if (mc > 0.4 && dy < -ry * 0.2 && mo < 0.9) continue;
         const inner = dy > ry * 0.2 && e < 0.9;
-        L.put(c, r, inner ? 126 : 64, inner ? 255 : ink[0], inner ? 120 : ink[1], inner ? 140 : ink[2], 250 * oa);
+        put(L, c, r, inner ? 126 : 64, inner ? 255 : ink[0], inner ? 120 : ink[1], inner ? 140 : ink[2], 250 * oa);
       }
     }
     // day dial (belly): a row of tick marks, the current hour glows
@@ -1033,7 +1006,7 @@ class Nomi {
       const hrs = hourNow(); const ticks = 9; const dyy = bottom - H * 0.12;
       for (let i = 0; i < ticks; i++) {
         const hh = 8 + i * 1.0; const lit = Math.abs(hrs - hh) < 0.55; const tx = x + (i - (ticks - 1) / 2) * 0.27 * u + tilt * H * 0.17;
-        L.putXY(tx, dyy, lit ? 124 : 46, lit ? 255 : base[0] * 0.5, lit ? 120 : base[1] * 0.45, lit ? 60 : base[2] * 0.4, lit ? 255 : 200);
+        putXY(L, tx, dyy, lit ? 124 : 46, lit ? 255 : base[0] * 0.5, lit ? 120 : base[1] * 0.45, lit ? 60 : base[2] * 0.4, lit ? 255 : 200);
       }
     }
   }
@@ -1041,13 +1014,13 @@ class Nomi {
     // dir 1: upper arc (happy ^), dir -1: lower arc (closed u)
     const L = this.L, cw = L.cw, chh = L.chh;
     const small = rx < cw * 1.05;
-    if (small) { L.putXY(cx, cy, ch1, ink[0], ink[1], ink[2], 255); return; }
+    if (small) { putXY(L, cx, cy, ch1, ink[0], ink[1], ink[2], 255); return; }
     const cMin = Math.floor((cx - rx - cw) / cw), cMax = Math.floor((cx + rx + cw) / cw);
     for (let c = cMin; c <= cMax; c++) {
       const dx = ((c + 0.5) * cw - cx) / rx; if (Math.abs(dx) > 1.05) continue;
       const yy = cy - dir * ry * Math.sqrt(Math.max(0, 1 - dx * dx)) + dir * ry * 0.35;
       const ch = dx < -0.45 ? (dir > 0 ? 47 : 92) : dx > 0.45 ? (dir > 0 ? 92 : 47) : (dir > 0 ? 94 : 95);
-      L.putXY((c + 0.5) * cw, yy, ch, ink[0], ink[1], ink[2], 255);
+      putXY(L, (c + 0.5) * cw, yy, ch, ink[0], ink[1], ink[2], 255);
     }
   }
   drawPin() {
@@ -1061,8 +1034,8 @@ class Nomi {
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       const dx = (c + 0.5) * cw - tipX, dy = ((r + 0.5) * chh - tipY) * 1.8; const d = Math.sqrt(dx * dx + dy * dy) / hr; if (d >= 1) continue;
       const a = (1 - d) * (1 - d) * glow; if (a < 0.06) continue;
-      if (c >= 0 && r >= 0 && c < L.cols && r < L.rows) { const i = r * L.cols + c; if (L.s.ch[i] !== ' ' && L.A[i] > 40) continue; }
-      L.put(c, r, d < 0.45 ? 58 : 46, 255, 214, 140, a * 150);
+      if (c >= 0 && r >= 0 && c < L.cols && r < L.rows) { const i = r * L.cols + c; if (L.ch[i] !== ' ' && L.a[i] > 40) continue; }
+      put(L, c, r, d < 0.45 ? 58 : 46, 255, 214, 140, a * 150);
     }
     // blade: a small triangular gnomon fin, wide at the head and sharp at the tip
     {
@@ -1080,21 +1053,21 @@ class Nomi {
           const edge = e > 0.62;
           const chv = edge ? (dx < 0 ? (slope < -0.15 ? 124 : 47) : (slope > 0.15 ? 124 : 92)) : (e < 0.25 ? 124 : 58);
           const lit = (dx < 0 ? 1 : 0.8) * (0.6 + 0.4 * warm);
-          L.put(c, r, t < 0.06 ? 33 : chv, lerp(200, 255, lit), lerp(150, 224, lit), lerp(120, 160, warm * lit), 255);
+          put(L, c, r, t < 0.06 ? 33 : chv, lerp(200, 255, lit), lerp(150, 224, lit), lerp(120, 160, warm * lit), 255);
         }
       }
     }
     // tip
-    L.putXY(tipX, tipY, 42, 255, 244, 214, 255);
-    L.putXY(tipX, tipY - chh * 0.8, 43, 255, 230, 170, 220 * glow);
+    putXY(L, tipX, tipY, 42, 255, 244, 214, 255);
+    putXY(L, tipX, tipY - chh * 0.8, 43, 255, 230, 170, 220 * glow);
     this.tipX = tipX; this.tipY = tipY;
-    if (this.o.main === true && !G.scrubbed && T > 2 && !this.held) { const pu = 0.5 + 0.5 * Math.sin(T * 3.2); const al = 70 + 160 * pu; L.putXY(tipX - cw * (2.2 + pu), tipY, 40, 255, 224, 150, al); L.putXY(tipX + cw * (2.2 + pu), tipY, 41, 255, 224, 150, al); }
+    if (this.o.main === true && !G.scrubbed && T > 2 && !this.held) { const pu = 0.5 + 0.5 * Math.sin(T * 3.2); const al = 70 + 160 * pu; putXY(L, tipX - cw * (2.2 + pu), tipY, 40, 255, 224, 150, al); putXY(L, tipX + cw * (2.2 + pu), tipY, 41, 255, 224, 150, al); }
     // orbit (focused)
     if (P.orbit > 0.15) {
       const R = 0.62 * u * P.orbit;
       for (let i = 0; i < 6; i++) {
         const a = T * 5.5 + i * 1.0472; const ox = tipX + Math.cos(a) * R * 1.3, oy = tipY + Math.sin(a) * R * 0.62;
-        L.putXY(ox, oy, i === 0 ? 42 : i < 3 ? 111 : 46, 255, 236, 180, 255 * (1 - i * 0.14) * P.orbit);
+        putXY(L, ox, oy, i === 0 ? 42 : i < 3 ? 111 : 46, 255, 236, 180, 255 * (1 - i * 0.14) * P.orbit);
       }
     }
   }
@@ -1102,27 +1075,34 @@ class Nomi {
     const L = this.L, Pl = this.parts, { k, ch, x, y, vx, t, m, r, g, b } = Pl;
     for (let i = 0; i < Pl.n; i++) {
       const kd = k[i], a = 255 * Math.min(1, (1 - t[i] / m[i]) * 2.2);
-      if (kd === PK.food) { const tw = 0.7 + 0.3 * Math.sin(G.T * 8); L.putXY(x[i], y[i], 42, 255, 224, 150, 255 * tw); L.putXY(x[i] - L.cw, y[i], 43, 255, 200, 120, 130); L.putXY(x[i] + L.cw, y[i], 43, 255, 200, 120, 130); L.putXY(x[i], y[i] - L.chh, 94, 255, 214, 130, 150); continue; }
-      L.putXY(x[i], y[i], kd === PK.zed ? (t[i] > m[i] * 0.5 ? cc('Z') : cc('z')) : ch[i], r[i], g[i], b[i], a);
+      if (kd === PK.food) { const tw = 0.7 + 0.3 * Math.sin(G.T * 8); putXY(L, x[i], y[i], 42, 255, 224, 150, 255 * tw); putXY(L, x[i] - L.cw, y[i], 43, 255, 200, 120, 130); putXY(L, x[i] + L.cw, y[i], 43, 255, 200, 120, 130); putXY(L, x[i], y[i] - L.chh, 94, 255, 214, 130, 150); continue; }
+      putXY(L, x[i], y[i], kd === PK.zed ? (t[i] > m[i] * 0.5 ? cc('Z') : cc('z')) : ch[i], r[i], g[i], b[i], a);
     }
     const f = this.fly;
-    if (f) { const sg = Math.sign(f.vx); L.putXY(f.x, f.y, 42, 220, 245, 255, 255); L.putXY(f.x - sg * L.cw * 1.2, f.y, 46, 190, 235, 255, 170); L.putXY(f.x - sg * L.cw * 2.4, f.y, 46, 190, 235, 255, 90); }
+    if (f) { const sg = Math.sign(f.vx); putXY(L, f.x, f.y, 42, 220, 245, 255, 255); putXY(L, f.x - sg * L.cw * 1.2, f.y, 46, 190, 235, 255, 170); putXY(L, f.x - sg * L.cw * 2.4, f.y, 46, 190, 235, 255, 90); }
   }
 }
 function u0(n) { return n.u; }
 const CH_RAMP = [32, 46, 58, 45, 61, 43, 42, 35, 37, 64];
 
-/* ================= world clock: the engine drives each surface, this keeps the shared page state moving ================= */
-let tw = performance.now(), rectT = 0;
-function tickWorld() {
-  const now = performance.now(), real = (now - tw) / 1000; if (real < 0.008) return; tw = now;
-  const dt = Math.min(0.1, real), sy = window.scrollY;
-  if (real > 0.25) { G.lastScrollY = sy; G.scrollV = 0; }
-  else { const v = (sy - G.lastScrollY) / Math.max(dt, 0.001); G.lastScrollY = sy; G.scrollV += (v - G.scrollV) * Math.min(1, dt * 8); }
+/* ================= world clock: page-wide state, once per frame while anything animates =================
+   Under reduced motion there are no frames, so everything this moves has a still path (see settleWorld). */
+let rectT = 0;
+GM.onFrame((dt) => {
+  const sy = window.scrollY;
+  const v = (sy - G.lastScrollY) / Math.max(dt, 0.001); G.lastScrollY = sy; G.scrollV += (v - G.scrollV) * Math.min(1, dt * 8);
   if (G.hourOv != null && !G.hourScrub && !G.hourPin) {
     if (G.hourHold > 0) G.hourHold -= dt; else { const rh = realHour(); let d = rh - G.hourOv; if (d > 12) d -= 24; if (d < -12) d += 24; G.hourOv += d * Math.min(1, dt * 1.6); G.hourOv = (G.hourOv + 24) % 24; if (Math.abs(d) < 0.03) G.hourOv = null; }
   }
   rectT -= dt; if (rectT <= 0) { rectT = 0.12; for (const a of actors) if (a.vis) a.rect = a.cv.getBoundingClientRect(); }
+});
+// reduced motion: the sun position eases back to the real hour by itself in the loop; with no loop, return it after the hold
+let rmHourT = 0;
+function settleWorld() {
+  if (!GM.reducedMotion) return;
+  clearTimeout(rmHourT);
+  if (G.hourOv == null || G.hourScrub || G.hourPin) return;
+  rmHourT = setTimeout(() => { if (G.hourOv == null || G.hourScrub || G.hourPin) return; G.hourOv = null; for (const a of all) { a.applyBg(true); if (a.ok) a.settle(); } }, Math.max(0, G.hourHold || 0) * 1000 + 200);
 }
 
 
@@ -1132,16 +1112,16 @@ live.el = $('#live');
 /* ---------- build instances ---------- */
 const all = [];
 function mk(id, o) { const cv = document.getElementById(id); if (!cv) return null; const n = new Nomi(cv, o); all.push(n); return n; }
-const hero = mk('cvHero', { fs: 11, main: true, dial: true, uw: 7.6, uh: 4.9, umax: 92, ground: 0.8, pn: 40 });
-const play = mk('cvPlay', { fs: 10.5, main: true, dial: true, uw: 7.6, uh: 4.9, umax: 80, ground: 0.8, pn: 40 });
+const hero = mk('cvHero', { onVisible: () => syncDock(), fs: 11, main: true, dial: true, uw: 7.6, uh: 4.9, umax: 92, ground: 0.8, pn: 40 });
+const play = mk('cvPlay', { onVisible: () => syncDock(), fs: 10.5, main: true, dial: true, uw: 7.6, uh: 4.9, umax: 80, ground: 0.8, pn: 40 });
 const dock = mk('cvDock', { fs: 6, fps: 20, main: 'dock', uw: 6, uh: 4.3, ground: 0.82, cx: 0.5 });
 const cards = ORDER.map((e) => mk('cv-' + e, { fs: 8, emo: e, uw: 5.2, uh: 4.9, ground: 0.84, bloom: 0.25, fps: 12 }));
 const wild = {
   nav: mk('cvNav', { fps: 20, fs: 5, emo: 'content', uw: 4.6, uh: 3.5, ground: 0.95, bloom: 0.25, bg: false, hopForced: true }),
   e404: mk('cv404', { fps: 20, fs: 8, emo: 'concerned', cycle: ['concerned', 'curious', 'concerned', 'shy'], cycleT: 2.6, uw: 7.4, uh: 4.6, ground: 0.84, free: false,
-    extra: (n) => { const L = n.L; const t = G.T; const q = '?'.charCodeAt(0); const y = n.tipY - L.chh * 2.4 - Math.sin(t * 2) * 3; L.putXY(n.tipX + L.cw * 3, y, q, 255, 220, 150, 255); if (Math.sin(t * 2 + 1) > 0.2) L.putXY(n.tipX - L.cw * 4, y + L.chh * 1.4, q, 200, 220, 255, 200); } }),
+    extra: (n) => { const L = n.L; const t = G.T; const q = '?'.charCodeAt(0); const y = n.tipY - L.chh * 2.4 - Math.sin(t * 2) * 3; putXY(L, n.tipX + L.cw * 3, y, q, 255, 220, 150, 255); if (Math.sin(t * 2 + 1) > 0.2) putXY(L, n.tipX - L.cw * 4, y + L.chh * 1.4, q, 200, 220, 255, 200); } }),
   load: mk('cvLoad', { fps: 20, fs: 8, emo: 'focused', uw: 7.4, uh: 4.6, ground: 0.8,
-    extra: (n) => { const L = n.L; const w = Math.floor(L.cols * 0.7), c0 = Math.floor((L.cols - w) / 2), r = Math.min(L.rows - 1, n.gr + 2); const p = (G.T * 0.22) % 1; for (let i = 0; i < w; i++) { const on = i / w < p; L.put(c0 + i, r, on ? 61 : 45, on ? 255 : 160, on ? 214 : 170, on ? 130 : 200, on ? 255 : 120); } L.put(c0 - 1, r, 91, 200, 210, 240, 255); L.put(c0 + w, r, 93, 200, 210, 240, 255); } }),
+    extra: (n) => { const L = n.L; const w = Math.floor(L.cols * 0.7), c0 = Math.floor((L.cols - w) / 2), r = Math.min(L.rows - 1, n.gr + 2); const p = (G.T * 0.22) % 1; for (let i = 0; i < w; i++) { const on = i / w < p; put(L, c0 + i, r, on ? 61 : 45, on ? 255 : 160, on ? 214 : 170, on ? 130 : 200, on ? 255 : 120); } put(L, c0 - 1, r, 91, 200, 210, 240, 255); put(L, c0 + w, r, 93, 200, 210, 240, 255); } }),
   win: mk('cvWin', { fps: 20, fs: 8, emo: 'delighted', cycle: ['delighted', 'proud'], cycleT: 3.2, uw: 7.4, uh: 4.6, ground: 0.84, pn: 60, hopForced: true,
     onStep: (n, dt) => { if (n.confetti <= 0) n.confetti = 1; } }),
   foot: mk('cvFoot', { fps: 20, fs: 8, emo: 'asleep', uw: 7.4, uh: 4.6, ground: 0.84 })
@@ -1152,19 +1132,18 @@ const dockEls = { box: $('#dock'), sleep: $('#dockSleep'), hide: $('#dockHide'),
 class Sketch {
   constructor(id, fn, fs) {
     this.cv = document.getElementById(id); this.fn = fn; this.t = 0; this.px = null; this.py = null;
-    this.L = new Grid([[0, [27, 36, 88]], [100, [51, 48, 95]]]);
     this.S = GM.surface(this.cv, { fontSize: fs || 8, transparent: true, bloom: 0.35, fps: 20,
-      setup: (s) => this.L.sync(s), step: (s, dt) => { this.t += dt; }, draw: () => this.draw(), still: () => { this.t = 0; } });
+      step: (s, dt) => { this.t += dt; }, draw: () => this.draw(), still: () => { this.t = 0; } });
     this.cv.addEventListener('pointermove', (e) => { const r = this.cv.getBoundingClientRect(); this.px = e.clientX - r.left; this.py = e.clientY - r.top; if (GM.reducedMotion) this.S.invalidate(); });
     this.cv.addEventListener('pointerleave', () => { this.px = null; });
     this.cv.addEventListener('pointerdown', () => { this.down = true; if (GM.reducedMotion) this.S.invalidate(); }); window.addEventListener('pointerup', () => { this.down = false; });
   }
-  draw() { const L = this.L; if (!L.ready) return; L.clearBuf(); this.fn(L, this); }
+  draw() { const L = this.S; if (!ready(L)) return; L.clear(); this.fn(L, this); }
 }
-const P = (L, x, y, ch, r, g, b, a) => L.putXY(x, y, ch.charCodeAt(0), r, g, b, a == null ? 255 : a);
+const P = (L, x, y, ch, r, g, b, a) => putXY(L, x, y, ch.charCodeAt(0), r, g, b, a == null ? 255 : a);
 const sk1 = new Sketch('sk1', (L, s) => { // Wick the moth: orbits the pointer lamp
   const w = L.vw, h = L.vh, t = s.t; const lx = s.px != null ? s.px : w * 0.5 + Math.sin(t * 0.5) * w * 0.25, ly = s.py != null ? s.py : h * 0.45;
-  for (let r = 0; r < L.rows; r++) for (let c = 0; c < L.cols; c++) { const dx = c * L.cw - lx, dy = (r * L.chh - ly) * 1.8; const d = Math.sqrt(dx * dx + dy * dy); if (d < 120) { const a = (1 - d / 120); L.put(c, r, a > 0.6 ? 58 : 46, 255, 214, 140, a * 210); } }
+  for (let r = 0; r < L.rows; r++) for (let c = 0; c < L.cols; c++) { const dx = c * L.cw - lx, dy = (r * L.chh - ly) * 1.8; const d = Math.sqrt(dx * dx + dy * dy); if (d < 120) { const a = (1 - d / 120); put(L, c, r, a > 0.6 ? 58 : 46, 255, 214, 140, a * 210); } }
   P(L, lx, ly, '*', 255, 244, 214);
   const a = t * 3.1 + Math.sin(t * 1.3) * 2, R = 48 + Math.sin(t * 2.2) * 20; const mx = lx + Math.cos(a) * R * 1.6, my = ly + Math.sin(a * 1.3) * R * 0.6 - 6;
   const fl = Math.sin(t * 34) > 0 ? 1 : 0, cw = L.cw;
@@ -1175,7 +1154,7 @@ const sk1 = new Sketch('sk1', (L, s) => { // Wick the moth: orbits the pointer l
 const sk2 = new Sketch('sk2', (L, s) => { // Cumulo, a literal cloud
   const w = L.vw, h = L.vh, t = s.t; const cx = w * 0.5 + Math.sin(t * 0.8) * 24, cy = h * 0.4 + Math.sin(t * 1.6) * 4;
   const blobs = [[0, 0, 56], [-52, 14, 38], [52, 14, 40], [18, -26, 38]];
-  for (let r = 0; r < L.rows; r++) for (let c = 0; c < L.cols; c++) { const x = c * L.cw - cx, y = r * L.chh - cy; let m = 0; for (const b of blobs) { const dx = x - b[0], dy = (y - b[1]) * 1.5; m = Math.max(m, 1 - Math.sqrt(dx * dx + dy * dy) / b[2]); } if (m > 0) L.put(c, r, m > 0.5 ? 64 : m > 0.25 ? 37 : 35, 220 - (1 - m) * 60, 228 - (1 - m) * 50, 245, 255 * Math.min(1, m * 3)); }
+  for (let r = 0; r < L.rows; r++) for (let c = 0; c < L.cols; c++) { const x = c * L.cw - cx, y = r * L.chh - cy; let m = 0; for (const b of blobs) { const dx = x - b[0], dy = (y - b[1]) * 1.5; m = Math.max(m, 1 - Math.sqrt(dx * dx + dy * dy) / b[2]); } if (m > 0) put(L, c, r, m > 0.5 ? 64 : m > 0.25 ? 37 : 35, 220 - (1 - m) * 60, 228 - (1 - m) * 50, 245, 255 * Math.min(1, m * 3)); }
   P(L, cx - 18, cy - 2, 'o', 40, 40, 80); P(L, cx + 18, cy - 2, 'o', 40, 40, 80); P(L, cx, cy + 12, s.down ? 'n' : 'u', 40, 40, 80);
   if (s.down || s.px != null && Math.abs(s.px - cx) < 60) for (let i = 0; i < 12; i++) P(L, cx - 56 + i * 10 + (i % 2) * 3, cy + 40 + ((t * 80 + i * 17) % 50), '|', 140, 190, 255, 200);
 }, 8);
@@ -1191,11 +1170,8 @@ const sk3 = new Sketch('sk3', (L, s) => { // Tick, a clock-hand bird
 
 /* ---------- dock: shows only when the big stages are off screen ---------- */
 let dockHidden = false; try { dockHidden = localStorage.getItem('nomiDockHidden') === '1'; } catch (e) {}
-// the dock shows only while neither big stage is on screen (a page behavior, so it keeps its own small observer)
-const stageSeen = new Map();
-const stageIO = new IntersectionObserver((es) => { for (const e of es) stageSeen.set(e.target, e.isIntersecting); syncDock(); }, { rootMargin: '60px' });
-stageIO.observe(hero.cv); stageIO.observe(play.cv);
-function mainVisible() { return !!(stageSeen.get(hero.cv) || stageSeen.get(play.cv)); }
+// the dock shows only while neither big stage is on screen
+function mainVisible() { return hero.S.visible || play.S.visible; }
 function syncDock() {
   const want = !mainVisible() && !dockHidden;
   dockEls.box.hidden = !want; dockEls.show.hidden = !(dockHidden && !mainVisible());
@@ -1258,7 +1234,7 @@ function wireStage(n, box) {
   });
   const up = (e) => {
     if (!down) return; const d = down; down = null;
-    if (d.type === 'scrub') { n.scrub = false; G.hourScrub = false; G.hourHold = 2.2; n.emoT = 1.4; n.nextEmo = null; cv.style.cursor = ''; if (n.emo === 'asleep') { n.idle = 80; } else n.feel(n.emo, 1.2, null); }
+    if (d.type === 'scrub') { n.scrub = false; G.hourScrub = false; G.hourHold = 2.2; settleWorld(); n.emoT = 1.4; n.nextEmo = null; cv.style.cursor = ''; if (n.emo === 'asleep') { n.idle = 80; } else n.feel(n.emo, 1.2, null); }
     else if (d.type === 'body') {
       if (d.moved) { n.held = false; n.hopS = 0; n.vy = 0; n.feel('delighted', 1.6, 'content'); n.emoT = 1.8; n.nextEmo = 'content'; n.nextDur = 0; n.x = clamp(n.x, n.u * 1.5, n.L.vw - n.u * 1.5); if (GM.reducedMotion) { n.hy = 0; n.settle(); } }
       else n.poke();

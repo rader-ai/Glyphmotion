@@ -259,36 +259,14 @@ a{color:inherit}
   <p class="end">end of sheet</p>
 </main>
 
+<script src="../../src/glyphmotion.js"></script>
 <script>
 (() => {
 'use strict';
-const FAMILY = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
-const STEP = 1 / 60;
-const reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-
-// ---------- helpers ----------
-const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
-const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-function hash2(x, y) {
-  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
-  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
-  return (h >>> 0) / 4294967296;
-}
-function vnoise(x, y) {
-  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
+const GM = Glyphmotion;
+const { clamp, lerp, smooth, hash2, vnoise, lineChar } = GM;
+// scene-only helpers (the engine owns the loop, canvas, font, buffers, bloom and visibility)
 const fbm = (x, y) => vnoise(x, y) * 0.6 + vnoise(x * 2.1 + 5, y * 2.1 + 9) * 0.3 + vnoise(x * 4.3 + 11, y * 4.3 + 3) * 0.1;
-function lineChar(x, y) {
-  let a = Math.atan2(y, x); if (a < 0) a += Math.PI; if (a >= Math.PI) a -= Math.PI;
-  if (a < Math.PI / 8 || a > 7 * Math.PI / 8) return '-';
-  if (a < 3 * Math.PI / 8) return '\\';
-  if (a < 5 * Math.PI / 8) return '|';
-  return '/';
-}
 const gOut = [0, 0, 0];
 function grad(stops, f) {
   f = clamp(f, 0, 1);
@@ -300,140 +278,15 @@ function grad(stops, f) {
   }
   const l = stops[stops.length - 1]; gOut[0] = l[1]; gOut[1] = l[2]; gOut[2] = l[3]; return gOut;
 }
-const cssCache = new Map();
-function css(k) {
-  let s = cssCache.get(k);
-  if (!s) { s = 'rgb(' + ((k >> 16) & 255) + ',' + ((k >> 8) & 255) + ',' + (k & 255) + ')'; if (cssCache.size > 8000) cssCache.clear(); cssCache.set(k, s); }
-  return s;
-}
-
-// ---------- shared engine: grid, fixed 60Hz sim, 30fps render, bloom ----------
-const instances = [];
-let raf = 0, lastT = 0;
-
-function createAscii(o) {
-  const cv = o.canvas, host = o.host, scene = o.scene;
-  const ctx = cv.getContext('2d', { alpha: false });
-  const bcv = document.createElement('canvas'), bctx = bcv.getContext('2d');
-  const e = { cols: 0, rows: 0, asp: 2, cw: 5, chh: 10, W: 0, H: 0, time: 0, energy: 0, target: 0, buf: {}, put: null, at: null };
-  let dpr = 1, vw = 1, vh = 1, FONT = '', Bch = [], Br, Bg, Bb;
-  let acc = 0, rAcc = 1, ready = false, visible = true, rzTimer = 0;
-
-  e.put = (c, r, ch, R, G, B) => {
-    if (c < 0 || c >= e.cols || r < 0 || r >= e.rows) return;
-    const i = r * e.cols + c; Bch[i] = ch; Br[i] = R; Bg[i] = G; Bb[i] = B;
-  };
-  e.at = (c, r) => (c < 0 || c >= e.cols || r < 0 || r >= e.rows) ? -1 : r * e.cols + c;
-
-  function layout() {
-    const rect = host.getBoundingClientRect();
-    vw = Math.max(1, rect.width); vh = Math.max(1, rect.height);
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
-    const fs = o.fs(vw);
-    FONT = '600 ' + fs.toFixed(2) + 'px ' + FAMILY;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.font = FONT;
-    e.cw = ctx.measureText('M').width || fs * 0.6;
-    e.chh = fs * 1.2;
-    e.cols = Math.ceil(vw / e.cw); e.rows = Math.ceil(vh / e.chh);
-    e.asp = e.chh / e.cw; e.W = e.cols; e.H = e.rows * e.asp;
-    const N = e.cols * e.rows;
-    Bch = new Array(N).fill(' '); Br = new Uint8ClampedArray(N); Bg = new Uint8ClampedArray(N); Bb = new Uint8ClampedArray(N);
-    e.buf.ch = Bch; e.buf.r = Br; e.buf.g = Bg; e.buf.b = Bb;
-    bcv.width = Math.max(1, Math.round(cv.width / 5)); bcv.height = Math.max(1, Math.round(cv.height / 5));
-    scene.layout(e);
-  }
-
-  function render() {
-    Bch.fill(' ');
-    scene.draw(e);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-    ctx.fillStyle = o.bg; ctx.fillRect(0, 0, vw, vh);
-    ctx.font = FONT; ctx.textBaseline = 'top';
-    const cols = e.cols, rows = e.rows, cw = e.cw, chh = e.chh;
-    let lastK = -1;
-    for (let r = 0; r < rows; r++) {
-      const y = r * chh, base = r * cols;
-      for (let c = 0; c < cols; c++) {
-        const i = base + c, ch = Bch[i];
-        if (ch === ' ') continue;
-        const k = ((Br[i] & 0xfc) << 16) | ((Bg[i] & 0xfc) << 8) | (Bb[i] & 0xfc);
-        if (k !== lastK) { ctx.fillStyle = css(k); lastK = k; }
-        ctx.fillText(ch, c * cw, y);
-      }
-    }
-    // cheap bloom: shrink the frame, add it back stretched
-    bctx.globalCompositeOperation = 'copy';
-    bctx.drawImage(cv, 0, 0, bcv.width, bcv.height);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = o.bloom == null ? 0.5 : o.bloom;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(bcv, 0, 0, cv.width, cv.height);
-    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-  }
-
-  function step(dt) {
-    e.time += dt;
-    e.energy += (e.target - e.energy) * Math.min(1, dt * 4);
-    if (scene.step) scene.step(dt, e);
-  }
-
-  const inst = {
-    e, scene,
-    active() { return ready && visible && !document.hidden && !reduce; },
-    advance(dt) {
-      acc += dt; let n = 0;
-      while (acc >= STEP && n < 8) { step(STEP); acc -= STEP; n++; }
-      if (n === 8) acc = 0;
-      rAcc += dt;
-      if (rAcc >= 1 / 30 - 0.004) { rAcc = 0; render(); }
-    },
-    requestRender() { if (ready && (reduce || !inst.active())) render(); },
-    setVisible(v) { visible = v; if (v) { if (ready && reduce) render(); kick(); } },
-    start() {
-      e.time = scene.still || 5;
-      layout(); render(); ready = true; kick();
-    },
-    relayout() { clearTimeout(rzTimer); rzTimer = setTimeout(() => { if (!ready) return; layout(); render(); }, 120); }
-  };
-  instances.push(inst);
-  if ('ResizeObserver' in window) new ResizeObserver(() => inst.relayout()).observe(host);
-  if (io) { io.observe(host); hostMap.set(host, inst); }
-  return inst;
-}
-
-const hostMap = new Map();
-const io = 'IntersectionObserver' in window
-  ? new IntersectionObserver(entries => { for (const en of entries) { const it = hostMap.get(en.target); if (it) it.setVisible(en.isIntersecting); } }, { rootMargin: '80px' })
-  : null;
-
-function tick(now) {
-  raf = 0;
-  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
-  let any = false;
-  for (const it of instances) { if (!it.active()) continue; any = true; it.advance(dt); }
-  if (any) raf = requestAnimationFrame(tick);
-}
-function kick() {
-  if (raf) return;
-  if (!instances.some(i => i.active())) return;
-  lastT = performance.now(); raf = requestAnimationFrame(tick);
-}
-document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
-
-// =====================================================================
-// SCENES
-// =====================================================================
 
 // ---------- Palm Springs: desert sun ----------
 function desertScene() {
+  let put;
   let hz = 0, sunX = 0, sunY = 0, sunR = 0, t1 = null, t2 = null, hzRow = 0;
   const SKYS = [[0, 52, 24, 88], [0.55, 178, 56, 104], [1, 255, 170, 86]];
   const SKYCH = ' .:-=+';
   function cactus(e, cx, baseR, h, sc) {
-    const P = e.put, g = [86 * sc, 168 * sc, 108 * sc], rim = [255, 176, 100];
+    const P = put, g = [86 * sc, 168 * sc, 108 * sc], rim = [255, 176, 100];
     for (let k = 0; k < h; k++) {
       const r = baseR - k;
       P(cx, r, k === h - 1 ? '/' : '(', g[0], g[1], g[2]);
@@ -449,13 +302,13 @@ function desertScene() {
   }
   return {
     still: 6,
-    layout(e) {
+    setup(e) { put = e.put.bind(e);
       hz = e.H * 0.64; hzRow = hz / e.asp;
-      sunX = e.W * 0.66; sunY = hz - e.H * 0.13; sunR = e.H * 0.18;
+      sunX = e.W * 0.66; sunR = e.H * 0.15; sunY = hz - e.H * 0.39;
       t1 = new Float32Array(e.cols); t2 = new Float32Array(e.cols);
     },
     draw(e) {
-      const { cols, rows, asp, time, energy, put } = e, H = e.H;
+      const { cols, rows, asp, time, energy } = e, H = e.H;
       const sR = sunR * (1 + 0.1 * energy), glowK = 1 + 0.3 * energy;
       const shim = 0.35 * (1 + energy);
       for (let c = 0; c < cols; c++) {
@@ -500,7 +353,7 @@ function desertScene() {
           const dx = X - sunX, dy = Y - sunY, ds = Math.sqrt(dx * dx + dy * dy);
           if (ds < sR) {
             const q = ds / sR;
-            put(c, r, q < 0.45 ? '@' : q < 0.7 ? '%' : q < 0.88 ? '#' : '*', 255, lerp(244, 150, q * q), lerp(196, 78, q));
+            put(c, r, q < 0.72 ? '@' : q < 0.9 ? '%' : '#', 255, lerp(244, 150, q * q), lerp(196, 78, q));
             continue;
           }
           const hs = hash2(c, r * 5 + 1);
@@ -528,6 +381,7 @@ function desertScene() {
 
 // ---------- San Francisco: fog over a bridge ----------
 function fogScene() {
+  let put;
   let deckY = 0, topY = 0, x1 = 0, x2 = 0, deckRow = 0, waterY = 0;
   const SKYS = [[0, 14, 18, 46], [0.7, 92, 62, 114], [1, 196, 112, 122]];
   const FOG = '.:-~=';
@@ -539,12 +393,12 @@ function fogScene() {
   }
   return {
     still: 8,
-    layout(e) {
+    setup(e) { put = e.put.bind(e);
       deckY = e.H * 0.62; topY = e.H * 0.17; x1 = e.W * 0.28; x2 = e.W * 0.74;
       deckRow = Math.floor(deckY / e.asp); waterY = deckY + e.asp * 2;
     },
     draw(e) {
-      const { cols, rows, asp, time, energy, put } = e, H = e.H, W = e.W;
+      const { cols, rows, asp, time, energy } = e, H = e.H, W = e.W;
       const lights = 1 + 0.7 * energy;
       // sky, hills, water
       for (let r = 0; r < rows; r++) {
@@ -610,12 +464,12 @@ function fogScene() {
           const n = vnoise(X * 0.045 - time * 0.45, Y * 0.14 + time * 0.03) * 0.65 + vnoise(X * 0.1 - time * 0.8, Y * 0.3 - time * 0.05) * 0.35;
           const d = clamp((n - 0.2) * 2.6, 0, 1) * band * thin;
           if (d < 0.1) continue;
-          const i = r * cols + c, under = e.buf.ch[i], m = Math.min(1, d * 1.25);
+          const i = r * cols + c, under = e.ch[i], m = Math.min(1, d * 1.25);
           if (under === ' ' || d > 0.65) {
             const sh = 0.45 + 0.5 * d;
             put(c, r, FOG[Math.min(4, Math.floor(d * 5))], 176 * sh, 172 * sh, 206 * sh);
           } else {
-            e.buf.r[i] = lerp(e.buf.r[i], 168, m * 0.8); e.buf.g[i] = lerp(e.buf.g[i], 164, m * 0.8); e.buf.b[i] = lerp(e.buf.b[i], 200, m * 0.8);
+            e.r[i] = lerp(e.r[i], 168, m * 0.8); e.g[i] = lerp(e.g[i], 164, m * 0.8); e.b[i] = lerp(e.b[i], 200, m * 0.8);
           }
         }
       }
@@ -625,11 +479,12 @@ function fogScene() {
 
 // ---------- Orange County: palms and surf ----------
 function surfScene() {
+  let put;
   let hz = 0, sunX = 0, sunY = 0, sunR = 0, wph = 0, inited = false;
   const SKYS = [[0, 40, 48, 112], [0.5, 150, 66, 128], [0.85, 238, 108, 118], [1, 255, 176, 104]];
   const shoreY = (X, e) => e.H * (0.97 - 0.5 * smooth(0.3, 1.0, X / e.W));
   function palm(e, bx, by, h, lean, ph, scale) {
-    const { asp, time, energy, put } = e;
+    const { asp, time, energy } = e;
     const swayAmt = 1 + 1.2 * energy;
     const rowsT = Math.max(3, Math.ceil(h / asp));
     const tx = t => bx - lean * t * t + Math.sin(time * 0.9 + ph) * 1.2 * swayAmt * t * t * t;
@@ -657,13 +512,13 @@ function surfScene() {
   }
   return {
     still: 10,
-    layout(e) {
+    setup(e) { put = e.put.bind(e);
       hz = e.H * 0.42; sunX = e.W * 0.34; sunR = e.H * 0.16; sunY = hz - sunR * 0.3;
       if (!inited) { wph = e.time * 0.9; inited = true; }
     },
-    step(dt, e) { wph += dt * (0.9 + 0.6 * e.energy); },
+    step(e, dt) { wph += dt * (0.9 + 0.6 * e.energy); },
     draw(e) {
-      const { cols, rows, asp, time, energy, put } = e, H = e.H, W = e.W;
+      const { cols, rows, asp, time, energy } = e, H = e.H, W = e.W;
       const hzRow = hz / asp;
       for (let r = 0; r < rows; r++) {
         const Y = (r + 0.5) * asp;
@@ -729,11 +584,12 @@ function surfScene() {
 
 // ---------- Testimonial: fireflies ----------
 function fireflyScene() {
+  let put;
   let flies = [], dust = [];
   const FLY = '.:+*';
   return {
     still: 7,
-    layout(e) {
+    setup(e) { put = e.put.bind(e);
       const n = clamp(Math.round(e.W * e.H / 260), 14, 40);
       flies = [];
       for (let i = 0; i < n; i++) {
@@ -744,7 +600,7 @@ function fireflyScene() {
       for (let i = 0; i < 18; i++) dust.push({ x: hash2(i, 71) * e.W, y: hash2(i, 73) * e.H, s: 0.4 + hash2(i, 79) });
     },
     draw(e) {
-      const { cols, rows, asp, time, put } = e, W = e.W, H = e.H;
+      const { cols, rows, asp, time } = e, W = e.W, H = e.H;
       // faint trunks and haze
       for (let c = 0; c < cols; c++) {
         if (hash2(c, 5) > 0.93) {
@@ -793,6 +649,7 @@ function fireflyScene() {
 
 // ---------- Footer strip: ticker, horizon, boat ----------
 function harborScene() {
+  let put;
   const TICK = 'NEXT UP  //  PALM SPRINGS  DEC 6  //  SAN FRANCISCO  JAN 15  //  ORANGE COUNTY  FEB 21  //  SEATS GO QUICKLY  //  ';
   let boatX = 0, inited = false, envRef = null;
   let msg = '', typed = 0, active = false, x0 = 0, pulse0 = -99;
@@ -801,22 +658,22 @@ function harborScene() {
     setHover(col, text) {
       const e = envRef; if (!e) return;
       if (text) {
-        if (!active || text !== msg) typed = reduce ? 99 : 0;
-        msg = text; x0 = col; active = true; pulse0 = reduce ? e.time - 0.55 : e.time; e.target = 1;
-      } else { active = false; e.target = 0; if (reduce) typed = 0; }
+        if (!active || text !== msg) typed = GM.reducedMotion ? 99 : 0;
+        msg = text; x0 = col; active = true; pulse0 = GM.reducedMotion ? e.time - 0.55 : e.time; e.target = 1;
+      } else { active = false; e.target = 0; if (GM.reducedMotion) typed = 0; }
     },
-    layout(e) { envRef = e; if (!inited) { boatX = e.cols * 0.36; inited = true; } },
-    step(dt, e) {
+    setup(e) { put = e.put.bind(e); envRef = e; if (!inited) { boatX = e.cols * 0.36; inited = true; } },
+    step(e, dt) {
       boatX += dt * (4 + 16 * e.energy);
       if (boatX > e.cols + 8) boatX = -8;
       if (active) { typed += dt * 38; if (e.time - pulse0 > 1.5) pulse0 = e.time; }
       else typed = Math.max(0, typed - dt * 90);
     },
     draw(e) {
-      const { cols, rows, time, put, energy } = e;
+      const { cols, rows, time, energy } = e;
       const wl = Math.max(2, rows - 3);
       // ticker row
-      const off = reduce ? 0 : Math.floor(time * 5);
+      const off = GM.reducedMotion ? 0 : Math.floor(time * 5);
       const full = 'NEXT UP  //  PALM SPRINGS  DEC 6  //  SAN FRANCISCO  JAN 15  //  ORANGE COUNTY  FEB 21  //  SEATS GO QUICKLY  //  ';
       const len = full.length;
       const text = '> ' + msg;
@@ -829,12 +686,12 @@ function harborScene() {
       }
       if (n > 0) {
         for (let k = 0; k < n; k++) put(start + k, 0, text[k], k < 2 ? 255 : 255, k < 2 ? 160 : 208, k < 2 ? 90 : 140);
-        if (Math.floor(time * 3) % 2 === 0 || reduce) put(start + n, 0, '_', 255, 196, 120);
+        if (Math.floor(time * 3) % 2 === 0 || GM.reducedMotion) put(start + n, 0, '_', 255, 196, 120);
       }
       // stars and moon
       for (let r = 1; r < wl; r++) for (let c = 0; c < cols; c++) {
         const h = hash2(c * 7 + 1, r * 13);
-        if (h > 0.955) { const tw = reduce ? 0.8 : 0.5 + 0.5 * Math.sin(time * (1 + h * 4) + h * 50); if (tw > 0.3) put(c, r, h > 0.99 ? '+' : '.', 120 * tw, 140 * tw, 190 * tw); }
+        if (h > 0.955) { const tw = GM.reducedMotion ? 0.8 : 0.5 + 0.5 * Math.sin(time * (1 + h * 4) + h * 50); if (tw > 0.3) put(c, r, h > 0.99 ? '+' : '.', 120 * tw, 140 * tw, 190 * tw); }
       }
       put(Math.floor(cols * 0.88), 1, 'o', 236, 230, 204);
       // horizon + water
@@ -849,7 +706,7 @@ function harborScene() {
       }
       // ripple from the hovered link
       const age = time - pulse0;
-      if (active || (reduce && typed > 0)) {
+      if (active || (GM.reducedMotion && typed > 0)) {
         if (age >= 0 && age < 1.6) {
           const rad = age * 22;
           for (let c = 0; c < cols; c++) {
@@ -877,23 +734,44 @@ function harborScene() {
   };
   return api;
 }
-
 // =====================================================================
 // WIRING
 // =====================================================================
+// One engine surface per canvas. Each scene keeps its own energy (0..1, eased toward target).
+function mount(canvas, sc, o) {
+  let first = true;
+  return GM.surface(canvas, Object.assign({
+    setup(s) {
+      if (first) { first = false; s.time = sc.still; }
+      if (s.energy === undefined) { s.energy = 0; s.target = 0; }
+      sc.setup(s);
+    },
+    step(s, dt) {
+      s.energy += (s.target - s.energy) * Math.min(1, dt * 4);
+      if (sc.step) sc.step(s, dt);
+    },
+    draw(s) { s.clear(); sc.draw(s); },
+    still(s) { s.time = sc.still; s.energy = s.target; }
+  }, o));
+}
+// set the energy target; under reduced motion there is no easing, so jump and repaint
+function setTarget(s, v) {
+  if (s.energy === undefined) return;
+  s.target = v;
+  if (GM.reducedMotion) s.energy = v;
+  s.invalidate();
+}
+
 const SCENES = { desert: desertScene, fog: fogScene, surf: surfScene };
-const all = [];
 
 // 1. event cards
 const status = document.getElementById('ev-status');
 document.querySelectorAll('.ev').forEach(card => {
-  const inst = createAscii({
-    canvas: card.querySelector('canvas'), host: card.querySelector('.ev-art'), scene: SCENES[card.dataset.scene](),
-    bg: '#0a0d18', fs: w => clamp(w / 44, 7, 9.5), bloom: 0.5
+  const surf = mount(card.querySelector('canvas'), SCENES[card.dataset.scene](), {
+    background: '#0a0d18', fontSize: w => clamp(w / 44, 7, 9.5)
   });
-  all.push(inst);
   let hov = false, foc = false;
-  const sync = () => { inst.e.target = (hov || foc) ? 1 : 0; };
+  const sync = () => setTarget(surf, (hov || foc) ? 1 : 0);
   card.addEventListener('pointerenter', () => { hov = true; sync(); });
   card.addEventListener('pointerleave', () => { hov = false; sync(); });
   card.addEventListener('focusin', () => { foc = true; sync(); });
@@ -909,9 +787,7 @@ document.querySelectorAll('.ev').forEach(card => {
 
 // 2. testimonial
 (() => {
-  const host = document.getElementById('q-art');
-  const inst = createAscii({ canvas: host.querySelector('canvas'), host, scene: fireflyScene(), bg: '#050b0b', fs: w => clamp(w / 90, 8, 11), bloom: 0.5 });
-  all.push(inst);
+  mount(document.querySelector('#q-art canvas'), fireflyScene(), { background: '#050b0b', fontSize: w => clamp(w / 90, 8, 11) });
   const items = [...document.querySelectorAll('.q-item')], count = document.getElementById('q-count');
   let idx = 0;
   const show = n => {
@@ -927,12 +803,11 @@ document.querySelectorAll('.ev').forEach(card => {
 (() => {
   const host = document.getElementById('strip');
   const scene = harborScene();
-  const inst = createAscii({ canvas: host.querySelector('canvas'), host, scene, bg: '#05080f', fs: w => w < 420 ? 9 : 10, bloom: 0.5 });
-  all.push(inst);
-  const colFor = a => { const r = host.getBoundingClientRect(), b = a.getBoundingClientRect(); return (b.left + b.width / 2 - r.left) / inst.e.cw; };
+  const surf = mount(host.querySelector('canvas'), scene, { background: '#05080f', fontSize: w => w < 420 ? 9 : 10 });
+  const colFor = a => { const r = host.getBoundingClientRect(), b = a.getBoundingClientRect(); return (b.left + b.width / 2 - r.left) / (surf.cw || 6); };
   document.querySelectorAll('#navlinks a').forEach(a => {
-    const on = () => { scene.setHover(colFor(a), a.dataset.msg); inst.requestRender(); };
-    const off = () => { scene.setHover(0, ''); inst.requestRender(); };
+    const on = () => { scene.setHover(colFor(a), a.dataset.msg); setTarget(surf, 1); };
+    const off = () => { scene.setHover(0, ''); setTarget(surf, 0); };
     a.addEventListener('pointerenter', on); a.addEventListener('pointerleave', off);
     a.addEventListener('focus', on); a.addEventListener('blur', off);
   });
@@ -940,19 +815,6 @@ document.querySelectorAll('.ev').forEach(card => {
 
 // demo links should not jump the page
 document.querySelectorAll('a[data-demo]').forEach(a => a.addEventListener('click', ev => ev.preventDefault()));
-
-// start once fonts are ready (or after a short wait)
-const stills = new Map();
-const startAll = () => {
-  all.forEach(inst => {
-    const sc = inst.scene;
-    inst.start();
-  });
-};
-const fontsReady = (document.fonts && document.fonts.load)
-  ? Promise.race([document.fonts.load('600 16px "JetBrains Mono"'), new Promise(r => setTimeout(r, 1500))])
-  : Promise.resolve();
-fontsReady.then(startAll, startAll);
 })();
 </script>
 </body>

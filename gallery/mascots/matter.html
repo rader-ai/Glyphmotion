@@ -351,11 +351,7 @@ const HT=[[0,34,28,30],[.2,110,24,16],[.45,225,76,18],[.7,255,160,50],[.9,255,22
 let HR=0,HG=0,HB=0;
 function heat(h){if(h<0)h=0;else if(h>1)h=1;let i=1;while(i<5&&h>HT[i][0])i++;const a=HT[i-1],b=HT[i],t=(h-a[0])/(b[0]-a[0]);HR=a[1]+(b[1]-a[1])*t;HG=a[2]+(b[2]-a[2])*t;HB=a[3]+(b[3]-a[3])*t}
 const rc=i=>GM.RAMP.charCodeAt(i<0?0:i>9?9:i|0);
-/* page-level input: pointer over the whole window (the stage canvases ignore pointer events), typing, scrolling */
-const ptr={x:-999,y:-999,on:false};
-addEventListener('pointermove',e=>{ptr.x=e.clientX;ptr.y=e.clientY;ptr.on=true},{passive:true});
-addEventListener('pointerdown',e=>{ptr.x=e.clientX;ptr.y=e.clientY;ptr.on=true},{passive:true});
-document.addEventListener('pointerleave',()=>{ptr.on=false});
+/* page-level input: typing and scrolling (the pointer comes from each surface, pointer:'window') */
 let lastInput=performance.now();
 let scrollV=0,lastSY=scrollY,scrollAt=0,typeAt=-9;
 addEventListener('scroll',()=>{lastInput=performance.now()},{passive:true});
@@ -378,7 +374,7 @@ class Field{
   }
   boot(){
     this.s=GM.surface(this.cv,{
-      fontSize:this.o.fs,weight:700,lineHeight:this.o.lh,transparent:true,
+      fontSize:this.o.fs,weight:700,lineHeight:this.o.lh,transparent:true,pointer:'window',
       setup:s=>this.relayout(s),
       step:()=>{pollScroll();this.pre();this.step()},
       draw:s=>{s.clear();this.render()},
@@ -399,7 +395,7 @@ class Field{
     if(c<0||r<0||c>=this.cols||r>=this.rows)return;
     const i=(r|0)*this.cols+(c|0);R=R>255?255:R<0?0:R;G=G>255?255:G<0?0:G;B=B>255?255:B<0?0:B;
     /* codes 0 and 32, and colors too dark to see, blank the cell */
-    if(!code||code===32||((R&248)|(G&248)|(B&248))===0){this.s.ch[i]=' ';return}
+    if(!code||code===32||((R&248)|(G&248)|(B&248))===0){this.s.blank(i);return}
     this.s.putI(i,chr(code),R,G,B);
   }
   spawn(x,y,vx,vy,life,R,G,B,ch,g){
@@ -528,9 +524,10 @@ class Mascot{
   confetti(n){const cols=[[255,138,42],[142,160,182],[140,138,255],[182,255,90],[214,170,96],[255,216,154]];for(let i=0;i<n;i++){const c=cols[i%6],a=rnd(-2.6,-.5),v=rnd(1,3.2);this.em('*+#o'[i&3],this.dX[0],this.dY[0]-this.S*.6,Math.cos(a)*v*1.2,Math.sin(a)*v,rnd(50,110),c[0],c[1],c[2],.045)}}
   /* ---------- behavior ---------- */
   readPtr(dt){
-    const f=this.f,r=f.rect;
-    if(!r||!ptr.on){this.pOn=false;this.psp*=.9;return}
-    const x=ptr.x-r.left-this.ox*f.cw,y=ptr.y-r.top-this.oy*f.chh;
+    const f=this.f,p=f.s&&f.s.pointer;
+    if(!p||p.x<-1e8){this.pOn=false;this.psp*=.9;return}
+    /* the engine's pointer is in column widths from the canvas corner; convert to pixels in this mascot's region */
+    const x=(p.x-this.ox)*f.cw,y=p.y*f.cw-this.oy*f.chh;
     const mv=Math.hypot(x-this.pl,y-this.pq);
     if(this.pOn)this.psp=lerp(this.psp,Math.min(4000,mv/Math.max(dt,.001)),.25);
     this.pl=x;this.pq=y;this.pOn=true;
