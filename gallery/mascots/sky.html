@@ -449,7 +449,7 @@ class Nomi {
     actors.push(this);
     this.S = GM.surface(cv, { fontSize: o.fs, transparent: true, bloom: o.bloom == null ? 0.35 : o.bloom, fps: o.fps || 30,
       relayoutDelay: o.main === true ? 0 : 120, onVisible: o.onVisible,
-      setup: () => { this.onLayout(); this.repaint(); }, step: (s, dt) => this.step(dt), draw: () => this.draw(), still: () => this.pose() });
+      setup: () => this.onLayout(), step: (s, dt) => this.step(dt), draw: () => this.draw(), still: () => this.pose() });
   }
   get L() { return this.S; }
   get ok() { return ready(this.S); }
@@ -534,8 +534,6 @@ class Nomi {
     this.updLight(0.001); this.applyBg(true);
   }
   settle() { this.pose(); this.S.invalidate(); }
-  // a layout clears the canvas, and with relayoutDelay 0 it lands after this frame's draw: paint now, or the stage blanks while it resizes
-  repaint() { if (!GM.reducedMotion && this.vis && this.ok) { this.draw(); this.S.present(); } }
   /* ------ look + light ------ */
   looking() {
     const u = this.u;

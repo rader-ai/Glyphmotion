@@ -359,7 +359,7 @@ const rgb = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + '
 
 /* Cells carry their own opacity (the engine's A argument). pa() keeps the char-code and 0..255
    alpha style this page was written in. */
-function pa(s, i, code, R, G, B, A) { s.putI(i, CH[code], R, G, B, A / 255); }
+function pa(s, i, code, R, G, B, A) { s.cnt++; s.putI(i, CH[code], R, G, B, A / 255); }
 
 /* ================= global state ================= */
 let T = 0, scY = window.scrollY || 0, VW = innerWidth, VH = innerHeight;
@@ -405,12 +405,9 @@ function skyColors() {
 /* ================= SKY surface ================= */
 const BIRDS = 8;
 const RB = [[255, 80, 80], [255, 150, 70], [255, 220, 90], [110, 220, 120], [90, 180, 255], [120, 120, 255], [190, 110, 240]];
-// the sky gradient and the sun and moon glows, painted to a canvas that becomes the sky surface's
-// background (the engine fills its background with any fill style, a pattern included)
-const underCv = document.createElement('canvas'), underX = underCv.getContext('2d');
-function skyUnder(L) {
-  const vw = Math.ceil(L.vw), vh = Math.ceil(L.vh), ctx = underX;
-  if (underCv.width !== vw || underCv.height !== vh) { underCv.width = vw; underCv.height = vh; }
+// the sky gradient and the sun and moon glows, painted under the glyphs by the engine's under() hook
+function skyUnder(ctx, L) {
+  const vw = L.vw, vh = L.vh;
   const stormK = S.storm, spaceK = S.space, nf = SK.nf;
   const g = ctx.createLinearGradient(0, 0, 0, vh);
   g.addColorStop(0, rgb(SK.zen)); g.addColorStop(1, rgb(SK.hor));
@@ -428,10 +425,9 @@ function skyUnder(L) {
     rg.addColorStop(0, 'rgba(170,200,255,' + ma.toFixed(3) + ')'); rg.addColorStop(1, 'rgba(170,200,255,0)');
     ctx.fillStyle = rg; ctx.fillRect(0, 0, vw, vh);
   }
-  L.o.background = L.ctx.createPattern(underCv, 'no-repeat');
 }
 function drawSky(L) {
-  skyColors(); skyUnder(L);
+  skyColors();
   const { cols, rows, cw, chh, asp } = L;
   const stormK = S.storm, spaceK = S.space, nf = SK.nf;
   L.clear();
@@ -622,7 +618,7 @@ function drawHalo(b) {
   }
 }
 function drawFx(L) {
-  L.clear();
+  L.clear(); L.cnt = 0;
   for (const b of BT) { if (b.el.offsetParent !== null || b.el.id === 'burger') b.rect = b.el.getBoundingClientRect(); else b.rect = null; drawHalo(b); }
   drawBolts();
   const p = PL, cw = L.cw, chh = L.chh, cols = L.cols, rows = L.rows;
@@ -630,6 +626,9 @@ function drawFx(L) {
     const c = (p.x[i] / cw) | 0, r = (p.y[i] / chh) | 0; if (p.x[i] < 0 || p.y[i] < 0 || c >= cols || r >= rows) continue;
     const a = Math.min(1, p.l[i] / p.m[i] * 1.8); pa(L, r * cols + c, p.c[i], p.r[i], p.gc[i], p.b[i], 255 * a);
   }
+  // an empty overlay needs no repaint once it has been cleared (this frame clears it, the next ones skip)
+  const empty = L.cnt === 0, skip = empty && L.wasEmpty; L.wasEmpty = empty;
+  if (skip) return false;
 }
 
 /* ================= buttons registry ================= */
@@ -1092,7 +1091,7 @@ setLive(false); statusEl.textContent = '';
   const ff = (n) => () => n;
   fitLogoHeight();
   const base = { baseline: 'middle' };
-  sky = GM.surface($('#sky'), { ...base, bloom: 0.26, fps: 16, background: '#0a1030', fontSize: (w) => clamp(w / 92, 12, 15), step: (s, dt) => simStep(dt), draw: drawSky, still });
+  sky = GM.surface($('#sky'), { ...base, bloom: 0.26, fps: 16, background: '#0a1030', under: skyUnder, fontSize: (w) => clamp(w / 92, 12, 15), step: (s, dt) => simStep(dt), draw: drawSky, still });
   fx = GM.surface($('#fx'), { ...base, transparent: true, bloom: 0.6, fontSize: ff(12), draw: drawFx, still });
   navL = GM.surface($('#logo-nav'), { ...base, transparent: true, bloom: 0.7, fontSize: ff(5.4), draw: drawNav, still });
   bigL = GM.surface($('#logo-big'), { ...base, transparent: true, bloom: 0.5, fontSize: logoFont, setup: buildLogo, draw: drawLogo, still });
