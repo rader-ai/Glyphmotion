@@ -144,6 +144,7 @@ class Surface {
    *   still(s)   reduced motion: put the world in a good resting pose (default: step 1.2s)
    *   onVisible(s, visible)  called when the surface scrolls into or out of view
    *   persistence seconds a glyph keeps glowing after it stops being drawn (phosphor afterglow). Default 0
+   *   persistenceCurve 'linear' (default) or 'exp' for a long soft tail; persistenceHold keeps the brighter of glow and new glyph
    *   pointer    'canvas' (default) or 'window': track the pointer page-wide, for overlays with pointer-events: none.
    *              With 'window', x and y follow the pointer everywhere; inside is true only over the canvas
    *   baseline   'top' (default) or 'middle': where glyphs sit in their cell
@@ -250,14 +251,17 @@ class Surface {
   // phosphor afterglow: a cell that stops being drawn keeps its glyph and fades out over o.persistence seconds
   _persist() {
     const dt = Math.max(0, this.time - this._lastRender) || 1 / this.o.fps; this._lastRender = this.time;
-    const fade = GM.reducedMotion ? 1 : dt / this.o.persistence;
+    // linear fades to nothing in `persistence` seconds; exp keeps a long soft tail (like phosphor)
+    const expo = this.o.persistenceCurve === 'exp', hold = !!this.o.persistenceHold;
+    const fade = GM.reducedMotion ? 1 : expo ? Math.exp(-3 * dt / this.o.persistence) : dt / this.o.persistence;
     const { ch, r, g, b, a, pch, plife, pr, pg, pb, pa } = this;
     for (let i = 0; i < this.N; i++) {
-      if (ch[i] !== ' ') { pch[i] = ch[i]; pr[i] = r[i]; pg[i] = g[i]; pb[i] = b[i]; pa[i] = a[i]; plife[i] = 1; }
-      else if (plife[i] > 0) {
-        plife[i] -= fade;
-        if (plife[i] > 0) { ch[i] = pch[i]; r[i] = pr[i]; g[i] = pg[i]; b[i] = pb[i]; a[i] = pa[i] * plife[i]; }
-      }
+      // decay the stored glow first
+      if (plife[i] > 0) { plife[i] = GM.reducedMotion ? 0 : expo ? plife[i] * fade : plife[i] - fade; if (plife[i] < 0.04) plife[i] = 0; }
+      const glow = pa[i] * plife[i];
+      // a fresh glyph replaces the glow, unless hold is on and the glow is still brighter
+      if (ch[i] !== ' ' && !(hold && glow > a[i])) { pch[i] = ch[i]; pr[i] = r[i]; pg[i] = g[i]; pb[i] = b[i]; pa[i] = a[i]; plife[i] = 1; }
+      else if (plife[i] > 0) { ch[i] = pch[i]; r[i] = pr[i]; g[i] = pg[i]; b[i] = pb[i]; a[i] = glow; }
     }
   }
 

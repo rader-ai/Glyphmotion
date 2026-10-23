@@ -125,7 +125,6 @@ code,kbd{font:600 .85em var(--mono);background:rgba(110,190,235,.1);border:1px s
 .mock .navbar span.l{display:none}
 @media (min-width:560px){.mock .navbar span.l{display:inline}}
 #wNav{position:absolute;left:0;top:0;height:112px;pointer-events:none}
-.mock .navbar{position:relative;z-index:1}
 #w404{height:290px}
 #wLoad{height:290px}
 #wWin{height:290px}
@@ -366,9 +365,8 @@ function pollScroll() {
   const sy = scrollY; SC.v = SC.v * .8 + ((sy - scY0) / Math.max(Math.min(dt, .1), .016)) * .2; scY0 = sy; SC.y = sy; scT = now;
 }
 
-// ---------- Grid: the engine surface's cell buffers, written with a per-cell strength ----------
-// The engine stores one color per cell, so strength (a) is folded into the color when a cell is written.
-// a below .04 hides the cell; a above 1 pushes the color toward white.
+// ---------- Grid: the engine surface's cell buffers, plus the page's raster helpers ----------
+// Strength a is the engine's cell opacity. Below .04 the cell is hidden; above 1 the color is pushed toward white.
 class Grid {
   bind(s) {
     this.s = s; this.cols = s.cols; this.rows = s.rows; this.cw = s.cw; this.chh = s.chh; this.asp = s.asp; this.N = s.N;
@@ -381,11 +379,9 @@ class Grid {
   }
   putI(i, ch, R, G, B, a) {
     const s = this.s;
-    if (a < .04) { s.ch[i] = ' '; return; }
-    const k = a > 1 ? 1 : a, hot = a > 1 ? Math.min(1, (a - 1) * 1.6) : 0;
-    let rr = R * k, gg = G * k, bb = B * k;
-    if (hot) { rr += (255 - rr) * hot; gg += (255 - gg) * hot; bb += (255 - bb) * hot; }
-    s.putI(i, ch, rr, gg, bb);
+    if (a < .04) { s.blank(i); return; }
+    if (a > 1) { const hot = Math.min(1, (a - 1) * 1.6); s.putI(i, ch, R + (255 - R) * hot, G + (255 - G) * hot, B + (255 - B) * hot); }
+    else s.putI(i, ch, R, G, B, a);
   }
   str(c, r, s, R, G, B, a) { for (let k = 0; k < s.length; k++) if (s[k] !== ' ') this.put(c + k, r, s[k], R, G, B, a); }
   // raster helpers (fn is a method called with this = owner)
@@ -436,7 +432,7 @@ class Surf {
   boot() {
     const o = this.so;
     this.s = GM.surface(this.cv, {
-      fontSize: o.fs, weight: 700, lineHeight: 1.25, background: o.bg, bloom: o.bloom, bloomScale: 5, fps: 30,
+      fontSize: o.fs, weight: 700, lineHeight: 1.25, background: o.bg, transparent: !o.bg, baseline: 'middle', bloom: o.bloom, bloomScale: 5, fps: 30,
       setup: s => this.relayout(s),
       step: (s, dt) => this.advance(dt),
       draw: () => { if (this.ready) this.draw(); },
@@ -491,7 +487,7 @@ const FUR = '+x%%###';
 
 class Vesper extends Surf {
   constructor(cv, o) {
-    super(cv, { fs: o.fs || (() => 10), bloom: o.bloom == null ? .5 : o.bloom, bg: o.bg || '#05070b' });
+    super(cv, { fs: o.fs || (() => 10), bloom: o.bloom == null ? .5 : o.bloom, bg: o.bg === undefined ? '#05070b' : o.bg });
     this.o = Object.assign({ env: {}, perch: [.5, .16], fit: null }, o); this.env = this.o.env;
     this.V = {}; this.W = {}; this.T = {};
     for (const k of KEYS) { this.V[k] = EM.content[k]; this.W[k] = 0; this.T[k] = EM.content[k]; }
@@ -1452,11 +1448,11 @@ const tiles = $$('canvas[data-m]').map(cv => {
 });
 
 // ---- in the wild
-const wNav = new Vesper($('#wNav'), { id: 'nav', bg: '#080c14', bloom: .5, canFly: false, env: { wire: true }, perch: [.5, 0], perchY: 64, fs: () => 6, fit: (w, h) => 44 });
+const wNav = new Vesper($('#wNav'), { id: 'nav', bg: null, bloom: .5, canFly: false, env: { wire: true }, perch: [.5, 0], perchY: 64, fs: () => 6, fit: (w, h) => 44 });
 const w404 = new Vesper($('#w404'), { id: '404', bloom: .5, env: { wire: true, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 3.2, h / 3.3), canFly: false, bg: '#080c14' });
 const wLoad = new Vesper($('#wLoad'), { id: 'load', bloom: .5, env: { wire: false, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 4.2, h / 3.8), bg: '#080c14' });
 const wWin = new Vesper($('#wWin'), { id: 'win', bloom: .5, env: { wire: true, dots: true }, perch: [.5, 0], fs: () => 6.6, fit: (w, h) => Math.min(w / 3.4, h / 3.3), bg: '#080c14' });
-const wFoot = new Vesper($('#wFoot'), { id: 'foot', bg: '#04060a', bloom: .45, canFly: false, napper: true, env: { wire: true }, perch: [.5, 0], fs: () => 6.2, fit: (w, h) => h / 2.6 });
+const wFoot = new Vesper($('#wFoot'), { id: 'foot', bg: null, bloom: .45, canFly: false, napper: true, env: { wire: true }, perch: [.5, 0], fs: () => 6.2, fit: (w, h) => h / 2.6 });
 w404.baseMood = 'concerned'; wLoad.baseMood = 'focused'; wWin.baseMood = 'content'; wNav.baseMood = 'content';
 wFoot.sleepLock = true; wFoot.idle = 999;
 w404.react('concerned', 1e9, true); wLoad.carry = 1; wLoad.carryT = 1; wWin.carry = 1; wWin.carryT = 1;

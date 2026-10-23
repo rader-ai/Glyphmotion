@@ -154,7 +154,7 @@ h2{font:500 clamp(26px,4.2vw,42px)/1.1 var(--ui);letter-spacing:-.01em;margin:0 
   text-shadow:0 0 18px rgba(255,176,64,.9),0 0 40px rgba(255,176,64,.5);opacity:0;transition:opacity .4s;width:min(92vw,720px)}
 #toast.on{opacity:1}
 #toast small{display:block;margin-top:10px;font-size:.55em;letter-spacing:.16em;color:var(--am)}
-canvas#cur{position:fixed;inset:0;width:100vw;height:100vh;z-index:80;pointer-events:none;mix-blend-mode:screen}
+canvas#cur{position:fixed;inset:0;width:100vw;height:100vh;z-index:80;pointer-events:none}
 
 @media (max-width:900px){
   .nav,.hdr-r .btn.sm{display:none}
@@ -354,7 +354,7 @@ let mr_ = 0, mg_ = 0, mb_ = 0;
 function mixTo(r, g, b, r2, g2, b2, t) { mr_ = r + (r2 - r) * t; mg_ = g + (g2 - g) * t; mb_ = b + (b2 - b) * t; }
 
 // ---------- shared state ----------
-// NOW is the page clock, advanced by the overlay surface's 60Hz step (the engine has one loop for everything).
+// NOW is the page clock, advanced by Glyphmotion.onFrame. Under reduced motion no frame runs, so it stays at 1.
 let NOW = RM() ? 1 : 0;
 const P = { x: -999, y: -999, has: false, touch: false, down: false, over: false, t: 0 };
 const ST = { muted: false, bt: -99 };
@@ -368,22 +368,26 @@ function ping(x, y, pw, kind) {
   pokeAll();
 }
 
-// ---------- Phos: phosphor persistence on top of an engine surface ----------
-// The engine paints a plain character grid. Carrier wants every lit cell to decay over a few frames,
-// so each scene excites cells here (ex / exc / str / ring) and flush() writes the decayed result into the engine grid.
-class Phos {
-  constructor(o) { this.pe = o.persist || .8; this.rgba = !!o.rgba; this.s = null; this.cols = 0; this.rows = 0; }
+// ---------- Ink: the cells a scene lights this frame ----------
+// Scenes light cells with an intensity (ex / exc / str / ring). Ink turns that into an engine glyph with opacity A;
+// the engine's persistence option then gives the phosphor afterglow, so nothing here decays.
+class Ink {
+  constructor() { this.s = null; this.cols = 0; this.rows = 0; this.n = 0; }
   layout(s) {
     this.s = s; this.cols = s.cols; this.rows = s.rows; this.cw = s.cw; this.chh = s.chh; this.asp = s.asp; this.N = s.N;
-    this.E = new Float32Array(s.N); this.ch = new Array(s.N).fill(' ');
-    this.R = new Uint8Array(s.N); this.G = new Uint8Array(s.N); this.B = new Uint8Array(s.N);
+    this.E = new Float32Array(s.N);
   }
+  begin() { this.s.clear(); this.E.fill(0); this.n = 0; }
   reset() { if (this.E) this.E.fill(0); }
   ex(i, ch, r, g, b, e) {
-    if (e <= 0.02) return;
-    const E = this.E;
-    if (e >= E[i] * .9) { this.ch[i] = ch; this.R[i] = r; this.G[i] = g; this.B[i] = b; }
-    if (e > E[i]) E[i] = e;
+    if (e <= 0.035) return;
+    const E = this.E, e0 = E[i];
+    if (e >= e0 * .9) {
+      // the stronger of the two writes sets the brightness, the later one (if close enough) sets the glyph
+      const m = e > e0 ? e : e0; E[i] = m; this.n++;
+      if (m > 1) { const hot = Math.min(1, (m - 1) * 3.3); this.s.putI(i, ch, r + (255 - r) * hot, g + (255 - g) * hot, b + (255 - b) * hot); }
+      else this.s.putI(i, ch, r, g, b, m);
+    }
   }
   exc(c, r, ch, R, G, B, e) {
     c = Math.round(c); r = Math.round(r);
@@ -399,40 +403,17 @@ class Phos {
       this.exc(cx + Rc * c, cy + Rc * s / asp, lineChar(-s, c), R, G, B, e);
     }
   }
-  // decay every cell and copy the lit ones into the engine grid; returns whether anything is still lit
-  flush() {
-    const s = this.s, N = this.cols * this.rows, E = this.E, ch = this.ch, R = this.R, G = this.G, B = this.B, pe = this.pe, rgba = this.rgba;
-    s.clear();
-    let alive = false;
-    for (let i = 0; i < N; i++) {
-      const e = E[i];
-      if (e < .035) { E[i] = 0; continue; }
-      alive = true; E[i] = e * pe;
-      const g = ch[i]; if (g === ' ') continue;
-      let rr, gg, bb;
-      if (rgba) {
-        // the overlay canvas is blended with screen, so scaling the color by its alpha is the same as drawing it translucent
-        const hot = e > 1 ? Math.min(1, (e - 1) * 3) : 0, k = e > 1 ? 1 : e;
-        rr = (R[i] + (255 - R[i]) * hot) * k; gg = (G[i] + (255 - G[i]) * hot) * k; bb = (B[i] + (255 - B[i]) * hot) * k;
-      } else {
-        const k = e > 1 ? 1 : e, hot = e > 1 ? Math.min(1, (e - 1) * 3.3) : 0;
-        rr = R[i] * k; gg = G[i] * k; bb = B[i] * k;
-        if (hot) { rr += (255 - rr) * hot; gg += (255 - gg) * hot; bb += (255 - bb) * hot; }
-      }
-      s.putI(i, g, rr, gg, bb);
-    }
-    return alive;
-  }
 }
 
-// ---------- Scene: one engine surface plus a phosphor grid ----------
+// ---------- Scene: one engine surface plus an Ink ----------
 const scenes = [];
 class Scene {
   constructor(cv, o) {
-    this.cv = cv; this.o = o; this.t = 0; this.pokable = false; this.sleepy = false;
-    this.g = new Phos(o);
+    this.cv = cv; this.o = o; this.t = 0; this.pokable = false; this.sleepy = false; this.lit = -99;
+    this.g = new Ink();
     this.s = GM.surface(cv, {
       fontSize: o.fs, lineHeight: 1.25, bloom: o.bloom, background: o.bg, transparent: !o.bg,
+      persistence: o.persist, baseline: 'middle',
       setup: s => { this.s = s; this.g.layout(s); if (this.onLayout) this.onLayout(); },
       step: (s, dt) => this.sim(dt),
       draw: () => this.frame(),
@@ -444,9 +425,10 @@ class Scene {
   rect() { return this.cv.getBoundingClientRect(); }
   sim(dt) { this.t += dt; }
   frame() {
-    this.draw();
-    const alive = this.g.flush();
-    if (!alive && this.sleepy && this.canSleep()) this.s.pause();
+    const g = this.g; g.begin(); this.draw();
+    if (g.n) this.lit = this.s.time;
+    // a sleepy scene pauses only once its afterglow has faded out
+    else if (this.sleepy && this.s.time - this.lit > this.o.persist + .1 && this.canSleep()) this.s.pause();
   }
   // reduced motion: run the world forward without painting, then show one still frame
   rest(n) { this.g.reset(); for (let i = 0; i < n; i++) this.sim(STEP); }
@@ -563,7 +545,7 @@ class Word {
 // ---------- Logo (nav, specimen) ----------
 class Logo extends Scene {
   constructor(cv, v, host) {
-    super(cv, { fs: v === 'big' ? ((w) => clamp(w / 120, 6.5, 10)) : (() => 4.7), persist: .8, bloom: .55 });
+    super(cv, { fs: v === 'big' ? ((w) => clamp(w / 120, 6.5, 10)) : (() => 4.7), persist: .42, bloom: .55 });
     this.v = v; this.word = new Word(); this.att = 0; this.tAtt = 0; this.ft = 0; this.pw = 1; this.pokable = true; this.force = false;
     if (host) {
       const on = () => { this.tAtt = 1; this.poke(); }, offf = () => { this.tAtt = 0; this.poke(); };
@@ -593,7 +575,7 @@ class Logo extends Scene {
 // ---------- NavWire: the menu bar as a spectrum analyzer ----------
 class NavWire extends Scene {
   constructor(cv, links) {
-    super(cv, { fs: () => 7, persist: .72, bloom: .5 }); this.links = links; this.hv = -1; this.act = -1; this.last = -1; this.pokable = true;
+    super(cv, { fs: () => 7, persist: .28, bloom: .5 }); this.links = links; this.hv = -1; this.act = -1; this.last = -1; this.pokable = true;
     this.lvl = new Float32Array(links.length); this.pk = null; this.pkx = 0; this.lastX = 40;
     links.forEach((l, i) => {
       l.addEventListener('pointerenter', () => this.setHover(i)); l.addEventListener('pointerleave', () => this.setHover(-1));
@@ -648,7 +630,7 @@ class NavWire extends Scene {
 // ---------- DropSurf: dropdown and mobile menu panels ----------
 class DropSurf extends Scene {
   constructor(cv, panel, full) {
-    super(cv, { fs: () => 7, persist: .78, bloom: .45 }); this.panel = panel; this.full = full; this.p = 0; this.tgt = 0; this.pokable = true;
+    super(cv, { fs: () => 7, persist: .38, bloom: .45 }); this.panel = panel; this.full = full; this.p = 0; this.tgt = 0; this.pokable = true;
     this.hr = null; this.tr = null; this.band = 0; this.sleepy = true; this.s.pause(); this.items = [...panel.querySelectorAll('a')];
     this.items.forEach(a => {
       const on = () => { this.setItem(a); }, offf = () => { this.tr = null; this.poke(); };
@@ -715,7 +697,7 @@ const CHAN = [[84, 214, 255], [255, 176, 64], [255, 84, 130], [246, 242, 228]];
 class BtnSurf extends Scene {
   constructor(btn) {
     const kind = btn.dataset.kind;
-    super(btn.querySelector('canvas'), { fs: () => 7, persist: kind === 'burger' ? .7 : .78, bloom: .55 });
+    super(btn.querySelector('canvas'), { fs: () => 7, persist: kind === 'burger' ? .27 : .38, bloom: .55 });
     this.btn = btn; this.kind = kind; this.hT = 0; this.hov = 0; this.pT = 0; this.prs = 0; this.kick = 0; this.sp = 0; this.pokable = true;
     this.on_ = true; this.ap = 1; this.cnt = 0; this.pk = new Pool(7, ['c', 't0', 'a0', 'a1', 'ci']); this.open = 0; this.openT = 0; this.per = null;
     const m = btn.matches.bind(btn);
@@ -858,7 +840,7 @@ class BtnSurf extends Scene {
 const WF_T = 0.58;
 class Hero extends Scene {
   constructor(cv) {
-    super(cv, { fs: (w) => clamp(w / 115, 7, 10), persist: .84, bloom: .55, bg: '#05070b' });
+    super(cv, { fs: (w) => clamp(w / 115, 7, 10), persist: .53, bloom: .55, bg: '#05070b' });
     this.word = new Word(); this.att = 0; this.ft = 0; this.pw = 1; this.pokable = true; this.chirps = new Pool(5, ['c0', 't0']);
     this.lock = new Float32Array(7); this.lockCol = null; this.acc = 0;
     listeners.ping.push((x, y) => {
@@ -958,17 +940,12 @@ class Hero extends Scene {
 // ---------- Cursor / charge / shock overlay ----------
 class Cur extends Scene {
   constructor(cv) {
-    super(cv, { fs: () => 11, persist: .78, bloom: 0, rgba: true });
+    super(cv, { fs: () => 11, persist: .38, bloom: 0 });
     this.rx = 0; this.ry = 0; this.lk = 0; this.trail = new Float32Array(16); this.tn = 0; this.spin = 0;
   }
-  // this overlay is always on screen, so its 60Hz step doubles as the page clock and the broadcast charge
-  sim(dt) {
-    this.t += dt; this.spin += dt * 24; NOW += dt;
-    if (CH.on) CH.v = Math.min(1, CH.v + dt / 1.5); else CH.v = Math.max(0, CH.v - dt * 3);
-  }
+  sim(dt) { this.t += dt; this.spin += dt * 24; }
   draw() {
     const g = this.g, cw = g.cw, chh = g.chh;
-    updDec(performance.now()); clock();
     if (P.has && !(P.touch && !P.down)) {
       this.rx += (P.x - this.rx) * .5; this.ry += (P.y - this.ry) * .5;
       this.lk += ((P.over ? 1 : 0) - this.lk) * .25;
@@ -1252,6 +1229,13 @@ function broadcast(x, y) {
 const utc = $('utc'); let lastS = -1;
 function clock() { const d = new Date(), s = d.getUTCSeconds(); if (s === lastS) return; lastS = s; utc.textContent = String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0') + ':' + String(s).padStart(2, '0'); }
 clock();
+
+// page-level state that has to move every frame: the clock, the broadcast charge and the DOM text decode
+GM.onFrame(dt => {
+  NOW += dt;
+  if (CH.on) CH.v = Math.min(1, CH.v + dt / 1.5); else CH.v = Math.max(0, CH.v - dt * 3);
+  updDec(performance.now()); clock();
+});
 
 // the engine runs one shared loop for every surface; under reduced motion it never starts
 // and each scene paints a still frame (and repaints from poke() after an interaction)
