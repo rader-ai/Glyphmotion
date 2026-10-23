@@ -79,4 +79,8 @@ For the examples, they also confirm that the loop really stops under reduced mot
 
 ## Status
 
-Early. The engine is small on purpose and will grow as the gallery pieces are rebuilt on top of it. No license has been chosen yet, so all rights are reserved for now.
+Early. The engine is small on purpose and will grow as the gallery pieces are rebuilt on top of it.
+
+## License
+
+MIT. See [LICENSE](LICENSE). Use it, remix it, ship it. A credit back to Glyphmotion is appreciated.

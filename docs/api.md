@@ -58,7 +58,7 @@ Creates a `Surface` bound to a canvas. Size the canvas with CSS; the engine matc
 | `spring(state, target, k, damping, dt)` | Moves `state.x` toward `target` with `state.v` as velocity. Good for moods, gaze and anything that should settle. |
 | `RAMP`, `ramp(t, chars)` | The default light ramp `' .:-=+*#%@'`, and a picker from 0 to 1. |
 | `lineChar(dx, dy)` | The glyph (`- \ \| /`) that best draws a line in that direction. Use it for spray, rain and rings. |
-| `textMask(surface, text, { font, fill })` | Rasterizes a word into the grid. Returns a `Uint8Array` with 1 where the letters cover a cell. |
+| `textMask(surface, text, { font, fill, lineGap })` | Rasterizes a word into the grid. Use `\n` to stack lines on narrow screens. Returns a `Uint8Array` with 1 where the letters cover a cell. |
 | `new Pool(capacity, fields)` | Fixed-size particle pool stored as typed arrays. `spawn({ ...values })` returns an index or -1 when full; `kill(i)` swap-removes, so loop backwards when killing. |
 | `reducedMotion` | `true` when the viewer prefers reduced motion. Updates live. |
 | `STEP` | The simulation step, `1/60`. |

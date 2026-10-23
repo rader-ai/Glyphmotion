@@ -278,12 +278,19 @@ GM.textMask = (s, text, o) => {
   const c = document.createElement('canvas'); c.width = cols; c.height = rows;
   const x = c.getContext('2d');
   x.font = font; x.textAlign = 'center'; x.textBaseline = 'middle';
-  const m = x.measureText(text);
-  const tw = m.width, th = (m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) || 100;
+  // '\n' splits the word into stacked lines, for narrow screens
+  const lines = String(text).split('\n');
+  let tw = 0, th = 0;
+  for (const line of lines) {
+    const m = x.measureText(line);
+    tw = Math.max(tw, m.width);
+    th = Math.max(th, (m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) || 100);
+  }
+  const lh = th * (o.lineGap || 1.25), total = th + lh * (lines.length - 1);
   // cells are taller than wide, so squash vertically by the aspect ratio
-  const k = Math.min(cols * fill / tw, rows * asp * fill / th);
+  const k = Math.min(cols * fill / tw, rows * asp * fill / total);
   x.setTransform(k, 0, 0, k / asp, cols / 2, rows / 2);
-  x.fillText(text, 0, 0);
+  lines.forEach((line, n) => x.fillText(line, 0, (n - (lines.length - 1) / 2) * lh));
   const data = x.getImageData(0, 0, cols, rows).data, mask = new Uint8Array(cols * rows);
   for (let i = 0; i < mask.length; i++) mask[i] = data[i * 4 + 3] > 110 ? 1 : 0;
   return mask;

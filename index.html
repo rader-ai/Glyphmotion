@@ -123,13 +123,14 @@ let P = null, top = 0;
 const GLYPHS = '#%@&#@';
 
 const surface = Glyphmotion.surface(document.getElementById('hero'), {
-  fontSize: w => clamp(w / 150, 4.5, 11), bloom: 0.6,
+  fontSize: w => clamp(w < 600 ? w / 72 : w / 150, 4.5, 11), bloom: 0.6,
   setup(s) {
     // the word sits in the upper part of the hero, clear of the copy below it
-    const mask = textMask(s, 'glyphmotion', { font: '400 100px "Archivo Black", Impact, "Arial Black", sans-serif', fill: s.vw < 600 ? 0.95 : 0.78 });
+    const narrow = s.vw < 600;
+    const mask = textMask(s, narrow ? 'glyph\nmotion' : 'glyphmotion', { font: '400 100px "Archivo Black", Impact, "Arial Black", sans-serif', fill: narrow ? 0.9 : 0.78 });
     let n = 0, minR = 1e9, maxR = 0;
     for (let i = 0; i < mask.length; i++) if (mask[i]) { n++; const r = (i / s.cols) | 0; minR = Math.min(minR, r); maxR = Math.max(maxR, r); }
-    top = Math.round(s.rows * 0.36 - (minR + maxR) / 2);
+    top = Math.round(s.rows * (s.vw < 600 ? 0.3 : 0.36) - (minR + maxR) / 2);
     P = new Pool(n, ['x', 'y', 'vx', 'vy', 'hx', 'hy', 'delay', 'seed']);
     for (let i = 0; i < mask.length; i++) if (mask[i]) {
       const c = i % s.cols, r = ((i / s.cols) | 0) + top;
