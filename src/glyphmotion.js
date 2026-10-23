@@ -378,6 +378,20 @@ GM.textMask = (s, text, o) => {
   });
   const data = x.getImageData(0, 0, cols, rows).data, mask = new Uint8Array(cols * rows);
   for (let i = 0; i < mask.length; i++) mask[i] = data[i * 4 + 3] > 110 ? 1 : 0;
+  // ink: center on the letters actually drawn, not the font's em box (capitals otherwise sit high)
+  if (o.ink) {
+    let top = rows, bot = -1;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (mask[r * cols + c]) { if (r < top) top = r; bot = r; break; }
+    for (let r = rows - 1; r > bot; r--) for (let c = 0; c < cols; c++) if (mask[r * cols + c]) { bot = r; break; }
+    if (bot >= top) {
+      const shift = Math.round(cy - (top + bot + 1) / 2);
+      if (shift) {
+        const out = new Uint8Array(cols * rows);
+        for (let r = 0; r < rows; r++) { const rr = r + shift; if (rr >= 0 && rr < rows) out.set(mask.subarray(r * cols, r * cols + cols), rr * cols); }
+        return out;
+      }
+    }
+  }
   return mask;
 };
 
