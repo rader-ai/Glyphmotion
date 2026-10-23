@@ -329,134 +329,68 @@ footer{border-top:1px solid var(--edge);padding:40px 0 120px;color:var(--muted);
 </aside>
 <button type="button" class="dopen" id="dockOpen">Show Nib</button>
 
+<script src="../../src/glyphmotion.js"></script>
 <script>
 (() => {
 'use strict';
-const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const STEP = 1 / 60;
-const FAM = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
-const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
-const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-const rnd = (a, b) => a + Math.random() * (b - a);
-function hash2(x, y) { let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
-function vnoise(x, y) {
-  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
+const GM = Glyphmotion;
+const { clamp, lerp, smooth, rnd, hash2, vnoise, spring, Pool } = GM;
+const STEP = GM.STEP;
 const GLYPH = Array.from({ length: 256 }, (_, i) => String.fromCharCode(i));
-const cc = s => s.charCodeAt(0);
-const cssCache = new Map();
-function css(k) { let s = cssCache.get(k); if (!s) { s = 'rgb(' + ((k >> 16) & 255) + ',' + ((k >> 8) & 255) + ',' + (k & 255) + ')'; if (cssCache.size > 9000) cssCache.clear(); cssCache.set(k, s); } return s; }
-const $ = (s, r = document) => r.querySelector(s);
-const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const $ = (q, r = document) => r.querySelector(q);
+const $$ = (q, r = document) => Array.from(r.querySelectorAll(q));
 
-// ---------- pointer ----------
-const PT = { x: -9999, y: -9999, in: false, down: false, speed: 0, lt: 0, touch: false, moved: 0 };
+// ---------- pointer (page level: Nib watches the pointer anywhere, not only over its canvas) ----------
+const PT = { x: -9999, y: -9999, in: false, down: false, speed: 0, st: 0, lt: 0, touch: false, moved: 0 };
+// speed decays with time, so it is read lazily instead of in a per-frame loop
+PT.vel = () => PT.speed * Math.exp(-Math.max(0, performance.now() - PT.st) / 1000 * 5);
 addEventListener('pointermove', e => {
   const dt = Math.max(1, e.timeStamp - PT.lt), d = Math.hypot(e.clientX - PT.x, e.clientY - PT.y);
-  if (PT.lt && PT.in) PT.speed = PT.speed * 0.55 + (d / dt * 1000) * 0.45;
+  if (PT.lt && PT.in) { PT.speed = PT.vel() * 0.55 + (d / dt * 1000) * 0.45; PT.st = e.timeStamp; }
   PT.x = e.clientX; PT.y = e.clientY; PT.lt = e.timeStamp; PT.in = true; PT.touch = e.pointerType === 'touch'; PT.moved = e.timeStamp;
 }, { passive: true });
 document.documentElement.addEventListener('mouseleave', () => { PT.in = false; });
 
-// ---------- View: a canvas grid of characters with bloom ----------
+// ---------- View: the character code adapter ----------
+// Nib is painted with numeric character codes; the engine grid takes characters.
 class View {
-  constructor(cv, o = {}) {
-    this.cv = cv; this.o = o;
-    this.ctx = cv.getContext('2d', { alpha: false });
-    this.bcv = document.createElement('canvas'); this.bctx = this.bcv.getContext('2d');
-    this.bloom = o.bloom == null ? 0.45 : o.bloom; this.bdiv = 5; this.bg = o.bg || '#06131f';
-    this.paintBg = null; this.cols = 1; this.rows = 1; this.rect = null; this.cw = 6; this.asp = 2;
-  }
-  layout() {
-    const r = this.cv.getBoundingClientRect();
-    this.vw = Math.max(1, r.width); this.vh = Math.max(1, r.height);
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.cv.width = Math.round(this.vw * this.dpr); this.cv.height = Math.round(this.vh * this.dpr);
-    const o = this.o;
-    this.fs = o.fs || clamp(this.vw / (o.fsDiv || 44), o.fsMin || 6, o.fsMax || 10);
-    this.font = '600 ' + this.fs.toFixed(2) + 'px ' + FAM;
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); this.ctx.font = this.font;
-    this.cw = this.ctx.measureText('M').width || this.fs * 0.6; this.chh = this.fs * 1.2;
-    this.cols = Math.ceil(this.vw / this.cw); this.rows = Math.ceil(this.vh / this.chh);
-    this.asp = this.chh / this.cw; this.W = this.cols; this.H = this.rows * this.asp;
-    const N = this.cols * this.rows;
-    this.code = new Uint8Array(N); this.R = new Uint8ClampedArray(N); this.G = new Uint8ClampedArray(N); this.B = new Uint8ClampedArray(N);
-    this.bcv.width = Math.max(1, Math.round(this.cv.width / this.bdiv)); this.bcv.height = Math.max(1, Math.round(this.cv.height / this.bdiv));
-    this.size = Math.round(this.vw) + 'x' + Math.round(this.vh);
-  }
-  updateRect() { this.rect = this.cv.getBoundingClientRect(); }
-  clear() { this.code.fill(0); }
-  put(c, r, ch, R, G, B) {
-    if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return;
-    const i = r * this.cols + c; this.code[i] = ch; this.R[i] = R; this.G[i] = G; this.B[i] = B;
-  }
-  render() {
-    const { ctx, cols, rows, code, R, G, B, vw, vh, dpr } = this;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-    if (this.paintBg) this.paintBg(ctx, vw, vh); else { ctx.fillStyle = this.bg; ctx.fillRect(0, 0, vw, vh); }
-    ctx.font = this.font; ctx.textBaseline = 'top';
-    let lastK = -1;
-    for (let r = 0; r < rows; r++) {
-      const y = r * this.chh, base = r * cols;
-      for (let c = 0; c < cols; c++) {
-        const ch = code[base + c]; if (!ch) continue;
-        const i = base + c, k = ((R[i] & 0xf8) << 16) | ((G[i] & 0xf8) << 8) | (B[i] & 0xf8);
-        if (k !== lastK) { ctx.fillStyle = css(k); lastK = k; }
-        ctx.fillText(GLYPH[ch], c * this.cw, y);
-      }
-    }
-    if (this.bloom > 0) {
-      this.bctx.globalCompositeOperation = 'copy'; this.bctx.drawImage(this.cv, 0, 0, this.bcv.width, this.bcv.height);
-      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = this.bloom;
-      ctx.imageSmoothingEnabled = true; ctx.drawImage(this.bcv, 0, 0, this.cv.width, this.cv.height);
-      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    }
-  }
+  constructor(s) { this.s = s; this.cv = s.canvas; }
+  get cols() { return this.s.cols; } get rows() { return this.s.rows; } get asp() { return this.s.asp; }
+  get W() { return this.s.W; } get H() { return this.s.H; } get cw() { return this.s.cw; }
+  get rect() { return this.cv.getBoundingClientRect(); }
+  clear() { this.s.clear(); }
+  put(c, r, code, R, G, B) { this.s.put(c, r, GLYPH[code], R, G, B); }
 }
 
-// ---------- one shared loop ----------
-const scenes = [];
-const IO = new IntersectionObserver(es => es.forEach(e => { const s = e.target.__s; if (s) { s.vis = e.isIntersecting; if (s.vis) { s.dirty = true; kick(); } if (s.onVis) s.onVis(s.vis); } }), { rootMargin: '40px' });
-const rzT = new Map();
-const RO = new ResizeObserver(es => es.forEach(e => {
-  const s = e.target.__s; if (!s) return; clearTimeout(rzT.get(s));
-  rzT.set(s, setTimeout(() => { if (s.ready) s.relayout(); }, 120));
-}));
-class Scene {
-  constructor(cv, o = {}) {
-    this.cv = cv; this.v = new View(cv, o); this.vis = false; this.ready = false; this.acc = 0; this.rAcc = 1; this.dirty = true; this.pend = 0;
-    cv.__s = this; scenes.push(this); IO.observe(cv); RO.observe(cv);
-  }
-  start() { this.v.layout(); this.onLayout(); this.ready = true; this.dirty = true; if (reduce) this.settle(); kick(); }
-  relayout() { this.v.layout(); this.onLayout(); this.dirty = true; if (reduce) this.settle(); kick(); }
-  settle() { this.v.updateRect(); const n = Math.round((this.still || 2.2) * 60); for (let i = 0; i < n; i++) this.sim(STEP); this.draw(); this.v.render(); }
-  onLayout() {} sim() {} draw() {}
+// ---------- surfaces ----------
+// One engine surface per canvas. The engine owns the loop, sizing, bloom, visibility and resize.
+// Under reduced motion there is no loop: a surface is brought to rest by running its step for a
+// moment (settle) and painted once. refresh() marks a surface stale and repaints it.
+let settling = 0;
+function settle(s) {
+  settling++;
+  try { const n = Math.round((s.stillSecs || 2.2) * 60); for (let i = 0; i < n; i++) s.stepFn(s, STEP); }
+  finally { settling--; }
 }
-let last = performance.now(), raf = 0;
-function kick() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } }
-function anyVisible() { for (const s of scenes) if (s.vis && s.ready) return true; return false; }
-function frame(now) {
-  raf = 0;
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  if (document.hidden) return;
-  PT.speed *= Math.exp(-dt * 5);
-  for (let k = 0; k < scenes.length; k++) {
-    const s = scenes[k]; if (!s.vis || !s.ready) continue;
-    s.v.updateRect();
-    if (reduce) { if (s.dirty) { s.dirty = false; s.settle(); } continue; }
-    s.acc += dt; let n = 0;
-    while (s.acc >= STEP && n < 4) { s.sim(STEP); s.acc -= STEP; n++; }
-    if (n === 4) s.acc = 0;
-    s.rAcc += dt;
-    if (s.rAcc >= 1 / 30 || s.dirty) { s.rAcc = 0; s.dirty = false; s.draw(); s.v.render(); }
-  }
-  if (!reduce && anyVisible()) raf = requestAnimationFrame(frame);
+function refresh(s) { if (settling) return; s.stale = true; s.invalidate(); }
+function surface(cv, o) {
+  const s = GM.surface(cv, {
+    fontSize: w => clamp(w / (o.fsDiv || 44), o.fsMin || 6, o.fsMax || 10),
+    bloom: o.bloom == null ? 0.45 : o.bloom,
+    background: o.bg || '#06131f',
+    transparent: !!o.transparent,
+    setup: s => { s.view = s.view || new View(s); if (o.setup) o.setup(s); },
+    step: (s, dt) => o.step(s, dt),
+    still: s => settle(s),
+    draw: s => {
+      if (o.skip && o.skip(s)) return;
+      if (GM.reducedMotion && s.stale) { s.stale = false; settle(s); }
+      s.view = s.view || new View(s); s.clear(); o.draw(s, s.view);
+    }
+  });
+  s.stepFn = o.step; s.stillSecs = o.still || 2.2;
+  return s;
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
 
 // =====================================================================
 //  NIB: the cuttlefish
@@ -492,22 +426,25 @@ const BM = {
 const SYM = { curious: ['?', 255, 232, 140], delighted: ['heart', 255, 120, 130], surprised: ['!', 255, 240, 200], sleepy: ['Z', 180, 190, 255], asleep: ['Z', 160, 175, 240], shy: ['heart', 255, 150, 150], concerned: ['drop', 130, 190, 255], proud: ['star', 255, 214, 120], focused: ['dots', 160, 255, 190] };
 
 const NP = 120;
+// spring() on one slot of a pair of typed arrays (position, velocity), reusing one scratch state
+const SPS = { x: 0, v: 0 };
+function spAt(X, Vv, i, target, k, d, dt) { SPS.x = X[i]; SPS.v = Vv[i]; spring(SPS, target, k, d, dt); X[i] = SPS.x; Vv[i] = SPS.v; }
 let CR = 0, CG = 0, CB = 0;
 class Nib {
   constructor(o = {}) {
-    this.o = o; this.P = {}; this.V = {}; this.T = {};
-    for (const k of KEYS) { this.P[k] = DEF[k]; this.V[k] = 0; this.T[k] = DEF[k]; }
+    this.o = o; this.P = {}; this.S = {}; this.T = {};
+    for (const k of KEYS) { this.P[k] = DEF[k]; this.S[k] = { x: DEF[k], v: 0 }; this.T[k] = DEF[k]; }
     this.mood = 'content'; this.setMood(o.mood || 'content', true);
-    for (const k of KEYS) this.P[k] = this.T[k];
-    this.t = rnd(0, 50); this.pt = this.t; this.px = 0; this.py = 0; this.vx = 0; this.vy = 0; this.rot = 0; this.rv = 0; this.kq = 0; this.kqv = 0;
+    for (const k of KEYS) this.P[k] = this.S[k].x = this.T[k];
+    this.t = rnd(0, 50); this.pt = this.t; this.bx = { x: 0, v: 0 }; this.by = { x: 0, v: 0 }; this.rs = { x: 0, v: 0 }; this.kqs = { x: 0, v: 0 }; this.px = 0; this.py = 0; this.rot = 0; this.kq = 0;
     this.home = { x: 0, y: 0 }; this.lean = { x: 0, y: 0 }; this.floor = 56; this.bounds = { x: 40, y: 30 };
     this.look = { x: 0, y: 0, w: 0 }; this.gx = 0; this.gy = 0; this.sacx = 0; this.sacy = 0; this.sacT = 1; this.blinkT = rnd(1.5, 4); this.bl = 0; this.blDur = 0;
     this.grab = null; this.cur = null; this.symAge = 0; this.symOn = !o.noSym; this.shown = true;
     this.arms = []; this.AN = 8; this.AS = 8;
     for (let k = 0; k < 8; k++) this.arms.push({ x: new Float32Array(9), y: new Float32Array(9), vx: new Float32Array(9), vy: new Float32Array(9), lx: new Float32Array(9), ly: new Float32Array(9), init: false });
     this.tents = []; for (let k = 0; k < 2; k++) this.tents.push({ x: new Float32Array(15), y: new Float32Array(15), vx: new Float32Array(15), vy: new Float32Array(15), mode: 'rest', tx: 0, ty: 0, amt: 0, ph: k * 1.7, until: 0, init: false });
-    this.pa = { x: new Float32Array(NP), y: new Float32Array(NP), vx: new Float32Array(NP), vy: new Float32Array(NP), l: new Float32Array(NP), m: new Float32Array(NP), c: new Uint8Array(NP), r: new Uint8Array(NP), g: new Uint8Array(NP), b: new Uint8Array(NP), k: new Uint8Array(NP) };
-    this.pn = 0; this.food = []; this.act = null; this.actT = 0; this.finPh = 0; this.onMood = null; this.EY = 1.5; this.stillSeed = o.seed || 0;
+    this.pa = new Pool(NP, ['x', 'y', 'vx', 'vy', 'l', 'm', 'c', 'r', 'g', 'b', 'k']);
+    this.food = []; this.act = null; this.actT = 0; this.finPh = 0; this.onMood = null; this.EY = 1.5; this.stillSeed = o.seed || 0;
   }
   setMood(name, silent) {
     if (!EMO[name]) return;
@@ -515,38 +452,37 @@ class Nib {
     Object.assign(this.T, DEF, EMO[name]);
     this.symAge = 0;
     if (!silent && prev !== name) {
-      if (name === 'surprised') { this.kqv -= 10; this.tentTuck(); }
-      else if (name === 'delighted') this.kqv += 6;
-      else if (name === 'shy') this.kqv += 9;
-      else if (name === 'proud') this.kqv -= 5;
-      else if (name === 'concerned') this.kqv += 3;
+      if (name === 'surprised') { this.kqs.v -= 10; this.tentTuck(); }
+      else if (name === 'delighted') this.kqs.v += 6;
+      else if (name === 'shy') this.kqs.v += 9;
+      else if (name === 'proud') this.kqs.v -= 5;
+      else if (name === 'concerned') this.kqs.v += 3;
       if (this.onMood) this.onMood(name, prev);
     }
   }
   tentTuck() { for (const t of this.tents) { t.mode = 'rest'; t.amt = 0; } }
   // ---- particles
   spawn(kind, x, y, vx, vy, life, ch, r, g, b) {
-    if (reduce) return;
-    const p = this.pa; const i = this.pn < NP ? this.pn++ : (Math.random() * NP) | 0;
+    if (GM.reducedMotion) return;
+    const p = this.pa; let i = p.spawn(); if (i < 0) i = (Math.random() * NP) | 0; // full: overwrite a random one
     p.x[i] = x; p.y[i] = y; p.vx[i] = vx; p.vy[i] = vy; p.l[i] = life; p.m[i] = life; p.k[i] = kind; p.c[i] = ch; p.r[i] = r; p.g[i] = g; p.b[i] = b;
   }
   bubbles(n, x, y) { for (let i = 0; i < n; i++) this.spawn(0, x + rnd(-2, 2), y, rnd(-3, 3), rnd(-14, -22), rnd(2, 3.4), i % 3 ? 111 : 79, 150, 220, 235); }
   sparks(n, x, y, pal) { for (let i = 0; i < n; i++) { const a = rnd(0, 6.283), s = rnd(14, 40), c = pal[i % pal.length]; this.spawn(1, x, y, Math.cos(a) * s, Math.sin(a) * s - 14, rnd(.7, 1.5), i % 2 ? 42 : 43, c[0], c[1], c[2]); } }
   ink(n, x, y) { for (let i = 0; i < n; i++) { const a = rnd(0, 6.283), s = rnd(6, 26); this.spawn(2, x, y, Math.cos(a) * s, Math.sin(a) * s, rnd(1.4, 2.6), i % 2 ? 35 : 37, 96, 60, 150); } }
-  jet(dx, dy, p) { const n = Math.hypot(dx, dy) || 1; this.vx += dx / n * p; this.vy += dy / n * p; this.kqv += 8; }
+  jet(dx, dy, p) { const n = Math.hypot(dx, dy) || 1; this.bx.v += dx / n * p; this.by.v += dy / n * p; this.kqs.v += 8; }
   // ---- limb targets
-  armRest(k, i, tt, o) { /* fills o.x,o.y local */ }
   sim(dt) {
-    const P = this.P, V = this.V, T = this.T, m = reduce ? 0 : 1;
-    if (!reduce) { this.t += dt; this.pt += dt; } else { this.t = 7 + this.stillSeed; this.pt = 7 + this.stillSeed; }
+    const P = this.P, S = this.S, T = this.T, rm = GM.reducedMotion, m = rm ? 0 : 1;
+    if (!rm) { this.t += dt; this.pt += dt; } else { this.t = 7 + this.stillSeed; this.pt = 7 + this.stillSeed; }
     const t = this.t;
     // emotion springs
     for (let q = 0; q < KEYS.length; q++) {
       const k = KEYS[q], col = COLK.has(k), K = col ? 20 : 85, C = col ? 9 : 13.5;
-      V[k] += ((T[k] - P[k]) * K - V[k] * C) * dt; P[k] += V[k] * dt;
+      P[k] = spring(S[k], T[k], K, C, dt);
     }
     // blink
-    if (!reduce) {
+    if (!rm) {
       this.blinkT -= dt;
       if (this.blinkT <= 0 && this.bl <= 0) { this.bl = 1e-4; this.blDur = P.lidTop > .5 ? .5 : .16; this.blinkT = P.lidTop > .5 ? rnd(3, 6) : (Math.random() < .2 ? .22 : rnd(2, 5.5)); }
       if (this.bl > 0) { this.bl += dt / this.blDur; if (this.bl >= 1) this.bl = 0; }
@@ -560,8 +496,8 @@ class Nib {
       const dx = this.look.x - this.px, dy = this.look.y - (this.py + this.EY), d = Math.hypot(dx, dy) || 1, g = Math.min(1, d / 30) * this.look.w * Math.min(1, P.gaze * 1.2);
       tgx = dx / d * g; tgy = dy / d * g;
     } else { tgx = this.sacx * P.gaze * .8; tgy = this.sacy * P.gaze * .8; }
-    if (reduce) { tgx = this.look.w > .01 ? tgx : 0; tgy = this.look.w > .01 ? tgy : 0; }
-    const gk = Math.min(1, dt * 16); this.gx += (tgx - this.gx) * gk; this.gy += (tgy - this.gy) * gk;
+    if (rm) { tgx = this.look.w > .01 ? tgx : 0; tgy = this.look.w > .01 ? tgy : 0; }
+    const gk = Math.min(1, dt * 16); this.gx = lerp(this.gx, tgx, gk); this.gy = lerp(this.gy, tgy, gk);
     // body
     const bob = Math.sin(t * P.bobS) * P.bobA * m, sway = Math.sin(t * 0.55 + 1) * 3.5 * m;
     let tx = this.home.x + this.lean.x + sway, ty = this.home.y + this.lean.y + P.lift + bob;
@@ -569,11 +505,10 @@ class Nib {
     if (this.grab) { tx = this.grab.x; ty = this.grab.y; }
     const bx = this.bounds.x, by = this.bounds.y; tx = clamp(tx, -bx, bx); ty = clamp(ty, -by, this.floor - 20);
     const kp = this.grab ? 60 : 16, kd = this.grab ? 12 : 6.2;
-    this.vx += ((tx - this.px) * kp - this.vx * kd) * dt; this.vy += ((ty - this.py) * kp - this.vy * kd) * dt;
-    this.px += this.vx * dt; this.py += this.vy * dt;
-    const rt = P.rot + clamp(this.vx * 0.005, -.1, .1) + Math.sin(t * .8) * .025 * m;
-    this.rv += ((rt - this.rot) * 70 - this.rv * 9) * dt; this.rot += this.rv * dt;
-    this.kqv += (-this.kq * 150 - this.kqv * 9) * dt; this.kq += this.kqv * dt;
+    this.px = spring(this.bx, tx, kp, kd, dt); this.py = spring(this.by, ty, kp, kd, dt);
+    const rt = P.rot + clamp(this.bx.v * 0.005, -.1, .1) + Math.sin(t * .8) * .025 * m;
+    this.rot = spring(this.rs, rt, 70, 9, dt);
+    this.kq = spring(this.kqs, 0, 150, 9, dt);
     // fins
     this.finPh += dt * P.finS * m;
     const breath = Math.sin(t * 1.7) * .02 * m;
@@ -600,7 +535,7 @@ class Nib {
           const u = i / 8;
           let th = th0 + dir * P.curl * Math.pow(u, 2.2) * 2.4;
           th = lerp(th, Math.PI / 2 + dir * .12, clamp(P.droop, 0, 1) * u * .85);
-          th += P.wig * Math.sin(t * P.wigS - i * .7 + k * 1.1) * u * .8 * (reduce ? 0 : 1);
+          th += P.wig * Math.sin(t * P.wigS - i * .7 + k * 1.1) * u * .8 * m;
           if (this.act === 'stretch') th += -f * .5 * u;
           lx += Math.cos(th) * L; ly += Math.sin(th) * L;
         }
@@ -608,8 +543,7 @@ class Nib {
         this.l2w(lx, ly, tmp);
         if (!a.init) { a.x[i] = tmp.x; a.y[i] = tmp.y; a.vx[i] = 0; a.vy[i] = 0; }
         const kk = i < 2 ? 220 : 120 - i * 8, cd = 2 * .6 * Math.sqrt(kk);
-        a.vx[i] += ((tmp.x - a.x[i]) * kk - a.vx[i] * cd) * dt; a.vy[i] += ((tmp.y - a.y[i]) * kk - a.vy[i] * cd) * dt;
-        a.x[i] += a.vx[i] * dt; a.y[i] += a.vy[i] * dt;
+        spAt(a.x, a.vx, i, tmp.x, kk, cd, dt); spAt(a.y, a.vy, i, tmp.y, kk, cd, dt);
       }
       a.init = true;
     }
@@ -632,7 +566,7 @@ class Nib {
         let cx, cy;
         { // integrate coil
           let ccx = 0, ccy = 0; const seg = 2.2 * P.lenS;
-          for (let j = 1; j <= i; j++) { const uj = j / 14; const th = Math.PI / 2 + dir * Math.pow(uj, 1.6) * (.9 + P.curl * .3) + Math.sin(t * 1.8 + j * .5 + k) * .12 * (reduce ? 0 : 1); ccx += Math.cos(th) * seg; ccy += Math.sin(th) * seg; }
+          for (let j = 1; j <= i; j++) { const uj = j / 14; const th = Math.PI / 2 + dir * Math.pow(uj, 1.6) * (.9 + P.curl * .3) + Math.sin(t * 1.8 + j * .5 + k) * .12 * m; ccx += Math.cos(th) * seg; ccy += Math.sin(th) * seg; }
           cx = ax + ccx * 1.0 + s * 0; cy = ay + ccy;
         }
         const reach = dist * reachf, bend = Math.sin(u * Math.PI) * 5 * (tn.mode === 'strike' ? 0 : 1) * Math.sin(t * 3 + k * 2);
@@ -641,8 +575,7 @@ class Nib {
         const gx = lerp(cx, rx, am), gy = lerp(cy, ry, am);
         if (!tn.init) { tn.x[i] = gx; tn.y[i] = gy; tn.vx[i] = 0; tn.vy[i] = 0; }
         const kk = tn.mode === 'strike' ? 420 - i * 10 : 140 - i * 5, cd = 2 * .62 * Math.sqrt(kk);
-        tn.vx[i] += ((gx - tn.x[i]) * kk - tn.vx[i] * cd) * dt; tn.vy[i] += ((gy - tn.y[i]) * kk - tn.vy[i] * cd) * dt;
-        tn.x[i] += tn.vx[i] * dt; tn.y[i] += tn.vy[i] * dt;
+        spAt(tn.x, tn.vx, i, gx, kk, cd, dt); spAt(tn.y, tn.vy, i, gy, kk, cd, dt);
       }
       tn.init = true;
       const want = tn.mode === 'rest' ? 0 : 1; tn.amt += (want - tn.amt) * Math.min(1, dt * (tn.mode === 'strike' ? 14 : 6));
@@ -652,19 +585,16 @@ class Nib {
   reachTo(side, x, y, secs, strike) { const tn = this.tents[side < 0 ? 0 : 1]; tn.mode = strike ? 'strike' : 'reach'; tn.tx = x; tn.ty = y; tn.until = secs; }
   tentMode(mode, secs, both) { for (let k = 0; k < 2; k++) { if (!both && k === 1 && mode !== 'wave') continue; const tn = this.tents[k]; tn.mode = mode; tn.until = secs; } }
   simParticles(dt) {
-    const p = this.pa; let w = 0;
-    for (let i = 0; i < this.pn; i++) {
-      let l = p.l[i] - dt; if (l <= 0) continue;
+    const p = this.pa;
+    for (let i = p.n - 1; i >= 0; i--) {
+      const l = p.l[i] - dt; if (l <= 0) { p.kill(i); continue; }
       const k = p.k[i];
       if (k === 0) { p.vx[i] += Math.sin(this.t * 3 + i) * 10 * dt; p.vy[i] *= (1 - dt * .2); }
       else if (k === 1) { p.vy[i] += 30 * dt; p.vx[i] *= (1 - dt * 1.6); p.vy[i] *= (1 - dt * 1.2); }
       else if (k === 2) { p.vx[i] *= (1 - dt * 1.8); p.vy[i] *= (1 - dt * 1.8); p.vy[i] -= 2 * dt; }
       else if (k === 3) { p.vx[i] += Math.sin(this.t * 2 + i) * 6 * dt; }
-      p.x[i] += p.vx[i] * dt; p.y[i] += p.vy[i] * dt;
-      if (w !== i) { p.x[w] = p.x[i]; p.y[w] = p.y[i]; p.vx[w] = p.vx[i]; p.vy[w] = p.vy[i]; p.m[w] = p.m[i]; p.k[w] = p.k[i]; p.c[w] = p.c[i]; p.r[w] = p.r[i]; p.g[w] = p.g[i]; p.b[w] = p.b[i]; }
-      p.l[w] = l; w++;
+      p.x[i] += p.vx[i] * dt; p.y[i] += p.vy[i] * dt; p.l[i] = l;
     }
-    this.pn = w;
   }
   // ---- skin color (sets CR,CG,CB)
   skin(lx, ly, shade) {
@@ -829,7 +759,7 @@ class Nib {
     }
     // particles
     const p = this.pa;
-    for (let i = 0; i < this.pn; i++) {
+    for (let i = 0; i < p.n; i++) {
       const a = Math.min(1, p.l[i] / p.m[i] * 1.6);
       v.put(Math.floor(ox + p.x[i] * S), Math.floor((oy + p.y[i] * S) / asp), p.c[i], p.r[i] * a, p.g[i] * a, p.b[i] * a);
     }
@@ -840,12 +770,12 @@ class Nib {
     const sy = SYM[this.mood], age = this.symAge;
     if (this.mood === 'surprised' && age > 2.4) return;
     const pop = clamp(age / .32, 0, 1), sc = pop < 1 ? 1 + .35 * Math.sin(pop * Math.PI) : 1;
-    const bx = Math.floor(o.ox + (this.px + 25) * o.S), by = Math.floor((o.oy + (this.py - 24 + Math.sin(this.pt * 2) * (reduce ? 0 : 1.5)) * o.S) / v.asp);
+    const bx = Math.floor(o.ox + (this.px + 25) * o.S), by = Math.floor((o.oy + (this.py - 24 + Math.sin(this.pt * 2) * (GM.reducedMotion ? 0 : 1.5)) * o.S) / v.asp);
     let a = 1; if (this.mood === 'surprised') a = 1 - smooth(1.6, 2.4, age);
     if (this.mood === 'delighted' || this.mood === 'proud') a = 1 - smooth(2.2, 3.2, age) * .6;
     const col = [sy[1] * a, sy[2] * a, sy[3] * a];
     if (sy[0] === 'dots') {
-      const ph = reduce ? 3 : Math.floor(this.pt * 4) % 4;
+      const ph = GM.reducedMotion ? 3 : Math.floor(this.pt * 4) % 4;
       for (let d = 0; d < 3; d++) if (d < ph) for (let yy = 0; yy < 2; yy++) for (let xx = 0; xx < 3; xx++) v.put(bx + d * 5 + xx, by + 4 + yy, 35, col[0], col[1], col[2]);
       return;
     }
@@ -857,16 +787,11 @@ class Nib {
     const lx = (this.cs * (dx - this.px) + this.sn * (dy - this.py)) / this.sx, ly = (-this.sn * (dx - this.px) + this.cs * (dy - this.py)) / this.sy;
     return (lx / 23) ** 2 + (ly / 17) ** 2 < 1;
   }
-  toDesign(cx, cy) { const c = this.cur; if (!c) return null; const r = c.v.rect || c.v.cv.getBoundingClientRect(); return { x: ((cx - r.left) / c.v.cw - c.ox) / c.S, y: ((cy - r.top) / c.v.cw - c.oy) / c.S }; }
+  toDesign(cx, cy) { const c = this.cur; if (!c) return null; const r = c.v.rect; return { x: ((cx - r.left) / c.v.cw - c.ox) / c.S, y: ((cy - r.top) / c.v.cw - c.oy) / c.S }; }
 }
 const RAMPB = [35, 35, 37, 37];
 
-window.SHOAL = { reduce, STEP, FAM, clamp, lerp, rnd, smooth, hash2, vnoise, cc, GLYPH, PT, View, Scene, kick, Nib, EMO, MOODS, $, $$, css, scenes };
-})();
 
-(() => {
-'use strict';
-const { reduce, Scene, Nib, PT, kick, clamp, lerp, rnd, smooth, vnoise, hash2, $, $$, MOODS, cc } = window.SHOAL;
 const now = () => performance.now();
 const LABEL = { content: 'Content', curious: 'Curious', delighted: 'Delighted', surprised: 'Surprised', shy: 'Shy', concerned: 'Concerned', proud: 'Proud', focused: 'Focused', sleepy: 'Sleepy', asleep: 'Asleep' };
 const WHY = {
@@ -886,22 +811,30 @@ const WHY = {
 // helpers
 // ------------------------------------------------------------------
 function gazeAt(nib) {
-  if (reduce || !PT.in || !nib.cur) { nib.look.w = 0; return; }
+  if (GM.reducedMotion || !PT.in || !nib.cur) { nib.look.w = 0; return; }
   const d = nib.toDesign(PT.x, PT.y); if (!d) { nib.look.w = 0; return; }
   nib.look.x = d.x; nib.look.y = d.y; nib.look.w = .9;
 }
+// A small Nib on its own surface (emotion cards and the "in the wild" scenes)
 function puppet(cv, o) {
-  const sc = new Scene(cv, { fsDiv: o.fsDiv || 58, fsMin: o.fsMin || 5.5, fsMax: o.fsMax || 9, bg: o.bg });
   const nib = new Nib({ mood: o.mood, seed: o.seed || 0, noSym: o.noSym });
-  sc.nib = nib; sc.still = 2.4;
-  sc.onLayout = function () {
-    const v = this.v; this.S = Math.min(v.W / o.fw, v.H / o.fh); this.ox = v.W / 2 + (o.dx || 0) * this.S; this.oy = v.H * (o.cy || .4);
-    nib.floor = (v.H - this.oy) / this.S - 4; nib.bounds = { x: v.W / 2 / this.S - 18, y: 40 };
-  };
-  sc.sim = function (dt) { if (!o.still) gazeAt(nib); nib.sim(dt); if (o.each) o.each(nib, dt); };
-  sc.draw = function () { const v = this.v; v.clear(); if (o.env) o.env(v, this); nib.paint(v, this); };
-  sc.start();
-  sc.hold = function (mood, secs, next) { nib.setMood(mood); clearTimeout(sc._tm); if (next) sc._tm = setTimeout(() => { nib.setMood(next); sc.dirty = true; kick(); }, secs * 1000); sc.dirty = true; kick(); };
+  const sc = surface(cv, {
+    fsDiv: o.fsDiv || 58, fsMin: o.fsMin || 5.5, fsMax: o.fsMax || 9, bg: o.bg, still: 2.4,
+    setup(s) {
+      s.S = Math.min(s.W / o.fw, s.H / o.fh); s.ox = s.W / 2 + (o.dx || 0) * s.S; s.oy = s.H * (o.cy || .4);
+      nib.floor = (s.H - s.oy) / s.S - 4; nib.bounds = { x: s.W / 2 / s.S - 18, y: 40 };
+    },
+    step(s, dt) {
+      const lk = o.lookAt && o.lookAt();
+      if (lk && !GM.reducedMotion && nib.cur) {
+        const d = nib.toDesign(lk.left + lk.width / 2, lk.top + lk.height / 2);
+        if (d) { nib.look.x = d.x; nib.look.y = d.y; nib.look.w = 1; }
+      } else gazeAt(nib);
+      nib.sim(dt); if (o.each) o.each(nib, dt);
+    },
+    draw(s, v) { if (o.env) o.env(v, s); nib.paint(v, s); }
+  });
+  sc.nib = nib;
   return sc;
 }
 function seabed(v, rows, col) {
@@ -918,26 +851,12 @@ function seabed(v, rows, col) {
 const stageCv = $('#stage'), dockCv = $('#dockCv'), dockEl = $('#dock');
 const nib = new Nib({ mood: 'content' });
 window.__nib = nib;
-const stage = new Scene(stageCv, { fsDiv: 112, fsMin: 6.2, fsMax: 10.4, bloom: .5 });
-const dock = new Scene(dockCv, { fsDiv: 44, fsMin: 5, fsMax: 6.2, bloom: .45 });
-stage.still = dock.still = 2.6;
 const motes = []; for (let i = 0; i < 34; i++) motes.push({ x: Math.random(), y: Math.random(), s: rnd(.4, 1), ph: Math.random() * 9 });
-stage.onLayout = function () {
-  const v = this.v; this.S = Math.min(v.W / 104, v.H / 72); this.ox = v.W / 2; this.oy = v.H * .4;
-  stage.fl = (v.H - this.oy) / this.S - 6;
-};
-dock.onLayout = function () { const v = this.v; this.S = Math.min(v.W / 66, v.H / 52); this.ox = v.W / 2; this.oy = v.H * .42; dock.fl = (v.H - this.oy) / this.S - 4; };
-stage.paintBg = function (ctx, w, h) {
-  ctx.fillStyle = '#05111c'; ctx.fillRect(0, 0, w, h);
-  const g = ctx.createRadialGradient(w / 2, h * .05, 10, w / 2, h * .3, Math.max(w, h) * .75);
-  g.addColorStop(0, 'rgba(60,140,160,.38)'); g.addColorStop(.5, 'rgba(20,70,100,.2)'); g.addColorStop(1, 'rgba(4,10,20,0)');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-};
-function useScene(sc) {
-  nib.floor = sc.fl; const v = sc.v;
-  nib.bounds = { x: Math.max(8, v.W / 2 / sc.S - 30), y: Math.max(8, sc.oy / sc.S - 24) };
+function useScene(s) {
+  nib.floor = s.fl;
+  nib.bounds.x = Math.max(8, s.W / 2 / s.S - 30); nib.bounds.y = Math.max(8, s.oy / s.S - 24);
 }
-function drawEnv(v, sc, t) {
+function drawEnv(v, t) {
   seabed(v, 3, [170, 140, 95]);
   // kelp
   for (let k = 0; k < 2; k++) {
@@ -952,23 +871,28 @@ function drawEnv(v, sc, t) {
   }
   // motes
   for (const m of motes) {
-    const x = ((m.x + Math.sin(t * .15 + m.ph) * .02) * v.cols) | 0, y = ((m.y + (reduce ? 0 : t * .004 * m.s)) % 1) * v.rows | 0;
+    const x = ((m.x + Math.sin(t * .15 + m.ph) * .02) * v.cols) | 0, y = ((m.y + (GM.reducedMotion ? 0 : t * .004 * m.s)) % 1) * v.rows | 0;
     const b = .3 + .35 * Math.sin(t * .8 + m.ph);
     v.put(x, y, m.s > .75 ? 111 : 46, 120 * b, 200 * b, 210 * b);
   }
 }
 function mainSim(dt) { brain.update(dt); nib.sim(dt); }
-function mainDraw(sc) {
-  useScene(sc); const v = sc.v; v.clear();
-  if (sc === stage) drawEnv(v, sc, nib.pt);
-  nib.paint(v, sc);
-}
-stage.sim = function (dt) { mainSim(dt); };
-dock.sim = function (dt) { if (!stage.vis) mainSim(dt); };
-stage.draw = function () { mainDraw(stage); };
-dock.draw = function () { mainDraw(dock); };
 let stageVis = false;
-stage.onVis = function (vis) { stageVis = vis; syncDock(); };
+function checkVis() { if (stage.visible !== stageVis) { stageVis = stage.visible; syncDock(); } }
+const stage = surface(stageCv, {
+  fsDiv: 112, fsMin: 6.2, fsMax: 10.4, bloom: .5, still: 2.6,
+  setup(s) { s.S = Math.min(s.W / 104, s.H / 72); s.ox = s.W / 2; s.oy = s.H * .4; s.fl = (s.H - s.oy) / s.S - 6; },
+  step(s, dt) { mainSim(dt); },
+  draw(s, v) { checkVis(); useScene(s); drawEnv(v, nib.pt); nib.paint(v, s); }
+});
+const dock = surface(dockCv, {
+  fsDiv: 44, fsMin: 5, fsMax: 6.2, bloom: .45, still: 2.6,
+  setup(s) { s.S = Math.min(s.W / 66, s.H / 52); s.ox = s.W / 2; s.oy = s.H * .42; s.fl = (s.H - s.oy) / s.S - 4; },
+  step(s, dt) { if (!stage.visible) mainSim(dt); },
+  skip() { return !dockEl.classList.contains('show'); },
+  draw(s, v) { useScene(s); nib.paint(v, s); }
+});
+function refreshMain() { refresh(stage); refresh(dock); }
 let dockOff = false;
 let dockPlace = 'r', dockSize = 'n';
 function textHit(x0, y0, x1, y1) {
@@ -985,7 +909,9 @@ function textHit(x0, y0, x1, y1) {
   return false;
 }
 function placeDock() {
-  if (stageVis || dockOff) return;
+  stageVis = stage.visible;
+  if (stageVis) { dockEl.classList.remove('show'); $('#dockOpen').classList.remove('show'); return; }
+  if (dockOff) return;
   const vw = innerWidth, vh = innerHeight, g = 16, pad = 6;
   const sizes = { n: [Math.min(250, vw * .46), 208], c: [Math.min(168, vw * .34), 140] };
   for (const sz of ['n', 'c']) for (const pl of ['r', 'l']) {
@@ -994,16 +920,21 @@ function placeDock() {
   }
   applyDock(false);
 }
+let dockKey = '';
 function applyDock(ok) {
+  const was = dockEl.classList.contains('show');
   dockEl.classList.toggle('left', dockPlace === 'l'); dockEl.classList.toggle('compact', dockSize === 'c');
   dockEl.classList.toggle('show', ok && !stageVis && !dockOff);
   $('#dockOpen').classList.toggle('show', (!ok && !stageVis && !dockOff) || (!stageVis && dockOff));
   $('#dockOpen').classList.toggle('left', dockPlace === 'l');
-  if (ok) { dock.dirty = true; kick(); setTimeout(() => { dock.relayout(); }, 30); }
+  const key = dockPlace + dockSize;
+  // the dock canvas changes size when it appears or switches size; lay it out right away
+  if (ok && (!was || key !== dockKey)) { dockKey = key; setTimeout(() => { dock.layout(); refresh(dock); }, 30); }
 }
 let dockT = 0;
 function syncDock() { clearTimeout(dockT); dockT = setTimeout(placeDock, 120); if (stageVis) { dockEl.classList.remove('show'); $('#dockOpen').classList.remove('show'); } }
-let scT = 0; addEventListener('scroll', () => { if (!stageVis && !scT) scT = setTimeout(() => { scT = 0; placeDock(); }, 140); }, { passive: true });
+// the engine tracks which canvases are on screen; re-check after scrolling settles
+let scT = 0; addEventListener('scroll', () => { if (!scT) scT = setTimeout(() => { scT = 0; checkVis(); if (!stage.visible) placeDock(); }, 140); }, { passive: true });
 addEventListener('resize', () => syncDock());
 $('#dockHide').addEventListener('click', () => { dockOff = true; dockEl.classList.remove('show'); $('#dockOpen').classList.add('show'); $('#dockOpen').focus(); });
 $('#dockOpen').addEventListener('click', () => { dockOff = false; $('#dockOpen').classList.remove('show'); placeDock(); setTimeout(() => $('#dockSleep').focus(), 80); });
@@ -1018,8 +949,8 @@ const brain = {
     const o = this.over;
     if (o && o.until > now() && o.prio > prio) return;
     this.over = { mood: name, until: now() + secs * 1000, prio, reason: reason || WHY[name] };
-    if (reduce) { clearTimeout(this._rt); this._rt = setTimeout(() => { stage.dirty = dock.dirty = true; kick(); }, secs * 1000 + 60); }
-    this.apply(); stage.dirty = dock.dirty = true; kick();
+    if (GM.reducedMotion) { clearTimeout(this._rt); this._rt = setTimeout(refreshMain, secs * 1000 + 60); }
+    this.apply(); refreshMain();
   },
   isNight() { const h = new Date().getHours(); return this.nightSim || h >= 21 || h < 6; },
   input() { const was = this.idle(); this.lastInput = now(); if (nib.mood === 'asleep' && !this.sleepLock) { this.mood('surprised', .9, 5, 'Woken up. Skin blanched, pupils tiny.'); setTimeout(() => this.mood('sleepy', 1.6, 2, 'Groggy for a moment.'), 950); } },
@@ -1046,12 +977,12 @@ const brain = {
     // pointer in design coordinates
     let pd = null; if (PT.in && nb.cur) pd = nb.toDesign(PT.x, PT.y);
     const rect = nb.cur && nb.cur.v.rect; const inRect = !!(pd && rect && PT.x >= rect.left && PT.x <= rect.right && PT.y >= rect.top && PT.y <= rect.bottom);
-    this.near = !!(inRect && Math.hypot(pd.x - nb.px, pd.y - nb.py) < 60) && !reduce;
+    this.near = !!(inRect && Math.hypot(pd.x - nb.px, pd.y - nb.py) < 60) && !GM.reducedMotion;
     // scroll
     const sy = scrollY, sv = (sy - this.lastY) / Math.max(dt, 1e-3); this.lastY = sy; this.scrollV += (sv - this.scrollV) * Math.min(1, dt * 6);
     // look target
     let look = null;
-    if (!reduce) {
+    if (!GM.reducedMotion) {
       if (this.glance && this.glance.until > t) look = this.glance;
       else if (t < this.awayUntil) look = { x: nb.px + 60, y: nb.py - 30 };
       else if (this.typeEl && t < this.typingUntil) { const r = this.typeEl.getBoundingClientRect(); const d = nb.toDesign(r.left + r.width / 2, r.top + r.height / 2); if (d) look = d; }
@@ -1061,14 +992,15 @@ const brain = {
     }
     if (look) { nb.look.x = look.x; nb.look.y = look.y; nb.look.w = 1; } else nb.look.w = 0;
     // scrolling wakes curiosity
-    if (!reduce && Math.abs(this.scrollV) > 500 && nb.mood !== 'asleep' && t - (this._sc || 0) > 2500) { this._sc = t; this.lastInput = t; this.mood('curious', 1.4, 2, 'The page is moving. It watches where you are going.'); }
+    if (!GM.reducedMotion && Math.abs(this.scrollV) > 500 && nb.mood !== 'asleep' && t - (this._sc || 0) > 2500) { this._sc = t; this.lastInput = t; this.mood('curious', 1.4, 2, 'The page is moving. It watches where you are going.'); }
     // petting
-    const pet = !reduce && inRect && pd && nb.hit(pd.x, pd.y) && !this.drag;
-    if (pet && PT.speed > 25 && PT.speed < 1100 && !PT.touch) { this.pet = Math.min(3, this.pet + dt * 1.4); this.lastInput = t; }
+    const vel = PT.vel();
+    const pet = !GM.reducedMotion && inRect && pd && nb.hit(pd.x, pd.y) && !this.drag;
+    if (pet && vel > 25 && vel < 1100 && !PT.touch) { this.pet = Math.min(3, this.pet + dt * 1.4); this.lastInput = t; }
     else this.pet = Math.max(0, this.pet - dt * .6);
     if (this.pet > 1.1) { this.mood('delighted', .8, 4, 'Being petted. Fins fast, skin shimmering.'); if (Math.random() < dt * 6) nb.spawn(1, nb.px + rnd(-14, 14), nb.py - 12, rnd(-6, 6), rnd(-26, -14), 1.1, 42, 255, 140, 150); }
     // stare contest (secret)
-    if (!reduce && pd && inRect && !PT.touch && Math.hypot(pd.x - nb.px, pd.y - nb.py) < 24 && PT.speed < 40 && !this.drag) { this.stare += dt; } else this.stare = Math.max(0, this.stare - dt * 2);
+    if (!GM.reducedMotion && pd && inRect && !PT.touch && Math.hypot(pd.x - nb.px, pd.y - nb.py) < 24 && vel < 40 && !this.drag) { this.stare += dt; } else this.stare = Math.max(0, this.stare - dt * 2);
     if (this.stare > 3) { this.stare = 0; this.awayUntil = t + 3000; this.mood('shy', 3.2, 6, 'You won the stare contest. It looks away and blushes.'); }
     // food + strike
     this.updateFood(dt, t);
@@ -1080,7 +1012,7 @@ const brain = {
     if (!this.foods().length) { nb.home.x = lerp(nb.home.x, 0, dt * 1.2); nb.home.y = lerp(nb.home.y, 0, dt * 1.2); }
     // bored actions
     const idle = this.idle();
-    if (!reduce && idle > 8 && idle < 24 && nb.mood === 'content' && !this.over) {
+    if (!GM.reducedMotion && idle > 8 && idle < 24 && nb.mood === 'content' && !this.over) {
       this.boredT -= dt;
       if (this.boredT <= 0) {
         this.boredT = rnd(3.5, 6.5); const a = (Math.random() * 4) | 0;
@@ -1090,18 +1022,18 @@ const brain = {
         else { nb.act = 'stretch'; nb.actT = 1.3; nb.kqv -= 7; }
       }
     }
-    if (!reduce && nb.mood === 'sleepy' && Math.random() < dt * .5) nb.bubbles(1, nb.px + 3, nb.py + 8);
-    if (!reduce && nb.mood === 'asleep' && Math.random() < dt * .7) nb.spawn(3, nb.px + 22, nb.py - 14, 3, -7, 3, 90, 180, 190, 245);
-    if (!reduce && nb.mood === 'delighted' && Math.random() < dt * 3) nb.sparks(1, nb.px + rnd(-18, 18), nb.py + rnd(-12, 4), [[255, 220, 120], [255, 140, 140], [150, 240, 230]]);
-    if (!reduce && nb.mood === 'proud' && Math.random() < dt * 5) nb.sparks(1, nb.px + rnd(-20, 20), nb.py + rnd(-14, 4), [[255, 220, 120], [255, 120, 100]]);
-    if (!reduce && nb.mood === 'concerned' && Math.random() < dt * .8) nb.spawn(1, nb.px - 11, nb.py + 7, 0, 6, 1.4, 46, 130, 190, 255);
+    if (!GM.reducedMotion && nb.mood === 'sleepy' && Math.random() < dt * .5) nb.bubbles(1, nb.px + 3, nb.py + 8);
+    if (!GM.reducedMotion && nb.mood === 'asleep' && Math.random() < dt * .7) nb.spawn(3, nb.px + 22, nb.py - 14, 3, -7, 3, 90, 180, 190, 245);
+    if (!GM.reducedMotion && nb.mood === 'delighted' && Math.random() < dt * 3) nb.sparks(1, nb.px + rnd(-18, 18), nb.py + rnd(-12, 4), [[255, 220, 120], [255, 140, 140], [150, 240, 230]]);
+    if (!GM.reducedMotion && nb.mood === 'proud' && Math.random() < dt * 5) nb.sparks(1, nb.px + rnd(-20, 20), nb.py + rnd(-14, 4), [[255, 220, 120], [255, 120, 100]]);
+    if (!GM.reducedMotion && nb.mood === 'concerned' && Math.random() < dt * .8) nb.spawn(1, nb.px - 11, nb.py + 7, 0, 6, 1.4, 46, 130, 190, 255);
     // reduce motion: hold a pose for blush etc, no timers
     this.apply();
   },
   foods() { return nib.food; },
   updateFood(dt, t) {
     const nb = nib, fs = nb.food;
-    for (let i = fs.length - 1; i >= 0; i--) { const f = fs[i]; if (!reduce) { f.y += (6 + Math.sin(t * .004 + f.ph) * 2) * dt; f.x += Math.sin(t * .003 + f.ph) * 3 * dt; } f.y = Math.min(f.y, nb.floor - 2); }
+    for (let i = fs.length - 1; i >= 0; i--) { const f = fs[i]; if (!GM.reducedMotion) { f.y += (6 + Math.sin(t * .004 + f.ph) * 2) * dt; f.x += Math.sin(t * .003 + f.ph) * 3 * dt; } f.y = Math.min(f.y, nb.floor - 2); }
     this.food2 = fs.length > 0;
     if (!fs.length) { this.strike = null; return; }
     const f = fs[0];
@@ -1111,8 +1043,8 @@ const brain = {
     const dx = f.x - nb.px, dy = f.y - (nb.py + 12), d = Math.hypot(dx, dy);
     if (!this.strike) {
       this.mood(d < 60 ? 'focused' : 'curious', .6, 3, d < 60 ? 'Lining up a catch. Lids narrow, brows down.' : 'Food! It noticed something sinking.');
-      if (d < 38 && !reduce) { this.strike = { t: now() + 520, f }; nb.tents[0].mode = nb.tents[1].mode = 'rest'; }
-      else if (d < 38 && reduce) { this.eat(f); }
+      if (d < 38 && !GM.reducedMotion) { this.strike = { t: now() + 520, f }; nb.tents[0].mode = nb.tents[1].mode = 'rest'; }
+      else if (d < 38 && GM.reducedMotion) { this.eat(f); }
     } else if (now() > this.strike.t && this.strike.f) {
       const s = this.strike; if (!s.hit) { s.hit = true; nb.reachTo(dx < 0 ? -1 : 1, f.x, f.y, .5, true); s.t = now() + 280; }
       else this.eat(f);
@@ -1124,7 +1056,7 @@ const brain = {
     nb.sparks(10, f.x, f.y, [[255, 150, 130], [255, 220, 120]]); nb.kqv += 7;
     this.mood('delighted', 2.2, 4, 'Caught a snack. Skin flushes coral and gold.');
   },
-  drop(x, y) { if (nib.food.length >= 3) nib.food.shift(); nib.food.push({ x, y, ph: rnd(0, 6) }); this.input(); stage.dirty = dock.dirty = true; kick(); if (reduce) { this.mood('curious', 2, 3, 'Food! It noticed something sinking.'); } },
+  drop(x, y) { if (nib.food.length >= 3) nib.food.shift(); nib.food.push({ x, y, ph: rnd(0, 6) }); this.input(); refreshMain(); if (GM.reducedMotion) { this.mood('curious', 2, 3, 'Food! It noticed something sinking.'); } },
   poke(fromX, fromY) {
     const t = now(); this.pokes = this.pokes.filter(p => t - p < 3500); this.pokes.push(t); this.input();
     nib.jet(nib.px - fromX, nib.py - fromY, 22);
@@ -1142,7 +1074,7 @@ const brain = {
     else if (name === 'wake') { this.sleepLock = false; this.nightSim = false; this.over = null; const was = nib.mood === 'asleep'; this.lastInput = now(); if (was) { this.mood('surprised', .9, 5, 'Woken up. Skin blanched, pupils tiny.'); setTimeout(() => this.mood('content', 2, 2, 'Back to normal.'), 1000); } else this.apply(); }
     else if (name === 'sleep') { this.sleepLock = !this.sleepLock; this.over = null; if (!this.sleepLock) { this.lastInput = now(); this.mood('surprised', .8, 5, 'Woken up. Skin blanched, pupils tiny.'); } this.apply(); }
     else if (name === 'showoff') { this.showoff = true; nib.tentMode('wave', 3, true); this.mood('proud', 3.4, 6, 'Showing off. The whole skin ripples.'); Object.assign(nib.T, { shim: 1, pSp: 4, pBand: .8 }); }
-    syncSleepBtns(); stage.dirty = dock.dirty = true; kick();
+    syncSleepBtns(); refreshMain();
   },
   force(m) {
     this.input(); this.sleepLock = (m === 'asleep'); this.over = null;
@@ -1181,7 +1113,7 @@ function bindPointer(cv) {
   cv.addEventListener('pointermove', e => {
     const dr = brain.drag; if (!dr || e.pointerId !== dr.id) return;
     if (!dr.moved && Math.hypot(e.clientX - dr.sx, e.clientY - dr.sy) > 8) { dr.moved = true; brain.pokes.length = 0; brain.mood('surprised', .5, 5, 'Picked up. Pupils shrink, arms trail behind.'); }
-    if (dr.moved) { const d = nib.toDesign(e.clientX, e.clientY); nib.grab = { x: d.x + dr.ox, y: d.y + dr.oy }; brain.input(); stage.dirty = dock.dirty = true; kick(); }
+    if (dr.moved) { const d = nib.toDesign(e.clientX, e.clientY); nib.grab = { x: d.x + dr.ox, y: d.y + dr.oy }; brain.input(); refreshMain(); }
   });
   const up = e => { const dr = brain.drag; if (!dr) return; brain.drag = null; nib.grab = null; if (dr.moved) { brain.mood('delighted', 1.6, 4, 'Put down gently. That was a fun ride.'); nib.bubbles(6, nib.px, nib.py); } };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
@@ -1190,7 +1122,7 @@ bindPointer(stageCv); bindPointer(dockCv);
 stageCv.addEventListener('dblclick', e => { const d = nib.toDesign(e.clientX, e.clientY); if (d && !nib.hit(d.x, d.y)) { nib.food.length = 0; brain.event('showoff'); } });
 ['keydown', 'wheel', 'touchstart'].forEach(ev => addEventListener(ev, () => { brain.lastInput = now(); if (nib.mood === 'asleep' && !brain.sleepLock && ev !== 'wheel') brain.input(); }, { passive: true }));
 addEventListener('scroll', () => { brain.lastInput = now(); if (nib.mood === 'asleep' && !brain.sleepLock) brain.input(); }, { passive: true });
-addEventListener('pointermove', () => { if (PT.speed > 80) brain.lastInput = now(); }, { passive: true });
+addEventListener('pointermove', () => { if (PT.vel() > 80) brain.lastInput = now(); }, { passive: true });
 
 // toolbar
 $('#btnPet').addEventListener('click', () => { brain.input(); brain.pet = 3; brain.mood('delighted', 2.4, 4, 'Being petted. Fins fast, skin shimmering.'); for (let i = 0; i < 6; i++) nib.spawn(1, nib.px + rnd(-14, 14), nib.py - 12, rnd(-6, 6), rnd(-26, -14), 1.2, 42, 255, 140, 150); });
@@ -1211,7 +1143,7 @@ form.addEventListener('submit', e => {
   e.preventDefault(); const v = email.value.trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { email.setAttribute('aria-invalid', 'true'); msg.textContent = 'That email does not look right. Try name@example.com.'; msg.className = 'fmsg bad'; brain.event('error'); return; }
   email.removeAttribute('aria-invalid'); msg.textContent = 'Checking...'; msg.className = 'fmsg'; brain.event('loading');
-  setTimeout(() => { msg.textContent = 'You are in. Welcome to the shoal.'; msg.className = 'fmsg ok'; brain.event('success'); }, reduce ? 200 : 1600);
+  setTimeout(() => { msg.textContent = 'You are in. Welcome to the shoal.'; msg.className = 'fmsg ok'; brain.event('success'); }, GM.reducedMotion ? 200 : 1600);
 });
 
 // ------------------------------------------------------------------
@@ -1234,42 +1166,41 @@ SHEET.forEach(([m, skin, trig], i) => {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'ecard'; b.dataset.mood = m; b.setAttribute('aria-label', LABEL[m] + '. ' + trig + ' Press to make the main Nib feel this.');
   b.innerHTML = '<canvas aria-hidden="true"></canvas><span class="en">' + LABEL[m] + '</span><span class="es">' + skin + '</span><span class="et"><b>Triggered by</b> ' + trig + '</span><span class="ego">Make Nib feel this</span>';
   sheetEl.appendChild(b);
-  b.addEventListener('click', () => { brain.force(m); stage.dirty = dock.dirty = true; kick(); });
-  sheets.push(puppet($('canvas', b), { mood: m, fw: 60, fh: 58, cy: .46, seed: i, still: false, fsDiv: 56, fsMin: 5.5, fsMax: 8, env: m === 'asleep' ? (v) => seabed(v, 2, [150, 120, 85]) : null }));
+  b.addEventListener('click', () => { brain.force(m); refreshMain(); });
+  sheets.push(puppet($('canvas', b), { mood: m, fw: 60, fh: 58, cy: .46, seed: i, fsDiv: 56, fsMin: 5.5, fsMax: 8, env: m === 'asleep' ? (v) => seabed(v, 2, [150, 120, 85]) : null }));
 });
 
 // ------------------------------------------------------------------
 // IN THE WILD
 // ------------------------------------------------------------------
-const navP = puppet($('#wNav'), { mood: 'content', fw: 58, fh: 44, cy: .42, noSym: true, fsDiv: 40, fsMin: 4.6, fsMax: 5.4 });
-$$('#navMock a').forEach(a => { a.addEventListener('mouseenter', () => { navP.nib.setMood('curious'); const r = a.getBoundingClientRect(); navP._lk = r; }); a.addEventListener('mouseleave', () => { navP.nib.setMood('content'); navP._lk = null; }); a.addEventListener('focus', () => navP.nib.setMood('curious')); a.addEventListener('blur', () => navP.nib.setMood('content')); a.addEventListener('click', e => e.preventDefault()); });
+let navLink = null; // the link under the pointer; the nav Nib looks at it
+const navP = puppet($('#wNav'), { mood: 'content', fw: 58, fh: 44, cy: .42, noSym: true, fsDiv: 40, fsMin: 4.6, fsMax: 5.4, lookAt: () => navLink });
+$$('#navMock a').forEach(a => { a.addEventListener('mouseenter', () => { navP.nib.setMood('curious'); navLink = a.getBoundingClientRect(); refresh(navP); }); a.addEventListener('mouseleave', () => { navP.nib.setMood('content'); navLink = null; refresh(navP); }); a.addEventListener('focus', () => { navP.nib.setMood('curious'); refresh(navP); }); a.addEventListener('blur', () => { navP.nib.setMood('content'); refresh(navP); }); a.addEventListener('click', e => e.preventDefault()); });
 const p404 = puppet($('#w404'), { mood: 'concerned', fw: 64, fh: 56, cy: .36, fsDiv: 50, fsMin: 5.4, fsMax: 7.5 });
-if (!reduce) setInterval(() => { if (p404.vis) p404.nib.tentMode('scratch', 1.6, false); }, 4200);
+setInterval(() => { if (!GM.reducedMotion && p404.visible) p404.nib.tentMode('scratch', 1.6, false); }, 4200);
 const pLoad = puppet($('#wLoad'), { mood: 'focused', fw: 56, fh: 52, cy: .36, fsDiv: 50, fsMin: 5.4, fsMax: 7 });
 pLoad.nib.tentMode('tap', 1e9, true);
 const pSign = puppet($('#wSign'), { mood: 'content', fw: 62, fh: 54, cy: .36, fsDiv: 50, fsMin: 5.4, fsMax: 7.5 });
-function celebrate() { pSign.nib.setMood('proud'); pSign.nib.tentMode('wave', 3, true); pSign.nib.sparks(28, pSign.nib.px, pSign.nib.py - 4, [[255, 214, 120], [255, 112, 96], [127, 232, 224], [197, 139, 255]]); pSign.nib.jet(0, -1, 18); clearTimeout(pSign._c); pSign._c = setTimeout(() => { pSign.nib.setMood('content'); pSign.dirty = true; kick(); }, 4200); pSign.dirty = true; kick(); $('#signMsg').textContent = 'Welcome to the shoal, Sam.'; }
+function celebrate() { pSign.nib.setMood('proud'); pSign.nib.tentMode('wave', 3, true); pSign.nib.sparks(28, pSign.nib.px, pSign.nib.py - 4, [[255, 214, 120], [255, 112, 96], [127, 232, 224], [197, 139, 255]]); pSign.nib.jet(0, -1, 18); clearTimeout(pSign._c); pSign._c = setTimeout(() => { pSign.nib.setMood('content'); refresh(pSign); }, 4200); refresh(pSign); $('#signMsg').textContent = 'Welcome to the shoal, Sam.'; }
 $('#signBtn').addEventListener('click', celebrate);
 let signSeen = false; new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && !signSeen) { signSeen = true; setTimeout(celebrate, 600); } }), { threshold: .6 }).observe($('#wSign'));
 const pSleep = puppet($('#wSleep'), { mood: 'asleep', fw: 56, fh: 38, cy: .3, fsDiv: 70, fsMin: 5.5, fsMax: 7, env: (v) => seabed(v, 2, [90, 74, 55]) });
-$('#wakeBtn').addEventListener('click', () => { pSleep.nib.setMood('surprised'); pSleep.nib.bubbles(5, pSleep.nib.px, pSleep.nib.py); clearTimeout(pSleep._t1); pSleep._t1 = setTimeout(() => { pSleep.nib.setMood('sleepy'); pSleep.dirty = true; kick(); pSleep._t2 = setTimeout(() => { pSleep.nib.setMood('asleep'); pSleep.dirty = true; kick(); }, 3000); }, 1100); pSleep.dirty = true; kick(); });
-// nav puppet looks at the link under the pointer
-navP.sim = (function (orig) { return function (dt) { const n = navP.nib; if (navP._lk && !reduce && n.cur) { const d = n.toDesign(navP._lk.left + navP._lk.width / 2, navP._lk.top + navP._lk.height / 2); if (d) { n.look.x = d.x; n.look.y = d.y; n.look.w = 1; } n.sim(dt); } else orig.call(navP, dt); }; })(navP.sim);
-
+$('#wakeBtn').addEventListener('click', () => { pSleep.nib.setMood('surprised'); pSleep.nib.bubbles(5, pSleep.nib.px, pSleep.nib.py); clearTimeout(pSleep._t1); pSleep._t1 = setTimeout(() => { pSleep.nib.setMood('sleepy'); refresh(pSleep); pSleep._t2 = setTimeout(() => { pSleep.nib.setMood('asleep'); refresh(pSleep); }, 3000); }, 1100); refresh(pSleep); });
 // loading bar
-const bar = $('#loadBar'); if (reduce) bar.style.width = '62%';
+const bar = $('#loadBar'); if (GM.reducedMotion) bar.style.width = '62%';
 
 // ------------------------------------------------------------------
 // SKETCHES
 // ------------------------------------------------------------------
 function mini(cv, o) {
-  const sc = new Scene(cv, { fsDiv: 46, fsMin: 5.4, fsMax: 7.5 }); sc.still = 2.2; sc.t = 0; sc.s = {};
-  sc.onLayout = function () { this.px = 0; };
-  sc.sim = function (dt) { if (!reduce) this.t += dt; else this.t = 3; o.sim(this, dt); };
-  sc.draw = function () { const v = this.v; v.clear(); o.draw(v, this); };
-  sc.start(); return sc;
+  const sc = { s: {}, t: 0, v: null };
+  surface(cv, {
+    fsDiv: 46, fsMin: 5.4, fsMax: 7.5, still: 2.2,
+    step(s, dt) { sc.v = s.view; if (!GM.reducedMotion) sc.t += dt; else sc.t = 3; o.sim(sc, dt); },
+    draw(s, v) { sc.v = v; o.draw(v, sc); }
+  });
 }
-function ptIn(sc) { if (reduce || !PT.in) return null; const r = sc.v.rect; if (!r) return null; return { x: (PT.x - r.left) / sc.v.cw, y: (PT.y - r.top) / sc.v.cw }; }
+function ptIn(sc) { if (GM.reducedMotion || !PT.in) return null; const r = sc.v.rect; return { x: (PT.x - r.left) / sc.v.cw, y: (PT.y - r.top) / sc.v.cw }; }
 function disc(v, cx, cy, rx, ry, fn) { // world coords, ry in world units
   const asp = v.asp;
   for (let r = Math.floor((cy - ry) / asp); r <= Math.ceil((cy + ry) / asp); r++) for (let c = Math.floor(cx - rx); c <= Math.ceil(cx + rx); c++) {
@@ -1278,14 +1209,14 @@ function disc(v, cx, cy, rx, ry, fn) { // world coords, ry in world units
 }
 // A: Wisp the jelly
 mini($('#sk1'), {
-  sim(sc, dt) { const s = sc.s, v = sc.v; if (s.x == null) { s.x = v.W / 2; s.y = v.H * .35; s.vx = 0; s.vy = 0; } const p = ptIn(sc); const tx = p ? p.x : v.W / 2 + Math.sin(sc.t * .5) * v.W * .25, ty = p ? p.y - 8 : v.H * .4 + Math.sin(sc.t * .8) * 8; s.pul = Math.sin(sc.t * 2.6); s.vx += ((tx - s.x) * 1.2 - s.vx * 1.6) * dt; s.vy += ((ty - s.y) * 1.2 - s.vy * 1.6 - (s.pul > .6 ? -18 : 0)) * dt; s.x += s.vx * dt; s.y += s.vy * dt; },
+  sim(sc, dt) { const s = sc.s, v = sc.v; if (s.x == null) { s.x = v.W / 2; s.y = v.H * .35; s.sx = { x: s.x, v: 0 }; s.sy = { x: s.y, v: 0 }; } const p = ptIn(sc); const tx = p ? p.x : v.W / 2 + Math.sin(sc.t * .5) * v.W * .25, ty = p ? p.y - 8 : v.H * .4 + Math.sin(sc.t * .8) * 8; s.pul = Math.sin(sc.t * 2.6); if (s.pul > .6) s.sy.v += 18 * dt; s.x = spring(s.sx, tx, 1.2, 1.6, dt); s.y = spring(s.sy, ty, 1.2, 1.6, dt); },
   draw(v, sc) { const s = sc.s; if (s.x == null) return; const w = 9 - s.pul * 1.2, h = 6.5 + s.pul;
     disc(v, s.x, s.y, w, h * 1, (c, r, dx, dy, d) => { if (dy > .15) return; const rim = d > .72; v.put(c, r, rim ? 37 : 35, rim ? 210 : 150, rim ? 150 : 90, 255); });
     for (let k = -3; k <= 3; k++) for (let m = 1; m < 11; m++) { const x = s.x + k * 2.6 + Math.sin(sc.t * 2.4 - m * .5 + k) * (.6 + m * .25), y = s.y + m * 1.2 * v.asp * .62 + 2; const a = 1 - m / 12; v.put(Math.round(x), Math.floor(y / v.asp), m % 3 ? 58 : 59, 200 * a, 130 * a, 255 * a); } }
 });
 // B: Clack the hermit crab
 mini($('#sk2'), {
-  sim(sc, dt) { const s = sc.s, v = sc.v; if (s.x == null) { s.x = v.W * .3; s.d = 1; s.h = 0; } const p = ptIn(sc); const fast = p && Math.hypot(p.x - s.x, p.y - v.H * .7) < 22 && PT.speed > 200; s.h += ((fast || (p && Math.hypot(p.x - s.x, p.y - v.H * .7) < 9) ? 1 : 0) - s.h) * Math.min(1, dt * 6); if (s.h < .4) { s.x += s.d * 5 * dt; if (s.x > v.W * .8) s.d = -1; if (s.x < v.W * .2) s.d = 1; } },
+  sim(sc, dt) { const s = sc.s, v = sc.v; if (s.x == null) { s.x = v.W * .3; s.d = 1; s.h = 0; } const p = ptIn(sc); const fast = p && Math.hypot(p.x - s.x, p.y - v.H * .7) < 22 && PT.vel() > 200; s.h = lerp(s.h, fast || (p && Math.hypot(p.x - s.x, p.y - v.H * .7) < 9) ? 1 : 0, Math.min(1, dt * 6)); if (s.h < .4) { s.x += s.d * 5 * dt; if (s.x > v.W * .8) s.d = -1; if (s.x < v.W * .2) s.d = 1; } },
   draw(v, sc) { const s = sc.s; if (s.x == null) return; const gy = v.H * .78; seabed(v, 3, [150, 120, 90]);
     disc(v, s.x - 3, gy - 7, 8, 8, (c, r, dx, dy, d) => { const sp = Math.atan2(dy, dx) + d * 7; const ch = d > .8 ? 35 : (Math.sin(sp * 1.5) > 0 ? 111 : 48); v.put(c, r, ch, 255 * (1 - d * .3), 150 + 60 * (1 - d), 120); });
     if (s.h < .6) { const ex = s.x + 6 * s.d; for (let k = 0; k < 2; k++) { const lx = ex + k * 2.2 - 1; v.put(Math.round(lx), Math.floor((gy - 5 - 2) / v.asp), 124, 235, 220, 200); v.put(Math.round(lx), Math.floor((gy - 8) / v.asp), 111, 255, 255, 255); }
@@ -1294,7 +1225,7 @@ mini($('#sk2'), {
 });
 // C: Puff the pufferfish
 mini($('#sk3'), {
-  sim(sc, dt) { const s = sc.s, v = sc.v; if (s.x == null) { s.x = v.W / 2; s.k = 0; } const p = ptIn(sc); const near = p && Math.hypot(p.x - s.x, (p.y - v.H * .45)) < 26; s.k += ((near ? 1 : 0) - s.k) * Math.min(1, dt * 5); s.x = v.W / 2 + Math.sin(sc.t * .6) * 10 * (1 - s.k); },
+  sim(sc, dt) { const s = sc.s, v = sc.v; if (s.x == null) { s.x = v.W / 2; s.k = 0; } const p = ptIn(sc); const near = p && Math.hypot(p.x - s.x, (p.y - v.H * .45)) < 26; s.k = lerp(s.k, near ? 1 : 0, Math.min(1, dt * 5)); s.x = v.W / 2 + Math.sin(sc.t * .6) * 10 * (1 - s.k); },
   draw(v, sc) { const s = sc.s; if (s.x == null) return; const r0 = 6 + s.k * 6, cy = v.H * .45;
     disc(v, s.x, cy, r0, r0, (c, r, dx, dy, d) => v.put(c, r, d > .8 ? 37 : 35, 255 * (.7 + .3 * (1 - d)), 200 * (.6 + .4 * (1 - d)), 90));
     if (s.k > .2) for (let a = 0; a < 16; a++) { const an = a / 16 * 6.283, rr = r0 + 1.6 + s.k * 1.5; v.put(Math.round(s.x + Math.cos(an) * rr), Math.floor((cy + Math.sin(an) * rr) / v.asp), 94, 255, 120, 100); }
@@ -1306,16 +1237,11 @@ mini($('#sk3'), {
 // boot
 // ------------------------------------------------------------------
 function boot() {
-  scenes_start();
   syncSleepBtns();
   const h = new Date().getHours(); const night = h >= 21 || h < 6;
   onMoodChange('content', night ? 'It is night where you are, so it will wind down early.' : 'Just arrived. Everything is fine.');
 }
-function scenes_start() { [stage, dock].forEach(s => s.start()); }
-// (puppets and sketches start themselves)
-const fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
 boot();
-fontsReady.then(() => setTimeout(() => { window.SHOAL.scenes.forEach(s => { if (s.ready) s.relayout(); }); }, 60));
 // hide the dock until we know where the stage is
 syncDock();
 })();
